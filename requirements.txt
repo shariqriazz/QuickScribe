@@ -1,0 +1,9 @@
+sounddevice
+soundfile
+numpy
+pynput
+python-dotenv
+pyperclip
+groq
+google-generativeai
+argparse

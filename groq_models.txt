@@ -1,0 +1,3 @@
+distil-whisper-large-v3-en
+whisper-large-v3-turbo
+whisper-large-v3
