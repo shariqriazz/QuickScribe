@@ -10,6 +10,7 @@ import subprocess
 import sys
 import argparse
 import platform  # To detect OS for key combinations
+import shlex  # For safe shell argument escaping
 from pynput import keyboard
 from dotenv import load_dotenv
 
@@ -43,6 +44,10 @@ TRIGGER_KEY = None
 groq_client = None
 gemini_model = None
 api_key = None # To store the loaded key
+# Output method
+USE_XDOTOOL = False # Default to copy-paste method
+LAST_TYPED_TEXT = "" # Track the last text that was typed for editing
+CONVERSATION_HISTORY = [] # Track conversation context for continuous dialogue (memory only)
 
 # --- Helper Functions ---
 
@@ -144,6 +149,35 @@ def setup_trigger_key(key_name):
             return False
     return True
 
+def detect_and_execute_commands(text):
+    """Detect commands in transcribed text and execute them. Returns the text with commands removed."""
+    global CONVERSATION_HISTORY, LAST_TYPED_TEXT
+    
+    # Command patterns to detect
+    reset_patterns = [
+        "reset conversation",
+        "clear conversation", 
+        "start over",
+        "new conversation",
+        "clear context"
+    ]
+    
+    text_lower = text.lower().strip()
+    
+    # Check for reset commands
+    for pattern in reset_patterns:
+        if pattern in text_lower:
+            print(f"\nCommand detected: '{pattern}' - Resetting conversation...")
+            CONVERSATION_HISTORY.clear()
+            LAST_TYPED_TEXT = ""
+            # Remove the command from the text
+            # Find the command in the original text (case-insensitive) and remove it
+            import re
+            text = re.sub(re.escape(pattern), '', text, flags=re.IGNORECASE).strip()
+            break
+    
+    return text
+
 # --- Configuration & Argument Parsing ---
 # Load .env file specifically from the script's directory
 script_dir = os.path.dirname(__file__)
@@ -191,9 +225,18 @@ parser.add_argument(
     default=DEFAULT_CHANNELS,
     help="Number of audio channels (e.g., 1 for mono)."
 )
+parser.add_argument(
+    "--use-xdotool",
+    action="store_true",
+    help="Use xdotool for typing text instead of clipboard paste. Linux only."
+)
 
-# Check if running interactively (no args other than script name)
-if len(sys.argv) == 1:
+# Check if running interactively (no args other than script name, or only --use-xdotool)
+args_without_script = sys.argv[1:]
+interactive_mode = (len(args_without_script) == 0 or 
+                   (len(args_without_script) == 1 and args_without_script[0] == '--use-xdotool'))
+
+if interactive_mode:
     print("Running in interactive mode...")
     groq_key_present = bool(os.getenv("GROQ_API_KEY"))
     gemini_key_present = bool(os.getenv("GOOGLE_API_KEY"))
@@ -230,12 +273,13 @@ if len(sys.argv) == 1:
         sys.exit(0)
 
     # Use default args for other settings in interactive mode
-    # Need to parse an empty list to make args object have default values
-    args = parser.parse_args([])
+    # Parse the actual args to capture --use-xdotool if present
+    args = parser.parse_args()
     LANGUAGE = args.language
     SAMPLE_RATE = args.sample_rate
     CHANNELS = args.channels
     TRIGGER_KEY_NAME = args.trigger_key
+    USE_XDOTOOL = args.use_xdotool
 
 else:
     # Parse arguments normally if provided
@@ -246,6 +290,7 @@ else:
     SAMPLE_RATE = args.sample_rate
     CHANNELS = args.channels
     TRIGGER_KEY_NAME = args.trigger_key
+    USE_XDOTOOL = args.use_xdotool
 
     # Validate required args if not interactive
     if not PROVIDER or not MODEL_ID:
@@ -253,6 +298,11 @@ else:
         print("\nError: --provider and --model are required when running with arguments.", file=sys.stderr)
         sys.exit(1)
 
+
+# --- Check platform for xdotool compatibility ---
+if USE_XDOTOOL and platform.system() != "Linux":
+    print(f"\nWarning: xdotool is only supported on Linux. Using clipboard method instead.", file=sys.stderr)
+    USE_XDOTOOL = False
 
 # --- Initialize Provider Client and Trigger Key ---
 if not initialize_provider_client():
@@ -268,6 +318,7 @@ print(f"Provider:      {PROVIDER.upper()}")
 print(f"Model:         {MODEL_ID}")
 print(f"Trigger Key:   {TRIGGER_KEY_NAME}")
 print(f"Audio:         {SAMPLE_RATE}Hz, {CHANNELS} channel(s)")
+print(f"Output Method: {'xdotool' if USE_XDOTOOL else 'clipboard paste'}")
 if PROVIDER == 'groq' and LANGUAGE:
     print(f"Language:      {LANGUAGE}")
 elif PROVIDER == 'gemini' and LANGUAGE:
@@ -397,11 +448,23 @@ def process_audio(audio_np):
             # print("Transcribing with Groq...")
             with open(tmp_filename, "rb") as file_for_groq:
                 try:
-                    transcription = groq_client.audio.transcriptions.create(
-                        file=(os.path.basename(tmp_filename), file_for_groq.read()),
-                        model=MODEL_ID,
-                        language=LANGUAGE
-                    )
+                    # Create prompt with conversation context
+                    prompt = ""
+                    if CONVERSATION_HISTORY:
+                        context = " ".join(CONVERSATION_HISTORY[-3:])  # Last 3 exchanges
+                        prompt = f"Previous context: {context}. Continue the conversation:"
+                    
+                    transcription_params = {
+                        "file": (os.path.basename(tmp_filename), file_for_groq.read()),
+                        "model": MODEL_ID,
+                        "language": LANGUAGE
+                    }
+                    
+                    # Add prompt if we have conversation history
+                    if prompt:
+                        transcription_params["prompt"] = prompt
+                    
+                    transcription = groq_client.audio.transcriptions.create(**transcription_params)
                     text_to_output = transcription.text
                     print(f"Transcription: {text_to_output}")
                 except GroqError as e:
@@ -452,7 +515,20 @@ def process_audio(audio_np):
                 print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
 
         if text_to_output:
-            output_text_cross_platform(text_to_output)
+            # Process commands and get cleaned text
+            cleaned_text = detect_and_execute_commands(text_to_output)
+            
+            # Add to conversation history if there's actual content
+            if cleaned_text.strip():
+                CONVERSATION_HISTORY.append(cleaned_text)
+                # Keep only last 10 exchanges to prevent context from growing too large
+                if len(CONVERSATION_HISTORY) > 10:
+                    CONVERSATION_HISTORY.pop(0)
+                
+                # Output the cleaned text
+                output_text_cross_platform(cleaned_text)
+            else:
+                print("Command executed, no text to output.")
         else:
             print("No transcription result.")
 
@@ -471,14 +547,69 @@ def process_audio(audio_np):
         print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
 
 
+def type_with_xdotool(new_text):
+    """Uses xdotool to type text directly with editing support via backspace."""
+    global LAST_TYPED_TEXT
+    
+    try:
+        # Find the common prefix between previous and new text
+        common_prefix_length = 0
+        for i in range(min(len(LAST_TYPED_TEXT), len(new_text))):
+            if LAST_TYPED_TEXT[i] == new_text[i]:
+                common_prefix_length += 1
+            else:
+                break
+        
+        # Calculate backspaces needed
+        backspaces_needed = len(LAST_TYPED_TEXT) - common_prefix_length
+        
+        # Text to add after backspacing
+        text_to_add = new_text[common_prefix_length:]
+        
+        # Send backspaces to delete from cursor to common point
+        if backspaces_needed > 0:
+            subprocess.run(["xdotool", "key", "--repeat", str(backspaces_needed), "BackSpace"], 
+                          capture_output=True, text=True, check=True)
+        
+        # Type the new text
+        if text_to_add:
+            subprocess.run(["xdotool", "type", text_to_add], 
+                          capture_output=True, text=True, check=True)
+        
+        # Update our record of what was typed
+        LAST_TYPED_TEXT = new_text
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"\nError executing xdotool: {e}", file=sys.stderr)
+        print("Make sure xdotool is installed: sudo apt-get install xdotool", file=sys.stderr)
+        return False
+    except FileNotFoundError:
+        print("\nxdotool command not found. Please install it: sudo apt-get install xdotool", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"\nUnexpected error using xdotool: {e}", file=sys.stderr)
+        return False
+
 def output_text_cross_platform(text):
-    """Copies text to clipboard and simulates paste."""
+    """Outputs text using either xdotool or clipboard paste based on settings."""
+    global USE_XDOTOOL
+    
+    # Use xdotool if selected and on Linux
+    current_os = platform.system()
+    if USE_XDOTOOL and current_os == "Linux":
+        # Try xdotool first
+        if type_with_xdotool(text):
+            return
+        # Fall back to clipboard if xdotool fails
+        print("Falling back to clipboard method...", file=sys.stderr)
+    
+    # Default clipboard method
     try:
         pyperclip.copy(text)
         # print("Copied to clipboard.") # Less verbose
 
         paste_key_char = 'v' # Common paste character
-        current_os = platform.system()
         if current_os == "Darwin": # macOS
             modifier_key = keyboard.Key.cmd
         elif current_os == "Windows" or current_os == "Linux":
