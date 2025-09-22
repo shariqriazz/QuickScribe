@@ -11,8 +11,14 @@ import sys
 import argparse
 import platform  # To detect OS for key combinations
 import shlex  # For safe shell argument escaping
+import re  # For regex processing
 from pynput import keyboard
 from dotenv import load_dotenv
+
+# Import XML processing modules
+from lib.word_stream import WordStreamParser, DictationWord
+from lib.diff_engine import DiffEngine
+from lib.output_manager import OutputManager
 
 # Cross-platform typing/pasting libraries
 try:
@@ -20,6 +26,11 @@ try:
 except ImportError:
     print("Error: pyperclip library not found. Please install it: pip install pyperclip")
     sys.exit(1)
+
+# XML word processing modules
+from lib.word_stream import WordStreamParser, DictationWord
+from lib.diff_engine import DiffEngine
+from lib.output_manager import OutputManager, XdotoolError
 
 # --- Constants ---
 DTYPE = 'int16' # Data type for recording
@@ -48,6 +59,12 @@ api_key = None # To store the loaded key
 USE_XDOTOOL = False # Default to copy-paste method
 LAST_TYPED_TEXT = "" # Track the last text that was typed for editing
 CONVERSATION_HISTORY = [] # Track conversation context for continuous dialogue (memory only)
+
+# XML processing components
+word_parser = None
+diff_engine = None
+output_manager = None
+current_words = [] # Track current word state for diff processing
 
 # --- Helper Functions ---
 
@@ -86,6 +103,13 @@ def select_from_list(options, prompt):
         except EOFError:
             print("\nSelection cancelled.")
             return None # Handle Ctrl+D
+
+def initialize_xml_components():
+    """Initialize the XML processing components."""
+    global word_parser, diff_engine, output_manager
+    word_parser = WordStreamParser()
+    diff_engine = DiffEngine()
+    output_manager = OutputManager()
 
 def initialize_provider_client():
     """Initializes the API client based on the selected PROVIDER."""
@@ -149,9 +173,78 @@ def setup_trigger_key(key_name):
             return False
     return True
 
+def process_xml_transcription(text):
+    """Process XML transcription text using the word processing pipeline."""
+    global CONVERSATION_HISTORY, current_words, word_parser, diff_engine, output_manager
+    
+    try:
+        # Check for conversation tags first
+        conversation_pattern = re.compile(r'<conversation>(.*?)</conversation>', re.DOTALL)
+        conversation_matches = conversation_pattern.findall(text)
+        
+        # Process conversation content
+        for conversation_content in conversation_matches:
+            content = conversation_content.strip()
+            if content:
+                # Process commands in conversation content
+                cleaned_content = detect_and_execute_commands(content)
+                if cleaned_content.strip():
+                    CONVERSATION_HISTORY.append(cleaned_content)
+                    # Keep only last 10 exchanges
+                    if len(CONVERSATION_HISTORY) > 10:
+                        CONVERSATION_HISTORY.pop(0)
+        
+        # Remove conversation tags from text before processing words
+        text_without_conversation = conversation_pattern.sub('', text)
+        
+        # Parse XML to extract words
+        newly_completed_words = word_parser.parse(text_without_conversation)
+        if not newly_completed_words:
+            return
+        
+        # Update current state with newly completed words
+        updated_words = current_words.copy()
+        
+        for new_word in newly_completed_words:
+            # Find if this word ID already exists
+            existing_index = None
+            for i, existing_word in enumerate(updated_words):
+                if existing_word.id == new_word.id:
+                    existing_index = i
+                    break
+            
+            if existing_index is not None:
+                # Update existing word
+                updated_words[existing_index] = new_word
+            else:
+                # Add new word, keeping words sorted by ID
+                inserted = False
+                for i, existing_word in enumerate(updated_words):
+                    if new_word.id < existing_word.id:
+                        updated_words.insert(i, new_word)
+                        inserted = True
+                        break
+                if not inserted:
+                    updated_words.append(new_word)
+        
+        # Generate diff and execute if using xdotool
+        if USE_XDOTOOL:
+            diff_result = diff_engine.compare(current_words, updated_words)
+            output_manager.execute_diff(diff_result)
+        else:
+            # Fallback to old method - just output the text
+            text_output = " ".join([word.text for word in updated_words])
+            output_text_cross_platform(text_output)
+        
+        # Update current words
+        current_words = updated_words
+        
+    except Exception as e:
+        print(f"\nError in XML processing: {e}", file=sys.stderr)
+
 def detect_and_execute_commands(text):
     """Detect commands in transcribed text and execute them. Returns the text with commands removed."""
-    global CONVERSATION_HISTORY, LAST_TYPED_TEXT
+    global CONVERSATION_HISTORY, LAST_TYPED_TEXT, current_words, word_parser
     
     # Command patterns to detect
     reset_patterns = [
@@ -170,6 +263,10 @@ def detect_and_execute_commands(text):
             print(f"\nCommand detected: '{pattern}' - Resetting conversation...")
             CONVERSATION_HISTORY.clear()
             LAST_TYPED_TEXT = ""
+            # Clear XML processing state
+            current_words.clear()
+            if word_parser:
+                word_parser.clear_buffer()
             # Remove the command from the text
             # Find the command in the original text (case-insensitive) and remove it
             import re
@@ -304,7 +401,29 @@ if USE_XDOTOOL and platform.system() != "Linux":
     print(f"\nWarning: xdotool is only supported on Linux. Using clipboard method instead.", file=sys.stderr)
     USE_XDOTOOL = False
 
-# --- Initialize Provider Client and Trigger Key ---
+# --- Initialize XML processing components ---
+def initialize_xml_processing():
+    """Initialize XML word processing components."""
+    global word_parser, diff_engine, output_manager
+    
+    word_parser = WordStreamParser()
+    diff_engine = DiffEngine()
+    
+    if USE_XDOTOOL:
+        try:
+            output_manager = OutputManager()
+            print("XML processing with xdotool output initialized.")
+        except Exception as e:
+            print(f"\nWarning: Failed to initialize xdotool output manager: {e}", file=sys.stderr)
+            print("Falling back to clipboard method.", file=sys.stderr)
+            output_manager = None
+    else:
+        output_manager = None
+# --- Initialize Components ---
+# Initialize XML processing components
+initialize_xml_components()
+
+# Initialize Provider Client and Trigger Key
 if not initialize_provider_client():
     sys.exit(1) # Exit if client initialization failed
 
@@ -448,11 +567,22 @@ def process_audio(audio_np):
             # print("Transcribing with Groq...")
             with open(tmp_filename, "rb") as file_for_groq:
                 try:
-                    # Create prompt with conversation context
-                    prompt = ""
+                    # Create prompt with conversation context and XML formatting instructions
+                    xml_instructions = (
+                        "Format words as <ID>word</ID> where ID starts at 10 and increments by 10. "
+                        "Example: <10>hello</10><20>world</20><30>today</30>. "
+                        "Only reuse ID numbers when editing previous words. "
+                        "After edits, resume with next available ID. "
+                        "Never output partial XML tags. "
+                        "Wrap any non-transcription responses in <conversation>...</conversation>. "
+                        "Keep conversations separate from transcription output. "
+                        "Never mix conversation and transcription tags."
+                    )
+                    
+                    prompt = xml_instructions
                     if CONVERSATION_HISTORY:
                         context = " ".join(CONVERSATION_HISTORY[-3:])  # Last 3 exchanges
-                        prompt = f"Previous context: {context}. Continue the conversation:"
+                        prompt += f" Previous context: {context}. Continue the conversation:"
                     
                     transcription_params = {
                         "file": (os.path.basename(tmp_filename), file_for_groq.read()),
@@ -460,9 +590,8 @@ def process_audio(audio_np):
                         "language": LANGUAGE
                     }
                     
-                    # Add prompt if we have conversation history
-                    if prompt:
-                        transcription_params["prompt"] = prompt
+                    # Add prompt (always include XML instructions)
+                    transcription_params["prompt"] = prompt
                     
                     transcription = groq_client.audio.transcriptions.create(**transcription_params)
                     text_to_output = transcription.text
@@ -487,7 +616,22 @@ def process_audio(audio_np):
 
             # print("Transcribing with Gemini...")
             try:
-                prompt = "Transcript:"
+                xml_instructions = (
+                    "Format words as <ID>word</ID> where ID starts at 10 and increments by 10. "
+                    "Example: <10>hello</10><20>world</20><30>today</30>. "
+                    "Only reuse ID numbers when editing previous words. "
+                    "After edits, resume with next available ID. "
+                    "Never output partial XML tags. "
+                    "Wrap any non-transcription responses in <conversation>...</conversation>. "
+                    "Keep conversations separate from transcription output. "
+                    "Never mix conversation and transcription tags."
+                )
+                
+                prompt = f"Transcript with XML formatting: {xml_instructions}"
+                if CONVERSATION_HISTORY:
+                    context = " ".join(CONVERSATION_HISTORY[-3:])
+                    prompt += f" Previous context: {context}. Continue the conversation:"
+                
                 audio_blob = {"mime_type": "audio/wav", "data": wav_bytes}
                 contents = [prompt, audio_blob]
                 response = gemini_model.generate_content(contents=contents)
@@ -515,20 +659,8 @@ def process_audio(audio_np):
                 print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
 
         if text_to_output:
-            # Process commands and get cleaned text
-            cleaned_text = detect_and_execute_commands(text_to_output)
-            
-            # Add to conversation history if there's actual content
-            if cleaned_text.strip():
-                CONVERSATION_HISTORY.append(cleaned_text)
-                # Keep only last 10 exchanges to prevent context from growing too large
-                if len(CONVERSATION_HISTORY) > 10:
-                    CONVERSATION_HISTORY.pop(0)
-                
-                # Output the cleaned text
-                output_text_cross_platform(cleaned_text)
-            else:
-                print("Command executed, no text to output.")
+            # Process XML words and handle continuous editing
+            process_xml_transcription(text_to_output)
         else:
             print("No transcription result.")
 
@@ -546,6 +678,100 @@ def process_audio(audio_np):
         # Remind user how to record again after processing finishes
         print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
 
+
+def process_xml_transcription(text):
+    """Process XML transcription text using the word processing pipeline."""
+    global current_words, word_parser, diff_engine, output_manager, CONVERSATION_HISTORY
+    
+    try:
+        # Check for conversation tags first
+        import re
+        conversation_pattern = re.compile(r'<conversation>(.*?)</conversation>', re.DOTALL)
+        conversation_matches = conversation_pattern.findall(text)
+        
+        # Process conversation content
+        for conversation_content in conversation_matches:
+            content = conversation_content.strip()
+            if content:
+                # Process commands in conversation content
+                cleaned_content = detect_and_execute_commands(content)
+                if cleaned_content.strip():
+                    print(f"AI: {cleaned_content}")
+                    CONVERSATION_HISTORY.append(cleaned_content)
+                    # Keep only last 10 exchanges
+                    if len(CONVERSATION_HISTORY) > 10:
+                        CONVERSATION_HISTORY.pop(0)
+        
+        # Remove conversation tags from text before processing words
+        text_without_conversation = conversation_pattern.sub('', text)
+        
+        # Parse XML to extract words
+        newly_completed_words = word_parser.parse(text_without_conversation)
+        if not newly_completed_words:
+            return
+        
+        # Update current state with newly completed words
+        updated_words = current_words.copy()
+        
+        for new_word in newly_completed_words:
+            # Find if this word ID already exists
+            existing_index = None
+            for i, existing_word in enumerate(updated_words):
+                if existing_word.id == new_word.id:
+                    existing_index = i
+                    break
+            
+            if existing_index is not None:
+                # Update existing word
+                updated_words[existing_index] = new_word
+            else:
+                # Add new word, keeping words sorted by ID
+                inserted = False
+                for i, existing_word in enumerate(updated_words):
+                    if new_word.id < existing_word.id:
+                        updated_words.insert(i, new_word)
+                        inserted = True
+                        break
+                if not inserted:
+                    updated_words.append(new_word)
+        
+        # Calculate diff and execute changes
+        diff_result = diff_engine.compare(current_words, updated_words)
+        
+        if output_manager and USE_XDOTOOL:
+            # Use the sophisticated output manager for xdotool
+            try:
+                output_manager.execute_diff(diff_result)
+            except XdotoolError as e:
+                print(f"\nxdotool error: {e}", file=sys.stderr)
+                print("Falling back to clipboard method...", file=sys.stderr)
+                # Fall back to clipboard method
+                if diff_result.new_text:
+                    full_text = ' '.join(w.text for w in updated_words)
+                    output_text_cross_platform(full_text)
+        else:
+            # Use clipboard method - but we still need to handle the diff properly
+            if diff_result.backspaces > 0 or diff_result.new_text:
+                # For clipboard method, output the full corrected text
+                full_text = ' '.join(w.text for w in updated_words)
+                output_text_cross_platform(full_text)
+        
+        # Update current words state
+        current_words = updated_words
+        
+        # Add to conversation history
+        if updated_words:
+            full_text = ' '.join(w.text for w in updated_words)
+            # Process commands in the full text
+            cleaned_text = detect_and_execute_commands(full_text)
+            if cleaned_text.strip() and cleaned_text != full_text:
+                # A command was detected and executed, update conversation history
+                CONVERSATION_HISTORY.append(cleaned_text)
+                if len(CONVERSATION_HISTORY) > 10:
+                    CONVERSATION_HISTORY.pop(0)
+    
+    except Exception as e:
+        print(f"\nError processing XML transcription: {e}", file=sys.stderr)
 
 def type_with_xdotool(new_text):
     """Uses xdotool to type text directly with editing support via backspace."""
