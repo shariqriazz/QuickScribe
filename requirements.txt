@@ -7,3 +7,8 @@ pyperclip
 groq
 google-generativeai
 argparse
+
+# System dependencies (not installable via pip):
+# xdotool - For Linux users when using --use-xdotool option
+#   Install via: sudo apt-get install xdotool (Debian/Ubuntu)
+#   Install via: sudo dnf install xdotool (Fedora/RHEL)
