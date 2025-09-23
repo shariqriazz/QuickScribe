@@ -31,6 +31,7 @@ except ImportError:
 from lib.word_stream import WordStreamParser, DictationWord
 from lib.diff_engine import DiffEngine
 from lib.output_manager import OutputManager, XdotoolError
+from lib.conversation_state import ConversationManager, ConversationState
 
 # --- Constants ---
 DTYPE = 'int16' # Data type for recording
@@ -65,6 +66,13 @@ word_parser = None
 diff_engine = None
 output_manager = None
 current_words = [] # Track current word state for diff processing
+
+# Conversation management
+conversation_manager = None
+
+# Provider-specific instruction additions (currently blank, can be customized per provider)
+GROQ_SPECIFIC_INSTRUCTIONS = ""
+GEMINI_SPECIFIC_INSTRUCTIONS = ""
 
 # --- Helper Functions ---
 
@@ -106,10 +114,12 @@ def select_from_list(options, prompt):
 
 def initialize_xml_components():
     """Initialize the XML processing components."""
-    global word_parser, diff_engine, output_manager
+    global word_parser, diff_engine, output_manager, conversation_manager
     word_parser = WordStreamParser()
     diff_engine = DiffEngine()
     output_manager = OutputManager()
+    conversation_manager = ConversationManager()
+    conversation_manager.load_conversation()
 
 def initialize_provider_client():
     """Initializes the API client based on the selected PROVIDER."""
@@ -173,78 +183,59 @@ def setup_trigger_key(key_name):
             return False
     return True
 
-def process_xml_transcription(text):
-    """Process XML transcription text using the word processing pipeline."""
-    global CONVERSATION_HISTORY, current_words, word_parser, diff_engine, output_manager
+def get_xml_instructions(provider_specific=""):
+    """
+    Get the common XML instructions with optional provider-specific additions.
     
-    try:
-        # Check for conversation tags first
-        conversation_pattern = re.compile(r'<conversation>(.*?)</conversation>', re.DOTALL)
-        conversation_matches = conversation_pattern.findall(text)
+    Args:
+        provider_specific: Additional instructions specific to the provider
         
-        # Process conversation content
-        for conversation_content in conversation_matches:
-            content = conversation_content.strip()
-            if content:
-                # Process commands in conversation content
-                cleaned_content = detect_and_execute_commands(content)
-                if cleaned_content.strip():
-                    CONVERSATION_HISTORY.append(cleaned_content)
-                    # Keep only last 10 exchanges
-                    if len(CONVERSATION_HISTORY) > 10:
-                        CONVERSATION_HISTORY.pop(0)
-        
-        # Remove conversation tags from text before processing words
-        text_without_conversation = conversation_pattern.sub('', text)
-        
-        # Parse XML to extract words
-        newly_completed_words = word_parser.parse(text_without_conversation)
-        if not newly_completed_words:
-            return
-        
-        # Update current state with newly completed words
-        updated_words = current_words.copy()
-        
-        for new_word in newly_completed_words:
-            # Find if this word ID already exists
-            existing_index = None
-            for i, existing_word in enumerate(updated_words):
-                if existing_word.id == new_word.id:
-                    existing_index = i
-                    break
-            
-            if existing_index is not None:
-                # Update existing word
-                updated_words[existing_index] = new_word
-            else:
-                # Add new word, keeping words sorted by ID
-                inserted = False
-                for i, existing_word in enumerate(updated_words):
-                    if new_word.id < existing_word.id:
-                        updated_words.insert(i, new_word)
-                        inserted = True
-                        break
-                if not inserted:
-                    updated_words.append(new_word)
-        
-        # Generate diff and execute if using xdotool
-        if USE_XDOTOOL:
-            diff_result = diff_engine.compare(current_words, updated_words)
-            output_manager.execute_diff(diff_result)
-        else:
-            # Fallback to old method - just output the text
-            text_output = " ".join([word.text for word in updated_words])
-            output_text_cross_platform(text_output)
-        
-        # Update current words
-        current_words = updated_words
-        
-    except Exception as e:
-        print(f"\nError in XML processing: {e}", file=sys.stderr)
+    Returns:
+        Complete instruction string
+    """
+    common_instructions = (
+        "You are an intelligent transcription assistant. Use COMMON SENSE to determine if the user is dictating content or giving you editing instructions.\n\n"
+        "SPACING CONTROL:\n"
+        "- YOU have full control over all spacing, punctuation, and whitespace\n"
+        "- Each <ID>content</ID> tag contains exactly what you want at that position\n"
+        "- SPACES BETWEEN TAGS ARE OMITTED - only content inside tags is used\n"
+        "- Include spaces, punctuation, and formatting within your tags as needed\n"
+        "- Example: <10>Hello world, </10><20>this works perfectly!</20> renders as 'Hello world, this works perfectly!'\n"
+        "- Bad: <10>Hello</10> <20>world</20> renders as 'Helloworld' (space between tags ignored)\n"
+        "- Good: <10>Hello world </10><20>today!</20> renders as 'Hello world today!' (space inside first tag)\n\n"
+        "DICTATION vs INSTRUCTION DETECTION:\n"
+        "- DICTATION: User speaking content to be written (flows naturally, continues previous text)\n"
+        "- INSTRUCTION: User giving you commands (phrases like 'fix this', 'change that', 'make it better', 'turn this into', 'correct the grammar')\n"
+        "- Use context clues: if it sounds like they're telling YOU to do something, it's an instruction\n"
+        "- Instructions often start mid-sentence or break the flow of normal speech\n\n"
+        "DICTATION MODE:\n"
+        "- Transcribe speech as <ID>content</ID> using PHRASE-LEVEL granularity\n"
+        "- Group words into logical chunks (3-8 words per tag is ideal)\n"
+        "- Continue from highest existing ID + 10 (if last ID was 40, start at 50)\n"
+        "- Example: <50>Testing the system </50><60>with multiple phrases </60><70>for better efficiency.</70>\n"
+        "- Avoid excessive tags like: <10>Testing </10><20>1, </20><30>2, </30><40>3.</40>\n\n"
+        "INSTRUCTION MODE:\n"
+        "- Don't transcribe the instruction itself\n"
+        "- Analyze the existing conversation text to understand what they want changed\n"
+        "- Make the requested changes using existing IDs: <30>newword </30> or <20></20> for deletion\n"
+        "- Common instructions: 'fix grammar', 'make it formal', 'turn this into a paragraph', 'correct spelling'\n\n"
+        "EXAMPLES:\n"
+        "- 'Hello world fix the grammar' → Likely: 'Hello world' (dictation) + 'fix the grammar' (instruction)\n"
+        "- 'Turn this sentence into a nice paragraph' → Pure instruction, edit existing text\n"
+        "- 'Today is sunny and warm' → Pure dictation, transcribe normally\n\n"
+        "CONVERSATION RESPONSES:\n"
+        "- Wrap clarifying responses in <conversation>...</conversation>\n"
+        "- Use only when you need to ask for clarification about instructions"
+    )
+    
+    if provider_specific.strip():
+        return common_instructions + "\n\n" + provider_specific
+    return common_instructions
+
 
 def detect_and_execute_commands(text):
     """Detect commands in transcribed text and execute them. Returns the text with commands removed."""
-    global CONVERSATION_HISTORY, LAST_TYPED_TEXT, current_words, word_parser
+    global CONVERSATION_HISTORY, LAST_TYPED_TEXT, current_words, word_parser, conversation_manager
     
     # Command patterns to detect
     reset_patterns = [
@@ -261,12 +252,15 @@ def detect_and_execute_commands(text):
     for pattern in reset_patterns:
         if pattern in text_lower:
             print(f"\nCommand detected: '{pattern}' - Resetting conversation...")
-            CONVERSATION_HISTORY.clear()
+            CONVERSATION_HISTORY.clear()  # Keep for backward compatibility
             LAST_TYPED_TEXT = ""
             # Clear XML processing state
             current_words.clear()
             if word_parser:
                 word_parser.clear_buffer()
+            # Reset conversation state
+            if conversation_manager:
+                conversation_manager.reset_conversation()
             # Remove the command from the text
             # Find the command in the original text (case-insensitive) and remove it
             import re
@@ -447,6 +441,17 @@ print("Ensure Terminal/IDE has Microphone and Accessibility/Input Monitoring per
 if PROVIDER == 'gemini':
     print("Note: Gemini currently only transcribes English audio well.")
 print("Press Ctrl+C to exit.")
+
+# Display system instructions once at startup
+print("\n" + "="*60)
+print("SYSTEM INSTRUCTIONS FOR MODEL:")
+print("-" * 60)
+# Show provider-specific instructions for current provider
+provider_specific = GROQ_SPECIFIC_INSTRUCTIONS if PROVIDER == 'groq' else GEMINI_SPECIFIC_INSTRUCTIONS
+xml_instructions = get_xml_instructions(provider_specific)
+print(xml_instructions)
+print("="*60)
+
 print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
 
 
@@ -568,21 +573,33 @@ def process_audio(audio_np):
             with open(tmp_filename, "rb") as file_for_groq:
                 try:
                     # Create prompt with conversation context and XML formatting instructions
-                    xml_instructions = (
-                        "Format words as <ID>word</ID> where ID starts at 10 and increments by 10. "
-                        "Example: <10>hello</10><20>world</20><30>today</30>. "
-                        "Only reuse ID numbers when editing previous words. "
-                        "After edits, resume with next available ID. "
-                        "Never output partial XML tags. "
-                        "Wrap any non-transcription responses in <conversation>...</conversation>. "
-                        "Keep conversations separate from transcription output. "
-                        "Never mix conversation and transcription tags."
-                    )
+                    xml_instructions = get_xml_instructions(GROQ_SPECIFIC_INSTRUCTIONS)
+                    
+                    # Display conversation flow
+                    print("\n" + "="*60)
+                    print("SENDING TO MODEL:")
+                    print("[conversation context being sent]")
+                    
+                    conversation_xml = ""
+                    if conversation_manager and conversation_manager.state.words:
+                        conversation_xml = conversation_manager.state.to_xml()
+                        print(f"XML markup: {conversation_xml}")
+                        
+                        # Show compiled view
+                        compiled_text = conversation_manager.state.to_text()
+                        print(f"Rendered text: {compiled_text}")
+                    else:
+                        print("XML markup: [no conversation history]")
+                        print("Rendered text: [empty]")
+                    
+                    print(f"Audio file: {os.path.basename(tmp_filename)}")
+                    print("-" * 60)
                     
                     prompt = xml_instructions
-                    if CONVERSATION_HISTORY:
-                        context = " ".join(CONVERSATION_HISTORY[-3:])  # Last 3 exchanges
-                        prompt += f" Previous context: {context}. Continue the conversation:"
+                    if conversation_xml:
+                        # Show both XML markup and rendered text to the model
+                        compiled_text = conversation_manager.state.to_text()
+                        prompt += f" Current conversation XML: {conversation_xml}\nCurrent conversation text: {compiled_text}"
                     
                     transcription_params = {
                         "file": (os.path.basename(tmp_filename), file_for_groq.read()),
@@ -595,7 +612,6 @@ def process_audio(audio_np):
                     
                     transcription = groq_client.audio.transcriptions.create(**transcription_params)
                     text_to_output = transcription.text
-                    print(f"Transcription: {text_to_output}")
                 except GroqError as e:
                     print(f"\nGroq API Error: {e}", file=sys.stderr)
                 except Exception as e:
@@ -616,21 +632,33 @@ def process_audio(audio_np):
 
             # print("Transcribing with Gemini...")
             try:
-                xml_instructions = (
-                    "Format words as <ID>word</ID> where ID starts at 10 and increments by 10. "
-                    "Example: <10>hello</10><20>world</20><30>today</30>. "
-                    "Only reuse ID numbers when editing previous words. "
-                    "After edits, resume with next available ID. "
-                    "Never output partial XML tags. "
-                    "Wrap any non-transcription responses in <conversation>...</conversation>. "
-                    "Keep conversations separate from transcription output. "
-                    "Never mix conversation and transcription tags."
-                )
+                xml_instructions = get_xml_instructions(GEMINI_SPECIFIC_INSTRUCTIONS)
+                
+                # Display conversation flow
+                print("\n" + "="*60)
+                print("SENDING TO MODEL:")
+                print("[conversation context being sent]")
+                
+                conversation_xml = ""
+                if conversation_manager and conversation_manager.state.words:
+                    conversation_xml = conversation_manager.state.to_xml()
+                    print(f"XML markup: {conversation_xml}")
+                    
+                    # Show compiled view
+                    compiled_text = conversation_manager.state.to_text()
+                    print(f"Rendered text: {compiled_text}")
+                else:
+                    print("XML markup: [no conversation history]")
+                    print("Rendered text: [empty]")
+                
+                print(f"Audio file: [audio_data.wav]")
+                print("-" * 60)
                 
                 prompt = f"Transcript with XML formatting: {xml_instructions}"
-                if CONVERSATION_HISTORY:
-                    context = " ".join(CONVERSATION_HISTORY[-3:])
-                    prompt += f" Previous context: {context}. Continue the conversation:"
+                if conversation_xml:
+                    # Show both XML markup and rendered text to the model
+                    compiled_text = conversation_manager.state.to_text()
+                    prompt += f" Current conversation XML: {conversation_xml}\nCurrent conversation text: {compiled_text}"
                 
                 audio_blob = {"mime_type": "audio/wav", "data": wav_bytes}
                 contents = [prompt, audio_blob]
@@ -643,11 +671,7 @@ def process_audio(audio_np):
                 elif hasattr(response, 'text'): # Fallback for simpler structures if any
                      text_to_output = response.text
 
-                if text_to_output:
-                    print(f"Transcription: {text_to_output}")
-                else:
-                    print("\nGemini did not return text.")
-                    # print(f"Full Response: {response}") # Debugging
+                # text_to_output is set above in the response processing
 
             except google_exceptions.InvalidArgument as e:
                  print(f"\nGemini API Error (Invalid Argument): {e}", file=sys.stderr)
@@ -659,8 +683,21 @@ def process_audio(audio_np):
                 print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
 
         if text_to_output:
-            # Process XML words and handle continuous editing
+            # Display assistant response
+            print("\nRECEIVED FROM MODEL:")
+            print(f"Raw response: {text_to_output}")
+            
+            # Process XML words first to update conversation state
             process_xml_transcription(text_to_output)
+            
+            # Display updated compiled view after processing
+            print("\nAFTER PROCESSING:")
+            if conversation_manager and conversation_manager.state.words:
+                compiled_text = conversation_manager.state.to_text()
+                print(f"Updated conversation: {compiled_text}")
+            else:
+                print("Updated conversation: [empty]")
+            print("="*60)
         else:
             print("No transcription result.")
 
@@ -681,7 +718,7 @@ def process_audio(audio_np):
 
 def process_xml_transcription(text):
     """Process XML transcription text using the word processing pipeline."""
-    global current_words, word_parser, diff_engine, output_manager, CONVERSATION_HISTORY
+    global current_words, word_parser, diff_engine, output_manager, conversation_manager
     
     try:
         # Check for conversation tags first
@@ -697,43 +734,60 @@ def process_xml_transcription(text):
                 cleaned_content = detect_and_execute_commands(content)
                 if cleaned_content.strip():
                     print(f"AI: {cleaned_content}")
-                    CONVERSATION_HISTORY.append(cleaned_content)
-                    # Keep only last 10 exchanges
-                    if len(CONVERSATION_HISTORY) > 10:
-                        CONVERSATION_HISTORY.pop(0)
         
         # Remove conversation tags from text before processing words
         text_without_conversation = conversation_pattern.sub('', text)
         
-        # Parse XML to extract words
-        newly_completed_words = word_parser.parse(text_without_conversation)
-        if not newly_completed_words:
+        # Parse XML to extract words (including deletions)
+        newly_parsed_words = word_parser.parse(text_without_conversation)
+        if not newly_parsed_words:
             return
         
-        # Update current state with newly completed words
-        updated_words = current_words.copy()
-        
-        for new_word in newly_completed_words:
-            # Find if this word ID already exists
-            existing_index = None
-            for i, existing_word in enumerate(updated_words):
-                if existing_word.id == new_word.id:
-                    existing_index = i
-                    break
+        # Update conversation state with all parsed words
+        if conversation_manager:
+            for word in newly_parsed_words:
+                if word.text is None:
+                    # Handle deletion
+                    conversation_manager.state.delete_word(word.id)
+                else:
+                    # Handle update/addition
+                    conversation_manager.state.update_word(word.id, word.text)
             
-            if existing_index is not None:
-                # Update existing word
-                updated_words[existing_index] = new_word
-            else:
-                # Add new word, keeping words sorted by ID
-                inserted = False
-                for i, existing_word in enumerate(updated_words):
-                    if new_word.id < existing_word.id:
-                        updated_words.insert(i, new_word)
-                        inserted = True
-                        break
-                if not inserted:
-                    updated_words.append(new_word)
+            # Conversation state updated in memory
+            
+            # Build current words list from conversation state for diff processing
+            word_items = list(conversation_manager.state.words.items())
+            word_items.sort(key=lambda x: x[0])  # Sort by ID
+            updated_words = [DictationWord(id=word_id, text=text) for word_id, text in word_items]
+        else:
+            # Fallback to old behavior if conversation manager not available
+            updated_words = current_words.copy()
+            
+            for new_word in newly_parsed_words:
+                if new_word.text is None:
+                    # Handle deletion - remove from updated_words
+                    updated_words = [w for w in updated_words if w.id != new_word.id]
+                else:
+                    # Find if this word ID already exists
+                    existing_index = None
+                    for i, existing_word in enumerate(updated_words):
+                        if existing_word.id == new_word.id:
+                            existing_index = i
+                            break
+                    
+                    if existing_index is not None:
+                        # Update existing word
+                        updated_words[existing_index] = new_word
+                    else:
+                        # Add new word, keeping words sorted by ID
+                        inserted = False
+                        for i, existing_word in enumerate(updated_words):
+                            if new_word.id < existing_word.id:
+                                updated_words.insert(i, new_word)
+                                inserted = True
+                                break
+                        if not inserted:
+                            updated_words.append(new_word)
         
         # Calculate diff and execute changes
         diff_result = diff_engine.compare(current_words, updated_words)
@@ -747,28 +801,17 @@ def process_xml_transcription(text):
                 print("Falling back to clipboard method...", file=sys.stderr)
                 # Fall back to clipboard method
                 if diff_result.new_text:
-                    full_text = ' '.join(w.text for w in updated_words)
+                    full_text = conversation_manager.state.to_text_from_words(updated_words)
                     output_text_cross_platform(full_text)
         else:
             # Use clipboard method - but we still need to handle the diff properly
             if diff_result.backspaces > 0 or diff_result.new_text:
                 # For clipboard method, output the full corrected text
-                full_text = ' '.join(w.text for w in updated_words)
+                full_text = conversation_manager.state.to_text_from_words(updated_words)
                 output_text_cross_platform(full_text)
         
         # Update current words state
         current_words = updated_words
-        
-        # Add to conversation history
-        if updated_words:
-            full_text = ' '.join(w.text for w in updated_words)
-            # Process commands in the full text
-            cleaned_text = detect_and_execute_commands(full_text)
-            if cleaned_text.strip() and cleaned_text != full_text:
-                # A command was detected and executed, update conversation history
-                CONVERSATION_HISTORY.append(cleaned_text)
-                if len(CONVERSATION_HISTORY) > 10:
-                    CONVERSATION_HISTORY.pop(0)
     
     except Exception as e:
         print(f"\nError processing XML transcription: {e}", file=sys.stderr)
