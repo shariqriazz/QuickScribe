@@ -35,6 +35,7 @@ from lib.word_stream import WordStreamParser, DictationWord
 from lib.diff_engine import DiffEngine
 from lib.output_manager import OutputManager, XdotoolError
 from lib.conversation_state import ConversationManager, ConversationState
+from providers.provider_factory import ProviderFactory
 
 # --- Constants ---
 DTYPE = 'int16' # Data type for recording
@@ -55,10 +56,8 @@ SAMPLE_RATE = DEFAULT_SAMPLE_RATE
 CHANNELS = DEFAULT_CHANNELS
 TRIGGER_KEY_NAME = DEFAULT_TRIGGER_KEY
 TRIGGER_KEY = None
-# Provider specific clients/models
-groq_client = None
-gemini_model = None
-api_key = None # To store the loaded key
+# Provider instance
+provider = None
 # Output method
 USE_XDOTOOL = False # Default to copy-paste method
 LAST_TYPED_TEXT = "" # Track the last text that was typed for editing
@@ -78,8 +77,6 @@ streaming_buffer = ""
 last_processed_position = 0
 
 # Provider-specific instruction additions (currently blank, can be customized per provider)
-GROQ_SPECIFIC_INSTRUCTIONS = ""
-GEMINI_SPECIFIC_INSTRUCTIONS = ""
 
 # --- Helper Functions ---
 
@@ -94,50 +91,20 @@ def initialize_xml_components():
     conversation_manager.load_conversation()
 
 def initialize_provider_client():
-    """Initializes the API client based on the selected PROVIDER."""
-    global groq_client, gemini_model, api_key # Allow modification
-
-    if PROVIDER == 'groq':
-        try:
-            from groq import Groq, GroqError
-        except ImportError:
-            print("Error: groq library not found. Please install it: pip install groq", file=sys.stderr)
-            return False
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            print("Error: GROQ_API_KEY not found in environment variables or .env file.", file=sys.stderr)
-            return False
-        try:
-            groq_client = Groq(api_key=api_key)
-            print("Groq client initialized.")
+    """Initializes the provider client based on the selected PROVIDER."""
+    global provider
+    
+    try:
+        provider = ProviderFactory.create_provider(PROVIDER, MODEL_ID, LANGUAGE)
+        if provider.initialize():
             return True
-        except Exception as e:
-            print(f"Error initializing Groq client: {e}", file=sys.stderr)
+        else:
             return False
-
-    elif PROVIDER == 'gemini':
-        try:
-            import google.generativeai as genai
-            # Import specific exception type
-            from google.api_core import exceptions as google_exceptions
-        except ImportError:
-            print("Error: google-generativeai library not found. Please install it: pip install google-generativeai", file=sys.stderr)
-            return False
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            print("Error: GOOGLE_API_KEY not found in environment variables or .env file.", file=sys.stderr)
-            return False
-        try:
-            genai.configure(api_key=api_key)
-            gemini_model = genai.GenerativeModel(MODEL_ID)
-            print("Gemini client initialized.")
-            return True
-        # Catch specific Google exceptions if needed during init, though less likely here
-        except Exception as e:
-            print(f"Error configuring or creating Gemini model instance ({MODEL_ID}): {e}", file=sys.stderr)
-            return False
-    else:
-        print("Error: No valid provider selected.", file=sys.stderr)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Error initializing provider: {e}", file=sys.stderr)
         return False
 
 def setup_trigger_key(key_name):
@@ -216,13 +183,17 @@ def get_xml_instructions(provider_specific=""):
         "- Don't transcribe the instruction itself in <update>\n"
         "- Analyze the existing conversation text to understand what they want changed\n"
         "- Make the requested changes using existing IDs: <30>newword </30> or <20></20> for deletion\n"
+        "- CRITICAL: When removing content, you MUST clear out old tags by making them empty: <30></30>, <40></40>, <50></50>\n"
+        "- Only include tags for content that should remain or be updated - all unused old tags must be explicitly emptied\n"
+        "- Example: If original has <10>old </10><20>content </20><30>here</30> and you want 'new text', output: <10>new text</10><20></20><30></30>\n"
         "- Common instructions: 'fix grammar', 'make it formal', 'turn this into a paragraph', 'correct spelling'\n\n"
         "EXAMPLES:\n"
         "- 'Hello world fix the grammar' → Likely: 'Hello world' (dictation) + 'fix the grammar' (instruction)\n"
         "- 'Turn this sentence into a nice paragraph' → Pure instruction, edit existing text\n"
         "- 'Today is sunny and warm' → Pure dictation, transcribe normally\n\n"
         "UPDATE SECTION RULES:\n"
-        "- Use empty tags like <50></50> to delete word ID 50\n"
+        "- MANDATORY: Use empty tags like <50></50> to delete/clear word ID 50\n"
+        "- MANDATORY: When editing existing content, ALL old tag IDs must be addressed - either updated with new content or explicitly emptied\n"
         "- YOU control all spacing, punctuation, and whitespace within tags\n"
         "- SPACES BETWEEN TAGS ARE IGNORED - only content inside tags is used\n"
         "- All whitespace including carriage returns must be inside tags - anything between tags is completely ignored. Newlines are preserved.\n"
@@ -230,6 +201,7 @@ def get_xml_instructions(provider_specific=""):
         "- Group words into logical phrases (3-8 words per tag ideal)\n"
         "- Continue from highest existing ID + 10\n"
         "- Example: <50>Testing the system </50><60>with multiple phrases.</60>\n"
+        "- Deletion example: Original <10>old </10><20>text </20><30>here</30> → New <10>new content</10><20></20><30></30>\n"
         "\n"
         "NON-DUPLICATION GUARANTEE:\n"
         "- <int> must not be a verbatim copy of <tx> after trimming and trivial punctuation normalization, unless the utterance is pure dictation and equals the intended cleaned output.\n"
@@ -363,7 +335,7 @@ print("\n" + "="*60)
 print("SYSTEM INSTRUCTIONS FOR MODEL:")
 print("-" * 60)
 # Show provider-specific instructions for current provider
-provider_specific = GROQ_SPECIFIC_INSTRUCTIONS if PROVIDER == 'groq' else GEMINI_SPECIFIC_INSTRUCTIONS
+provider_specific = provider.get_provider_specific_instructions() if provider else ""
 xml_instructions = get_xml_instructions(provider_specific)
 print(xml_instructions)
 print("="*60)
@@ -473,204 +445,83 @@ def stop_recording_and_process():
 # --- Audio Processing & Transcription ---
 def process_audio(audio_np):
     """Transcribes audio via the selected provider and outputs the result with real-time streaming."""
-    # print(f"Processing {audio_np.shape[0] / SAMPLE_RATE:.2f}s of audio...") # Less verbose
-    tmp_filename = None # For Groq
-
-    # Need access to global clients/models initialized earlier
-    global groq_client, gemini_model
-
-    # Also need specific exception types if imported conditionally
-    if PROVIDER == 'groq':
-        from groq import GroqError
-    elif PROVIDER == 'gemini':
-        from google.api_core import exceptions as google_exceptions
-
+    global provider
 
     try:
         reset_streaming_state()
-        if PROVIDER == 'groq':
-            if not groq_client:
-                print("\nError: Groq client not initialized.", file=sys.stderr)
-                return
+        
+        if not provider or not provider.is_initialized():
+            print("\nError: Provider not initialized.", file=sys.stderr)
+            return
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-                tmp_filename = tmp_file.name
-                sf.write(tmp_filename, audio_np, SAMPLE_RATE)
-
-            # print("Transcribing with Groq...")
-            with open(tmp_filename, "rb") as file_for_groq:
-                try:
-                    # Create prompt with conversation context and XML formatting instructions
-                    xml_instructions = get_xml_instructions(GROQ_SPECIFIC_INSTRUCTIONS)
-                    
-                    # Display conversation flow
-                    print("\n" + "="*60)
-                    print("SENDING TO MODEL:")
-                    print("[conversation context being sent]")
-                    
-                    conversation_xml = ""
-                    if conversation_manager and conversation_manager.state.words:
-                        conversation_xml = conversation_manager.state.to_xml()
-                        print(f"XML markup: {conversation_xml}")
-                        
-                        # Show compiled view
-                        compiled_text = conversation_manager.state.to_text()
-                        print(f"Rendered text: {compiled_text}")
-                    else:
-                        print("XML markup: [no conversation history]")
-                        print("Rendered text: [empty]")
-                    
-                    print(f"Audio file: {os.path.basename(tmp_filename)}")
-                    print("-" * 60)
-                    
-                    prompt = xml_instructions
-                    if conversation_xml:
-                        # Show both XML markup and rendered text to the model
-                        compiled_text = conversation_manager.state.to_text()
-                        prompt += f" Current conversation XML: {conversation_xml}\nCurrent conversation text: {compiled_text}"
-                    
-                    transcription_params = {
-                        "file": (os.path.basename(tmp_filename), file_for_groq.read()),
-                        "model": MODEL_ID,
-                        "language": LANGUAGE
-                    }
-                    
-                    # Add prompt (always include XML instructions)
-                    transcription_params["prompt"] = prompt
-                    
-                    # Use streaming for Groq if available
-                    try:
-                        # Check if streaming is available for transcription
-                        transcription = groq_client.audio.transcriptions.create(**transcription_params)
-                        text_to_output = transcription.text
-                        
-                        # Apply final state without non-stream display
-                        process_xml_transcription(text_to_output)
-                        
-                    except Exception as stream_error:
-                        print(f"Streaming not available, using standard response: {stream_error}")
-                        transcription = groq_client.audio.transcriptions.create(**transcription_params)
-                        text_to_output = transcription.text
-                        process_xml_transcription(text_to_output)
-                        
-                except GroqError as e:
-                    print(f"\nGroq API Error: {e}", file=sys.stderr)
-                except Exception as e:
-                    print(f"\nUnexpected error during Groq transcription: {e}", file=sys.stderr)
-
-        elif PROVIDER == 'gemini':
-            if not gemini_model:
-                print("\nError: Gemini model not initialized.", file=sys.stderr)
-                return
-
-            wav_bytes_io = io.BytesIO()
-            sf.write(wav_bytes_io, audio_np, SAMPLE_RATE, format='WAV', subtype='PCM_16')
-            wav_bytes = wav_bytes_io.getvalue()
-            wav_bytes_io.close()
-
-            if len(wav_bytes) > 18 * 1024 * 1024:
-                 print("\nWarning: Audio data >18MB, may fail inline Gemini request.")
-
-            # print("Transcribing with Gemini...")
+        # Create prompt with conversation context and XML formatting instructions
+        provider_specific_instructions = provider.get_provider_specific_instructions()
+        xml_instructions = get_xml_instructions(provider_specific_instructions)
+        
+        # Display conversation flow
+        print("\n" + "="*60)
+        print("SENDING TO MODEL:")
+        print("[conversation context being sent]")
+        
+        conversation_xml = ""
+        if conversation_manager and conversation_manager.state.words:
+            conversation_xml = conversation_manager.state.to_xml()
+            print(f"XML markup: {conversation_xml}")
+            
+            # Show compiled view
+            compiled_text = conversation_manager.state.to_text()
+            print(f"Rendered text: {compiled_text}")
+        else:
+            print("XML markup: [no conversation history]")
+            print("Rendered text: [empty]")
+        
+        print(f"Audio file: [audio_data.wav]")
+        print("-" * 60)
+        
+        prompt = xml_instructions
+        if conversation_xml:
+            # Show both XML markup and rendered text to the model
+            compiled_text = conversation_manager.state.to_text()
+            prompt += f" Current conversation XML: {conversation_xml}\nCurrent conversation text: {compiled_text}"
+        
+        # Try streaming if provider supports it
+        if hasattr(provider, 'transcribe_audio_streaming'):
             try:
-                xml_instructions = get_xml_instructions(GEMINI_SPECIFIC_INSTRUCTIONS)
+                print("\nRECEIVED FROM MODEL (streaming):")
+                accumulated_text = ""
+                for chunk_text in provider.transcribe_audio_streaming(audio_np, SAMPLE_RATE, prompt):
+                    if chunk_text:
+                        print(chunk_text, end='', flush=True)
+                        accumulated_text += chunk_text
+                        process_streaming_chunk(chunk_text)
+                print()  # New line after streaming
                 
-                # Display conversation flow
-                print("\n" + "="*60)
-                print("SENDING TO MODEL:")
-                print("[conversation context being sent]")
-                
-                conversation_xml = ""
-                if conversation_manager and conversation_manager.state.words:
-                    conversation_xml = conversation_manager.state.to_xml()
-                    print(f"XML markup: {conversation_xml}")
-                    
-                    # Show compiled view
-                    compiled_text = conversation_manager.state.to_text()
-                    print(f"Rendered text: {compiled_text}")
+                if accumulated_text:
+                    process_xml_transcription(accumulated_text)
                 else:
-                    print("XML markup: [no conversation history]")
-                    print("Rendered text: [empty]")
+                    print("\nProvider did not return text.")
+                    
+            except Exception as stream_error:
+                print(f"Streaming failed, using standard response: {stream_error}")
+                # Fall back to non-streaming
+                text_to_output = provider.transcribe_audio(audio_np, SAMPLE_RATE, prompt)
+                if text_to_output:
+                    process_xml_transcription(text_to_output)
+                else:
+                    print("\nProvider did not return text.")
+        else:
+            # Use non-streaming transcription
+            text_to_output = provider.transcribe_audio(audio_np, SAMPLE_RATE, prompt)
+            if text_to_output:
+                process_xml_transcription(text_to_output)
+            else:
+                print("\nProvider did not return text.")
+
+
                 
-                print(f"Audio file: [audio_data.wav]")
-                print("-" * 60)
-                
-                prompt = f"Transcript with XML formatting: {xml_instructions}"
-                if conversation_xml:
-                    # Show both XML markup and rendered text to the model
-                    compiled_text = conversation_manager.state.to_text()
-                    prompt += f" Current conversation XML: {conversation_xml}\nCurrent conversation text: {compiled_text}"
-                
-                audio_blob = {"mime_type": "audio/wav", "data": wav_bytes}
-                contents = [prompt, audio_blob]
-                
-                # Use streaming for Gemini
-                try:
-                    response = gemini_model.generate_content(
-                        contents=contents,
-                        stream=True
-                    )
-
-                    reset_streaming_state()
-                    print("\nRECEIVED FROM MODEL (streaming):")
-                    accumulated_text = ""
-                    for chunk in response:
-                        if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                            chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
-                            if chunk_text:
-                                print(chunk_text, end='', flush=True)
-                                accumulated_text += chunk_text
-                                process_streaming_chunk(chunk_text)
-                    print()  # New line after streaming
-
-                    if accumulated_text:
-                        process_xml_transcription(accumulated_text)
-                    else:
-                        print("\nGemini did not return text.")
-
-                except Exception as stream_error:
-                    print(f"Streaming failed, using standard response: {stream_error}")
-                    response = gemini_model.generate_content(contents=contents)
-
-                    # Check for safety ratings first
-                    if response.candidates and response.candidates[0].safety_ratings:
-                        print("\nSafety Ratings:")
-                        for rating in response.candidates[0].safety_ratings:
-                            print(f"  {rating.category.name}: {rating.probability.name}")
-
-                    # Check response structure carefully
-                    text_to_output = None
-                    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                         text_to_output = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
-                    elif hasattr(response, 'text'): # Fallback for simpler structures if any
-                         text_to_output = response.text
-
-                    if text_to_output:
-                        process_xml_transcription(text_to_output)
-                    else:
-                        print("\nGemini did not return text.")
-                        if response.candidates and response.candidates[0].finish_reason:
-                            print(f"Finish reason: {response.candidates[0].finish_reason.name}")
-
-            except google_exceptions.InvalidArgument as e:
-                 print(f"\nGemini API Error (Invalid Argument): {e}", file=sys.stderr)
-            except google_exceptions.PermissionDenied as e:
-                 print(f"\nGemini API Error (Permission Denied): {e}", file=sys.stderr)
-            except google_exceptions.ResourceExhausted as e:
-                 print(f"\nGemini API Error (Rate Limit/Quota): {e}", file=sys.stderr)
-            except Exception as e:
-                print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
-
-    except sf.SoundFileError as e:
-        print(f"\nError processing sound file data: {e}", file=sys.stderr)
     except Exception as e:
         print(f"\nError in process_audio: {e}", file=sys.stderr)
     finally:
-        if tmp_filename and os.path.exists(tmp_filename):
-            try:
-                os.remove(tmp_filename)
-            except OSError as e:
-                print(f"\nError deleting temp file {tmp_filename}: {e}", file=sys.stderr)
         # Remind user how to record again after processing finishes
         if TRIGGER_KEY is not None:
             print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
