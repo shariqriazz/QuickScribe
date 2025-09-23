@@ -2,8 +2,10 @@ import io
 import os
 import sys
 import soundfile as sf
+import numpy as np
 from typing import Optional, Generator, Tuple
 from .base_provider import BaseProvider
+from .conversation_context import ConversationContext
 
 
 class GeminiProvider(BaseProvider):
@@ -43,7 +45,7 @@ class GeminiProvider(BaseProvider):
         """Check if provider is initialized."""
         return self._initialized and self.model is not None
     
-    def transcribe_audio(self, audio_np, sample_rate: int, prompt: str = "") -> Optional[str]:
+    def _transcribe_audio_legacy(self, audio_np, sample_rate: int, prompt: str = "") -> Optional[str]:
         """Transcribe audio using Gemini API (non-streaming)."""
         if not self.is_initialized():
             print("\nError: Gemini model not initialized.", file=sys.stderr)
@@ -137,22 +139,59 @@ class GeminiProvider(BaseProvider):
         except Exception as e:
             print(f"Streaming failed: {e}")
             # Fallback to non-streaming
-            result = self.transcribe_audio(audio_np, sample_rate, prompt)
+            result = self._transcribe_audio_legacy(audio_np, sample_rate, prompt)
             if result:
                 yield result
     
-    def transcribe_audio_file(self, filename: str, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
+    def transcribe_audio(self, audio_np: np.ndarray, context: ConversationContext,
+                        streaming_callback=None, final_callback=None) -> None:
+        """Unified transcription interface with internal bytes handling."""
+        if not self.is_initialized():
+            print("\nError: Gemini model not initialized.", file=sys.stderr)
+            return
+
+        try:
+            # Convert audio to WAV bytes
+            wav_bytes_io = io.BytesIO()
+            sf.write(wav_bytes_io, audio_np, context.sample_rate, format='WAV', subtype='PCM_16')
+            wav_bytes = wav_bytes_io.getvalue()
+            wav_bytes_io.close()
+
+            if len(wav_bytes) > 18 * 1024 * 1024:
+                print("\nWarning: Audio data >18MB, may fail inline Gemini request.")
+
+            # Get conversation context
+            conversation_xml = context.xml_markup
+            compiled_text = context.compiled_text
+            
+            # Display conversation flow
+            print("\n" + "="*60)
+            print("SENDING TO MODEL:")
+            print("[conversation context being sent]")
+            print(f"XML markup: {conversation_xml if conversation_xml else '[no conversation history]'}")
+            print(f"Rendered text: {compiled_text if compiled_text else '[empty]'}")
+            print(f"Audio file: [audio_data.wav]")
+            print("-" * 60)
+            
+            print("\nRECEIVED FROM MODEL (streaming):")
+            self._transcribe_audio_bytes(wav_bytes, conversation_xml, compiled_text, 
+                                       streaming_callback, final_callback)
+                
+        except Exception as e:
+            print(f"\nError during Gemini transcription: {e}", file=sys.stderr)
+
+    def _transcribe_audio_file(self, filename: str, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
         """Transcribe audio from file (not directly supported by Gemini, convert to bytes)."""
         try:
             with open(filename, 'rb') as f:
                 audio_bytes = f.read()
-            return self.transcribe_audio_bytes_sync(audio_bytes, conversation_xml, compiled_text)
+            return self._transcribe_audio_bytes_sync(audio_bytes, conversation_xml, compiled_text)
         except Exception as e:
             print(f"\nError reading audio file: {e}", file=sys.stderr)
             return None
     
-    def transcribe_audio_bytes(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "", 
-                              streaming_callback=None, final_callback=None):
+    def _transcribe_audio_bytes(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "", 
+                               streaming_callback=None, final_callback=None):
         """Transcribe audio from bytes with streaming support."""
         if not self.is_initialized():
             print("\nError: Gemini model not initialized.", file=sys.stderr)
@@ -216,7 +255,7 @@ class GeminiProvider(BaseProvider):
         except Exception as e:
             print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
     
-    def transcribe_audio_bytes_sync(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
+    def _transcribe_audio_bytes_sync(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
         """Synchronous version of transcribe_audio_bytes."""
         result = None
         
@@ -224,7 +263,7 @@ class GeminiProvider(BaseProvider):
             nonlocal result
             result = text
         
-        self.transcribe_audio_bytes(wav_bytes, conversation_xml, compiled_text, final_callback=final_callback)
+        self._transcribe_audio_bytes(wav_bytes, conversation_xml, compiled_text, final_callback=final_callback)
         return result
     
     def get_provider_specific_instructions(self) -> str:

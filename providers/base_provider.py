@@ -3,6 +3,8 @@ Base provider class with common XML instructions.
 """
 from abc import ABC, abstractmethod
 from typing import Optional
+import numpy as np
+from .conversation_context import ConversationContext
 
 
 class BaseProvider(ABC):
@@ -21,6 +23,20 @@ class BaseProvider(ABC):
     @abstractmethod
     def is_initialized(self) -> bool:
         """Check if provider is initialized."""
+        pass
+    
+    @abstractmethod
+    def transcribe_audio(self, audio_np: np.ndarray, context: ConversationContext,
+                        streaming_callback=None, final_callback=None) -> None:
+        """
+        Unified transcription interface for all providers.
+        
+        Args:
+            audio_np: Audio data as numpy array
+            context: Conversation context with XML markup and compiled text
+            streaming_callback: Optional callback for streaming text chunks
+            final_callback: Optional callback for final result
+        """
         pass
     
     def get_xml_instructions(self, provider_specific: str = "") -> str:

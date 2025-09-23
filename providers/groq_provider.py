@@ -2,8 +2,10 @@ import os
 import sys
 import tempfile
 import soundfile as sf
+import numpy as np
 from typing import Optional, Dict, Any
 from .base_provider import BaseProvider
+from .conversation_context import ConversationContext
 
 
 class GroqProvider(BaseProvider):
@@ -83,7 +85,49 @@ class GroqProvider(BaseProvider):
                 except OSError as e:
                     print(f"\nError deleting temp file {tmp_filename}: {e}", file=sys.stderr)
     
-    def transcribe_audio_file(self, filename: str, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
+    def transcribe_audio(self, audio_np: np.ndarray, context: ConversationContext,
+                        streaming_callback=None, final_callback=None) -> None:
+        """Unified transcription interface with internal file handling."""
+        if not self.is_initialized():
+            print("\nError: Groq client not initialized.", file=sys.stderr)
+            return
+        
+        tmp_filename = None
+        try:
+            # Save audio to temporary file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+                tmp_filename = tmp_file.name
+                sf.write(tmp_filename, audio_np, context.sample_rate)
+            
+            # Get conversation context
+            conversation_xml = context.xml_markup
+            compiled_text = context.compiled_text
+            
+            # Display conversation flow
+            print("\n" + "="*60)
+            print("SENDING TO MODEL:")
+            print("[conversation context being sent]")
+            print(f"XML markup: {conversation_xml if conversation_xml else '[no conversation history]'}")
+            print(f"Rendered text: {compiled_text if compiled_text else '[empty]'}")
+            print(f"Audio file: {os.path.basename(tmp_filename)}")
+            print("-" * 60)
+            
+            # Transcribe with provider
+            result = self._transcribe_audio_file(tmp_filename, conversation_xml, compiled_text)
+            if result and final_callback:
+                final_callback(result)
+                
+        except Exception as e:
+            print(f"\nError during Groq transcription: {e}", file=sys.stderr)
+        finally:
+            # Clean up temporary file
+            if tmp_filename and os.path.exists(tmp_filename):
+                try:
+                    os.remove(tmp_filename)
+                except OSError as e:
+                    print(f"\nError deleting temp file {tmp_filename}: {e}", file=sys.stderr)
+
+    def _transcribe_audio_file(self, filename: str, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
         """Transcribe audio from file using Groq API."""
         if not self.is_initialized():
             print("\nError: Groq client not initialized.", file=sys.stderr)
@@ -116,8 +160,8 @@ class GroqProvider(BaseProvider):
             print(f"\nUnexpected error during Groq transcription: {e}", file=sys.stderr)
             return None
     
-    def transcribe_audio_bytes(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "", 
-                              streaming_callback=None, final_callback=None):
+    def _transcribe_audio_bytes(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "", 
+                               streaming_callback=None, final_callback=None):
         """Transcribe audio from bytes (Groq doesn't support bytes directly, save to temp file)."""
         if not self.is_initialized():
             print("\nError: Groq client not initialized.", file=sys.stderr)
@@ -131,7 +175,7 @@ class GroqProvider(BaseProvider):
                 tmp_file.write(wav_bytes)
             
             # Use file transcription
-            result = self.transcribe_audio_file(tmp_filename, conversation_xml, compiled_text)
+            result = self._transcribe_audio_file(tmp_filename, conversation_xml, compiled_text)
             
             if final_callback:
                 final_callback(result)
