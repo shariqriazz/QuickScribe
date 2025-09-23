@@ -9,9 +9,11 @@ import os
 import subprocess
 import sys
 import argparse
+import time
 import platform  # To detect OS for key combinations
 import shlex  # For safe shell argument escaping
 import re  # For regex processing
+import signal
 from pynput import keyboard
 from dotenv import load_dotenv
 
@@ -69,6 +71,10 @@ current_words = [] # Track current word state for diff processing
 
 # Conversation management
 conversation_manager = None
+
+# Streaming state
+streaming_buffer = ""
+last_processed_position = 0
 
 # Provider-specific instruction additions (currently blank, can be customized per provider)
 GROQ_SPECIFIC_INSTRUCTIONS = ""
@@ -171,6 +177,9 @@ def initialize_provider_client():
 def setup_trigger_key(key_name):
     """Sets up the trigger key based on the provided name."""
     global TRIGGER_KEY
+    if key_name is None or str(key_name).lower() in ("", "none", "disabled", "off"):
+        TRIGGER_KEY = None
+        return True
     try:
         TRIGGER_KEY = getattr(keyboard.Key, key_name)
         # print(f"Using special key: {key_name}") # Less verbose
@@ -211,7 +220,10 @@ def get_xml_instructions(provider_specific=""):
         "- Always provide helpful feedback when appropriate\n\n"
         "SECTION DETAILS:\n"
         "- <tx>: Literal word-for-word transcription of what you heard\n"
-        "- <int>: Your interpretation of what the user actually meant to say\n"
+        "- <int>: Your interpretation of what the user actually wants. This is CRITICAL - analyze whether they are:\n"
+        "  * DICTATING content to be written (then interpret their intended meaning, fix grammar, clarify unclear speech)\n"
+        "  * GIVING INSTRUCTIONS for editing (then describe what editing action they want performed)\n"
+        "  * DO NOT simply duplicate the translation - provide meaningful interpretation of user intent\n"
         "- <conv>: Include ONLY when conversation/clarification is needed\n"
         "- <update>: Final processed content formatted as <ID>content</ID>\n\n"
         "SPACING CONTROL:\n"
@@ -250,7 +262,15 @@ def get_xml_instructions(provider_specific=""):
         "- Escape XML characters: use &amp; for &, &gt; for >, &lt; for < inside content\n"
         "- Group words into logical phrases (3-8 words per tag ideal)\n"
         "- Continue from highest existing ID + 10\n"
-        "- Example: <50>Testing the system </50><60>with multiple phrases.</60>"
+        "- Example: <50>Testing the system </50><60>with multiple phrases.</60>\n"
+        "\n"
+        "NON-DUPLICATION GUARANTEE:\n"
+        "- <int> must not be a verbatim copy of <tx> after trimming and trivial punctuation normalization, unless the utterance is pure dictation and equals the intended cleaned output.\n"
+        "- For dictation with fillers (e.g., 'um', 'uh', repetitions), <int> contains the minimal intended words only.\n"
+        "- For instructions (e.g., 'fix grammar', 'replace X with Y', 'delete lines 20 to 40'), <int> is an imperative edit request targeting the current conversation state.\n"
+        "EXAMPLES:\n"
+        "- Input: 'um okay product roadmap' → <tx>: 'um okay product roadmap'; <int>: 'product roadmap'\n"
+        "- Input: 'replace foo with bar and remove the second paragraph' → <tx>: 'replace foo with bar and remove the second paragraph'; <int>: 'Replace `foo` with `bar` and remove the second paragraph.'"
     )
     
     if provider_specific.strip():
@@ -321,7 +341,7 @@ parser.add_argument(
     "--trigger-key",
     type=str,
     default=DEFAULT_TRIGGER_KEY,
-    help="The key name to trigger recording (e.g., 'alt_r', 'ctrl_r', 'f19')."
+    help="The key name to trigger recording (e.g., 'alt_r', 'ctrl_r', 'f19'), or 'none' to disable."
 )
 parser.add_argument(
     "--language",
@@ -345,6 +365,11 @@ parser.add_argument(
     "--use-xdotool",
     action="store_true",
     help="Use xdotool for typing text instead of clipboard paste. Linux only."
+)
+parser.add_argument(
+    "--no-trigger-key",
+    action="store_true",
+    help="Disable keyboard trigger; use POSIX signals (SIGUSR1/SIGUSR2) instead."
 )
 
 # Check if running interactively (no args other than script name, or only --use-xdotool)
@@ -395,6 +420,8 @@ if interactive_mode:
     SAMPLE_RATE = args.sample_rate
     CHANNELS = args.channels
     TRIGGER_KEY_NAME = args.trigger_key
+    if getattr(args, "no_trigger_key", False):
+        TRIGGER_KEY_NAME = "none"
     USE_XDOTOOL = args.use_xdotool
 
 else:
@@ -406,6 +433,8 @@ else:
     SAMPLE_RATE = args.sample_rate
     CHANNELS = args.channels
     TRIGGER_KEY_NAME = args.trigger_key
+    if getattr(args, "no_trigger_key", False):
+        TRIGGER_KEY_NAME = "none"
     USE_XDOTOOL = args.use_xdotool
 
     # Validate required args if not interactive
@@ -454,7 +483,7 @@ if not setup_trigger_key(TRIGGER_KEY_NAME):
 print(f"\n--- Configuration ---")
 print(f"Provider:      {PROVIDER.upper()}")
 print(f"Model:         {MODEL_ID}")
-print(f"Trigger Key:   {TRIGGER_KEY_NAME}")
+print(f"Trigger Key:   {'disabled' if TRIGGER_KEY is None else TRIGGER_KEY_NAME}")
 print(f"Audio:         {SAMPLE_RATE}Hz, {CHANNELS} channel(s)")
 print(f"Output Method: {'xdotool' if USE_XDOTOOL else 'clipboard paste'}")
 if PROVIDER == 'groq' and LANGUAGE:
@@ -477,7 +506,10 @@ xml_instructions = get_xml_instructions(provider_specific)
 print(xml_instructions)
 print("="*60)
 
-print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
+if TRIGGER_KEY is not None:
+    print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
+else:
+    print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
 
 
 # --- Audio Recording ---
@@ -549,18 +581,27 @@ def stop_recording_and_process():
 
     if not audio_data:
         print("No audio data recorded.")
-        print(f"\nHold '{TRIGGER_KEY_NAME}' to record...") # Remind user
+        if TRIGGER_KEY is not None:
+            print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
+        else:
+            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
         return
 
     try:
         full_audio = np.concatenate(audio_data, axis=0)
     except ValueError as e:
         print(f"\nError concatenating audio data: {e}", file=sys.stderr)
-        print(f"\nHold '{TRIGGER_KEY_NAME}' to record...") # Remind user
+        if TRIGGER_KEY is not None:
+            print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
+        else:
+            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
         return
     except Exception as e:
         print(f"\nUnexpected error combining audio: {e}", file=sys.stderr)
-        print(f"\nHold '{TRIGGER_KEY_NAME}' to record...") # Remind user
+        if TRIGGER_KEY is not None:
+            print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
+        else:
+            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
         return
 
     processing_thread = threading.Thread(target=process_audio, args=(full_audio,))
@@ -569,9 +610,8 @@ def stop_recording_and_process():
 
 # --- Audio Processing & Transcription ---
 def process_audio(audio_np):
-    """Transcribes audio via the selected provider and outputs the result."""
+    """Transcribes audio via the selected provider and outputs the result with real-time streaming."""
     # print(f"Processing {audio_np.shape[0] / SAMPLE_RATE:.2f}s of audio...") # Less verbose
-    text_to_output = None
     tmp_filename = None # For Groq
 
     # Need access to global clients/models initialized earlier
@@ -585,6 +625,7 @@ def process_audio(audio_np):
 
 
     try:
+        reset_streaming_state()
         if PROVIDER == 'groq':
             if not groq_client:
                 print("\nError: Groq client not initialized.", file=sys.stderr)
@@ -635,8 +676,21 @@ def process_audio(audio_np):
                     # Add prompt (always include XML instructions)
                     transcription_params["prompt"] = prompt
                     
-                    transcription = groq_client.audio.transcriptions.create(**transcription_params)
-                    text_to_output = transcription.text
+                    # Use streaming for Groq if available
+                    try:
+                        # Check if streaming is available for transcription
+                        transcription = groq_client.audio.transcriptions.create(**transcription_params)
+                        text_to_output = transcription.text
+                        
+                        # Apply final state without non-stream display
+                        process_xml_transcription(text_to_output)
+                        
+                    except Exception as stream_error:
+                        print(f"Streaming not available, using standard response: {stream_error}")
+                        transcription = groq_client.audio.transcriptions.create(**transcription_params)
+                        text_to_output = transcription.text
+                        process_xml_transcription(text_to_output)
+                        
                 except GroqError as e:
                     print(f"\nGroq API Error: {e}", file=sys.stderr)
                 except Exception as e:
@@ -687,29 +741,54 @@ def process_audio(audio_np):
                 
                 audio_blob = {"mime_type": "audio/wav", "data": wav_bytes}
                 contents = [prompt, audio_blob]
-                response = gemini_model.generate_content(contents=contents)
+                
+                # Use streaming for Gemini
+                try:
+                    response = gemini_model.generate_content(
+                        contents=contents,
+                        stream=True
+                    )
 
-                # Check for safety ratings first
-                if response.candidates and response.candidates[0].safety_ratings:
-                    print("\nSafety Ratings:")
-                    for rating in response.candidates[0].safety_ratings:
-                        print(f"  {rating.category.name}: {rating.probability.name}")
+                    reset_streaming_state()
+                    print("\nRECEIVED FROM MODEL (streaming):")
+                    accumulated_text = ""
+                    for chunk in response:
+                        if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
+                            chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
+                            if chunk_text:
+                                print(chunk_text, end='', flush=True)
+                                accumulated_text += chunk_text
+                                process_streaming_chunk(chunk_text)
+                    print()  # New line after streaming
 
-                # Check response structure carefully
-                text_to_output = None
-                if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                     text_to_output = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
-                elif hasattr(response, 'text'): # Fallback for simpler structures if any
-                     text_to_output = response.text
+                    if accumulated_text:
+                        process_xml_transcription(accumulated_text)
+                    else:
+                        print("\nGemini did not return text.")
 
-                if text_to_output:
-                    print(f"Transcription: {text_to_output}")
-                else:
-                    print("\nGemini did not return text.")
-                    if response.candidates and response.candidates[0].finish_reason:
-                        print(f"Finish reason: {response.candidates[0].finish_reason.name}")
+                except Exception as stream_error:
+                    print(f"Streaming failed, using standard response: {stream_error}")
+                    response = gemini_model.generate_content(contents=contents)
 
-                # text_to_output is set above in the response processing
+                    # Check for safety ratings first
+                    if response.candidates and response.candidates[0].safety_ratings:
+                        print("\nSafety Ratings:")
+                        for rating in response.candidates[0].safety_ratings:
+                            print(f"  {rating.category.name}: {rating.probability.name}")
+
+                    # Check response structure carefully
+                    text_to_output = None
+                    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                         text_to_output = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
+                    elif hasattr(response, 'text'): # Fallback for simpler structures if any
+                         text_to_output = response.text
+
+                    if text_to_output:
+                        process_xml_transcription(text_to_output)
+                    else:
+                        print("\nGemini did not return text.")
+                        if response.candidates and response.candidates[0].finish_reason:
+                            print(f"Finish reason: {response.candidates[0].finish_reason.name}")
 
             except google_exceptions.InvalidArgument as e:
                  print(f"\nGemini API Error (Invalid Argument): {e}", file=sys.stderr)
@@ -719,26 +798,6 @@ def process_audio(audio_np):
                  print(f"\nGemini API Error (Rate Limit/Quota): {e}", file=sys.stderr)
             except Exception as e:
                 print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
-
-        if text_to_output:
-            # Display assistant response
-            print("\nRECEIVED FROM MODEL:")
-            print(f"Raw response: {text_to_output}")
-            
-            # Process XML words first to update conversation state
-            process_xml_transcription(text_to_output)
-            
-            # Display updated compiled view after processing
-            print("\nAFTER PROCESSING:")
-            if conversation_manager and conversation_manager.state.words:
-                compiled_text = conversation_manager.state.to_text()
-                print(f"Updated conversation: {compiled_text}")
-            else:
-                print("Updated conversation: [empty]")
-            print("="*60)
-        else:
-            print("No transcription result.")
-
 
     except sf.SoundFileError as e:
         print(f"\nError processing sound file data: {e}", file=sys.stderr)
@@ -751,7 +810,97 @@ def process_audio(audio_np):
             except OSError as e:
                 print(f"\nError deleting temp file {tmp_filename}: {e}", file=sys.stderr)
         # Remind user how to record again after processing finishes
-        print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
+        if TRIGGER_KEY is not None:
+            print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
+        else:
+            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
+
+
+def process_streaming_response(text_to_output):
+    """No-op: non-stream final display removed."""
+    if not text_to_output:
+        return
+    # Keep state consistent without extra console output
+    process_xml_transcription(text_to_output)
+
+
+def process_streaming_chunk(chunk_text):
+    """Process streaming text chunks and apply real-time updates."""
+    global streaming_buffer, last_processed_position, current_words, word_parser, diff_engine, output_manager, conversation_manager
+    
+    # Add chunk to buffer
+    streaming_buffer += chunk_text
+    
+    # Try to extract complete XML tags from buffer
+    import re
+    
+    # Look for complete <update> sections with word tags
+    update_pattern = re.compile(r'<update>(.*?)</update>', re.DOTALL)
+    update_matches = update_pattern.findall(streaming_buffer)
+    
+    if update_matches:
+        # Process the most recent complete update section
+        latest_update = update_matches[-1]
+        
+        # Extract word tags from the update
+        word_pattern = re.compile(r'<(\d+)>(.*?)</\1>', re.DOTALL)
+        word_matches = word_pattern.findall(latest_update)
+        
+        if word_matches:
+            # Create word objects from matches
+            new_words = []
+            for word_id_str, word_text in word_matches:
+                word_id = int(word_id_str)
+                # Handle empty tags as deletions
+                if word_text.strip() == "":
+                    new_words.append(DictationWord(id=word_id, text=None))
+                else:
+                    new_words.append(DictationWord(id=word_id, text=word_text))
+            
+            # Update conversation state incrementally
+            if conversation_manager:
+                for word in new_words:
+                    if word.text is None:
+                        conversation_manager.state.delete_word(word.id)
+                    else:
+                        conversation_manager.state.update_word(word.id, word.text)
+                
+                # Build updated words list
+                word_items = list(conversation_manager.state.words.items())
+                word_items.sort(key=lambda x: x[0])
+                updated_words = [DictationWord(id=word_id, text=text) for word_id, text in word_items]
+                
+                # Calculate and apply diff for real-time updates
+                diff_result = diff_engine.compare(current_words, updated_words)
+                
+                if output_manager and USE_XDOTOOL:
+                    try:
+                        output_manager.execute_diff(diff_result)
+                    except XdotoolError as e:
+                        print(f"\nxdotool error: {e}", file=sys.stderr)
+                        # Fall back to clipboard for this chunk
+                        if diff_result.new_text:
+                            full_text = conversation_manager.state.to_text_from_words(updated_words)
+                            output_text_cross_platform(full_text)
+                else:
+                    # Use clipboard method for real-time updates
+                    if diff_result.backspaces > 0 or diff_result.new_text:
+                        full_text = conversation_manager.state.to_text_from_words(updated_words)
+                        output_text_cross_platform(full_text)
+                
+                # Update current words state
+                current_words = updated_words
+                
+                # Show real-time progress
+                compiled_text = conversation_manager.state.to_text()
+                print(f"\r[Streaming] {compiled_text}", end='', flush=True)
+
+
+def reset_streaming_state():
+    """Reset streaming state for new transcription."""
+    global streaming_buffer, last_processed_position
+    streaming_buffer = ""
+    last_processed_position = 0
 
 
 def process_xml_transcription(text):
@@ -938,6 +1087,25 @@ def output_text_cross_platform(text):
         print(f"\nUnexpected error during text output: {e}", file=sys.stderr)
 
 
+# --- POSIX Signal Handlers ---
+def handle_sigusr1(signum, frame):
+    global is_recording
+    try:
+        if not is_recording:
+            start_recording()
+    except Exception as e:
+        print(f"\nError in SIGUSR1 handler: {e}", file=sys.stderr)
+
+
+def handle_sigusr2(signum, frame):
+    global is_recording
+    try:
+        if is_recording:
+            stop_recording_and_process()
+    except Exception as e:
+        print(f"\nError in SIGUSR2 handler: {e}", file=sys.stderr)
+
+
 # --- Key Listener Callbacks ---
 def on_press(key):
     global is_recording
@@ -955,13 +1123,7 @@ def on_release(key):
             stop_recording_and_process()
 
         if key == keyboard.Key.esc:
-            print("\nExiting...")
-            if recording_stream:
-                try:
-                    if recording_stream.active: recording_stream.stop()
-                    recording_stream.close()
-                except Exception as e: pass # Ignore errors on exit
-            return False # Stop listener
+            return
     except Exception as e:
         print(f"\nError in on_release: {e}", file=sys.stderr)
 
@@ -985,10 +1147,20 @@ if __name__ == "__main__":
             print(f"\nWarning: Could not query/test audio devices: {e}", file=sys.stderr)
 
 
-        listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-        listener.start()
-        # print("\nListener started. Waiting for trigger key...") # Moved earlier
-        listener.join()
+        try:
+            signal.signal(signal.SIGUSR1, handle_sigusr1)
+            signal.signal(signal.SIGUSR2, handle_sigusr2)
+        except Exception as _e:
+            pass
+
+        if TRIGGER_KEY is not None:
+            listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+            listener.start()
+            # print("\nListener started. Waiting for trigger key...") # Moved earlier
+            listener.join()
+        else:
+            while True:
+                time.sleep(1)
 
     except ImportError as e:
         print(f"\nImport Error: {e}", file=sys.stderr)
