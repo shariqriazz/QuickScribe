@@ -1,9 +1,4 @@
-import sounddevice as sd
-import soundfile as sf
-import numpy as np
 import threading
-import queue
-import tempfile
 import io
 import os
 import subprocess
@@ -17,6 +12,9 @@ from pynput import keyboard
 
 # Configuration management
 from config_manager import ConfigManager
+
+# Audio handling
+from audio_handler import AudioHandler
 
 # Import XML processing modules
 from lib.word_stream import WordStreamParser, DictationWord
@@ -44,9 +42,7 @@ DEFAULT_SAMPLE_RATE = 16000
 DEFAULT_CHANNELS = 1
 
 # --- Global Variables ---
-is_recording = False
-audio_queue = queue.Queue()
-recording_stream = None
+audio_handler = None
 keyboard_controller = keyboard.Controller()
 # These will be set later by args or interactive mode
 PROVIDER = None
@@ -312,6 +308,10 @@ if not initialize_provider_client():
 if not setup_trigger_key(TRIGGER_KEY_NAME):
     sys.exit(1) # Exit if trigger key setup failed
 
+# Initialize audio handler
+audio_handler = AudioHandler(SAMPLE_RATE, CHANNELS, DTYPE)
+audio_handler.set_trigger_key_name(TRIGGER_KEY_NAME)
+
 
 # --- Print Final Configuration ---
 print(f"\n--- Configuration ---")
@@ -345,102 +345,6 @@ if TRIGGER_KEY is not None:
 else:
     print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
 
-
-# --- Audio Recording ---
-def audio_callback(indata, frames, time, status):
-    """This is called (from a separate thread) for each audio block."""
-    if status:
-        if status.input_overflow:
-            # pass # Or print less verbose
-             print("W", end='', flush=True) # Indicate overflow warning
-        else:
-            print(f"\nAudio callback status: {status}", file=sys.stderr)
-    if is_recording:
-        audio_queue.put(indata.copy())
-
-def start_recording():
-    """Starts the audio recording stream."""
-    global is_recording, recording_stream
-    if is_recording:
-        return
-
-    print("\nRecording started... ", end='', flush=True)
-    is_recording = True
-    audio_queue.queue.clear()
-
-    try:
-        recording_stream = sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype=DTYPE,
-            callback=audio_callback
-        )
-        recording_stream.start()
-    except sd.PortAudioError as e:
-        print(f"\nError starting audio stream: {e}", file=sys.stderr)
-        print("Check audio device settings and permissions.", file=sys.stderr)
-        is_recording = False
-        recording_stream = None
-    except Exception as e:
-        print(f"\nUnexpected error during recording start: {e}", file=sys.stderr)
-        is_recording = False
-        recording_stream = None
-
-def stop_recording_and_process():
-    """Stops recording and processes the audio in a separate thread."""
-    global is_recording, recording_stream
-    if not is_recording:
-        return
-
-    print("Stopped. Processing... ", end='', flush=True)
-    is_recording = False
-
-    if recording_stream:
-        try:
-            recording_stream.stop()
-            recording_stream.close()
-        except sd.PortAudioError as e:
-             print(f"\nError stopping/closing audio stream: {e}", file=sys.stderr)
-        except Exception as e:
-             print(f"\nUnexpected error stopping/closing audio stream: {e}", file=sys.stderr)
-        finally:
-            recording_stream = None
-
-    audio_data = []
-    while not audio_queue.empty():
-        try:
-            audio_data.append(audio_queue.get_nowait())
-        except queue.Empty:
-            break
-
-    if not audio_data:
-        print("No audio data recorded.")
-        if TRIGGER_KEY is not None:
-            print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
-        else:
-            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
-        return
-
-    try:
-        full_audio = np.concatenate(audio_data, axis=0)
-    except ValueError as e:
-        print(f"\nError concatenating audio data: {e}", file=sys.stderr)
-        if TRIGGER_KEY is not None:
-            print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
-        else:
-            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
-        return
-    except Exception as e:
-        print(f"\nUnexpected error combining audio: {e}", file=sys.stderr)
-        if TRIGGER_KEY is not None:
-            print(f"\nHold '{TRIGGER_KEY_NAME}' to record...")
-        else:
-            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
-        return
-
-    processing_thread = threading.Thread(target=process_audio, args=(full_audio,))
-    processing_thread.daemon = True
-    processing_thread.start()
 
 # --- Audio Processing & Transcription ---
 def process_audio(audio_np):
@@ -836,38 +740,38 @@ def output_text_cross_platform(text):
 
 # --- POSIX Signal Handlers ---
 def handle_sigusr1(signum, frame):
-    global is_recording
+    global audio_handler
     try:
-        if not is_recording:
-            start_recording()
+        if audio_handler and not audio_handler.is_recording:
+            audio_handler.start_recording()
     except Exception as e:
         print(f"\nError in SIGUSR1 handler: {e}", file=sys.stderr)
 
 
 def handle_sigusr2(signum, frame):
-    global is_recording
+    global audio_handler
     try:
-        if is_recording:
-            stop_recording_and_process()
+        if audio_handler and audio_handler.is_recording:
+            audio_handler.stop_recording_and_process(process_audio)
     except Exception as e:
         print(f"\nError in SIGUSR2 handler: {e}", file=sys.stderr)
 
 
 # --- Key Listener Callbacks ---
 def on_press(key):
-    global is_recording
+    global audio_handler
     try:
-        if key == TRIGGER_KEY and not is_recording:
-            start_recording()
+        if key == TRIGGER_KEY and audio_handler and not audio_handler.is_recording:
+            audio_handler.start_recording()
     except Exception as e:
         print(f"\nError in on_press: {e}", file=sys.stderr)
 
 
 def on_release(key):
-    global is_recording
+    global audio_handler
     try:
-        if key == TRIGGER_KEY and is_recording:
-            stop_recording_and_process()
+        if key == TRIGGER_KEY and audio_handler and audio_handler.is_recording:
+            audio_handler.stop_recording_and_process(process_audio)
 
         if key == keyboard.Key.esc:
             return
@@ -879,19 +783,9 @@ def on_release(key):
 if __name__ == "__main__":
     listener = None
     try:
-        try:
-            # print("\nAvailable Input Audio Devices:") # Less verbose startup
-            # print(sd.query_devices())
-            # Check if default device works, maybe?
-            with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=DTYPE, callback=lambda i,f,t,s: None):
-                pass
-            print("Audio device check successful.")
-        except sd.PortAudioError as e:
-             print(f"\nFATAL: Audio device error: {e}", file=sys.stderr)
-             print("Please check connection, selection, and permissions.", file=sys.stderr)
-             sys.exit(1)
-        except Exception as e:
-            print(f"\nWarning: Could not query/test audio devices: {e}", file=sys.stderr)
+        # Test audio device using audio handler
+        if not audio_handler.test_audio_device():
+            sys.exit(1)
 
 
         try:
@@ -922,10 +816,6 @@ if __name__ == "__main__":
         print("\nCleaning up...")
         if listener and listener.is_alive():
             listener.stop()
-        if recording_stream:
-            try:
-                if recording_stream.active: recording_stream.stop()
-                recording_stream.close()
-                print("Audio stream stopped.")
-            except Exception as e: pass # Ignore errors on final cleanup
+        if audio_handler:
+            audio_handler.cleanup()
         print("Exited.")
