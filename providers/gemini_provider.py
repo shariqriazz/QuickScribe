@@ -3,16 +3,15 @@ import os
 import sys
 import soundfile as sf
 from typing import Optional, Generator, Tuple
+from .base_provider import BaseProvider
 
 
-class GeminiProvider:
+class GeminiProvider(BaseProvider):
     """Gemini provider for speech transcription."""
     
     def __init__(self, model_id: str, language: Optional[str] = None):
-        self.model_id = model_id
-        self.language = language  # Note: Gemini ignores this parameter
+        super().__init__(model_id, language)  # Note: Gemini ignores language parameter
         self.model = None
-        self._initialized = False
     
     def initialize(self) -> bool:
         """Initialize the Gemini client."""
@@ -141,6 +140,92 @@ class GeminiProvider:
             result = self.transcribe_audio(audio_np, sample_rate, prompt)
             if result:
                 yield result
+    
+    def transcribe_audio_file(self, filename: str, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
+        """Transcribe audio from file (not directly supported by Gemini, convert to bytes)."""
+        try:
+            with open(filename, 'rb') as f:
+                audio_bytes = f.read()
+            return self.transcribe_audio_bytes_sync(audio_bytes, conversation_xml, compiled_text)
+        except Exception as e:
+            print(f"\nError reading audio file: {e}", file=sys.stderr)
+            return None
+    
+    def transcribe_audio_bytes(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "", 
+                              streaming_callback=None, final_callback=None):
+        """Transcribe audio from bytes with streaming support."""
+        if not self.is_initialized():
+            print("\nError: Gemini model not initialized.", file=sys.stderr)
+            return
+
+        try:
+            xml_instructions = self.get_xml_instructions()
+            
+            prompt = f"Transcript with XML formatting: {xml_instructions}"
+            if conversation_xml:
+                prompt += f" Current conversation XML: {conversation_xml}\nCurrent conversation text: {compiled_text}"
+            
+            audio_blob = {"mime_type": "audio/wav", "data": wav_bytes}
+            contents = [prompt, audio_blob]
+            
+            # Use streaming
+            try:
+                response = self.model.generate_content(
+                    contents=contents,
+                    stream=True
+                )
+
+                accumulated_text = ""
+                for chunk in response:
+                    if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
+                        chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
+                        if chunk_text:
+                            if streaming_callback:
+                                streaming_callback(chunk_text)
+                            accumulated_text += chunk_text
+
+                if final_callback:
+                    final_callback(accumulated_text)
+
+            except Exception as stream_error:
+                print(f"Streaming failed, using standard response: {stream_error}")
+                response = self.model.generate_content(contents=contents)
+
+                # Check for safety ratings first
+                if response.candidates and response.candidates[0].safety_ratings:
+                    print("\nSafety Ratings:")
+                    for rating in response.candidates[0].safety_ratings:
+                        print(f"  {rating.category.name}: {rating.probability.name}")
+
+                # Check response structure carefully
+                text_to_output = None
+                if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                    text_to_output = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
+                elif hasattr(response, 'text'):
+                    text_to_output = response.text
+
+                if final_callback:
+                    final_callback(text_to_output)
+
+        except self.google_exceptions.InvalidArgument as e:
+            print(f"\nGemini API Error (Invalid Argument): {e}", file=sys.stderr)
+        except self.google_exceptions.PermissionDenied as e:
+            print(f"\nGemini API Error (Permission Denied): {e}", file=sys.stderr)
+        except self.google_exceptions.ResourceExhausted as e:
+            print(f"\nGemini API Error (Rate Limit/Quota): {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
+    
+    def transcribe_audio_bytes_sync(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
+        """Synchronous version of transcribe_audio_bytes."""
+        result = None
+        
+        def final_callback(text):
+            nonlocal result
+            result = text
+        
+        self.transcribe_audio_bytes(wav_bytes, conversation_xml, compiled_text, final_callback=final_callback)
+        return result
     
     def get_provider_specific_instructions(self) -> str:
         """Get provider-specific instructions for prompts."""
