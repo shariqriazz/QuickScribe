@@ -195,6 +195,25 @@ def get_xml_instructions(provider_specific=""):
     """
     common_instructions = (
         "You are an intelligent transcription assistant. Use COMMON SENSE to determine if the user is dictating content or giving you editing instructions.\n\n"
+        "RESPONSE FORMAT - Always respond using this EXACT format:\n"
+        "<x>\n"
+        "<tx>literal translation goes here</tx>\n"
+        "<int>model interpretation goes here</int>\n"
+        "<conv>conversational discussion goes here only if conversation is necessary</conv>\n"
+        "<update><10>processed content </10><20>goes here </20><30>with proper formatting.</30></update>\n"
+        "</x>\n\n"
+        "ENHANCED BEHAVIOR:\n"
+        "- Always use proper grammar and correct any grammatical errors you detect\n"
+        "- If user gives multiple correction statements, pay attention to following their directions\n"
+        "- Read between the lines - capture meaning and user's voice rather than exact words\n"
+        "- Handle stutters, false starts, and unclear speech by interpreting intent\n"
+        "- Prioritize natural, well-formed output over literal transcription\n"
+        "- Always provide helpful feedback when appropriate\n\n"
+        "SECTION DETAILS:\n"
+        "- <tx>: Literal word-for-word transcription of what you heard\n"
+        "- <int>: Your interpretation of what the user actually meant to say\n"
+        "- <conv>: Include ONLY when conversation/clarification is needed\n"
+        "- <update>: Final processed content formatted as <ID>content</ID>\n\n"
         "SPACING CONTROL:\n"
         "- YOU have full control over all spacing, punctuation, and whitespace\n"
         "- Each <ID>content</ID> tag contains exactly what you want at that position\n"
@@ -209,13 +228,13 @@ def get_xml_instructions(provider_specific=""):
         "- Use context clues: if it sounds like they're telling YOU to do something, it's an instruction\n"
         "- Instructions often start mid-sentence or break the flow of normal speech\n\n"
         "DICTATION MODE:\n"
-        "- Transcribe speech as <ID>content</ID> using PHRASE-LEVEL granularity\n"
+        "- Transcribe speech using PHRASE-LEVEL granularity in <update> section\n"
         "- Group words into logical chunks (3-8 words per tag is ideal)\n"
         "- Continue from highest existing ID + 10 (if last ID was 40, start at 50)\n"
         "- Example: <50>Testing the system </50><60>with multiple phrases </60><70>for better efficiency.</70>\n"
         "- Avoid excessive tags like: <10>Testing </10><20>1, </20><30>2, </30><40>3.</40>\n\n"
         "INSTRUCTION MODE:\n"
-        "- Don't transcribe the instruction itself\n"
+        "- Don't transcribe the instruction itself in <update>\n"
         "- Analyze the existing conversation text to understand what they want changed\n"
         "- Make the requested changes using existing IDs: <30>newword </30> or <20></20> for deletion\n"
         "- Common instructions: 'fix grammar', 'make it formal', 'turn this into a paragraph', 'correct spelling'\n\n"
@@ -223,9 +242,15 @@ def get_xml_instructions(provider_specific=""):
         "- 'Hello world fix the grammar' → Likely: 'Hello world' (dictation) + 'fix the grammar' (instruction)\n"
         "- 'Turn this sentence into a nice paragraph' → Pure instruction, edit existing text\n"
         "- 'Today is sunny and warm' → Pure dictation, transcribe normally\n\n"
-        "CONVERSATION RESPONSES:\n"
-        "- Wrap clarifying responses in <conversation>...</conversation>\n"
-        "- Use only when you need to ask for clarification about instructions"
+        "UPDATE SECTION RULES:\n"
+        "- Use empty tags like <50></50> to delete word ID 50\n"
+        "- YOU control all spacing, punctuation, and whitespace within tags\n"
+        "- SPACES BETWEEN TAGS ARE IGNORED - only content inside tags is used\n"
+        "- All whitespace including carriage returns must be inside tags - anything between tags is completely ignored\n"
+        "- Escape XML characters: use &amp; for &, &gt; for >, &lt; for < inside content\n"
+        "- Group words into logical phrases (3-8 words per tag ideal)\n"
+        "- Continue from highest existing ID + 10\n"
+        "- Example: <50>Testing the system </50><60>with multiple phrases.</60>"
     )
     
     if provider_specific.strip():
@@ -664,12 +689,25 @@ def process_audio(audio_np):
                 contents = [prompt, audio_blob]
                 response = gemini_model.generate_content(contents=contents)
 
+                # Check for safety ratings first
+                if response.candidates and response.candidates[0].safety_ratings:
+                    print("\nSafety Ratings:")
+                    for rating in response.candidates[0].safety_ratings:
+                        print(f"  {rating.category.name}: {rating.probability.name}")
+
                 # Check response structure carefully
                 text_to_output = None
                 if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
                      text_to_output = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
                 elif hasattr(response, 'text'): # Fallback for simpler structures if any
                      text_to_output = response.text
+
+                if text_to_output:
+                    print(f"Transcription: {text_to_output}")
+                else:
+                    print("\nGemini did not return text.")
+                    if response.candidates and response.candidates[0].finish_reason:
+                        print(f"Finish reason: {response.candidates[0].finish_reason.name}")
 
                 # text_to_output is set above in the response processing
 
