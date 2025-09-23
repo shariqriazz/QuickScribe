@@ -271,6 +271,24 @@ def get_xml_instructions(provider_specific=""):
         "EXAMPLES:\n"
         "- Input: 'um okay product roadmap' → <tx>: 'um okay product roadmap'; <int>: 'product roadmap'\n"
         "- Input: 'replace foo with bar and remove the second paragraph' → <tx>: 'replace foo with bar and remove the second paragraph'; <int>: 'Replace `foo` with `bar` and remove the second paragraph.'"
+        "\n"
+        "\n"
+        "RESETTING STATE:\n"
+        "- If the previous content should be cleared, you must emit a reset tag before any updates.\n"
+        "- Emit <reset/> as the FIRST tag in your response (immediately before <update> inside <x>).\n"
+        "- Do not emit deletions of old IDs when resetting; after <reset/>, start fresh IDs at 10, 20, 30 ... and reference only new IDs.\n"
+        "- When to issue <reset/>:\n"
+        "  * User explicitly says: 'reset conversation', 'clear conversation/context', 'start over', 'new conversation'.\n"
+        "  * Topic shifts significantly such that prior text is no longer relevant.\n"
+        "\n"
+        "RESETTED RESPONSE EXAMPLE:\n"
+        "<x>\n"
+        "<reset/>\n"
+        "<tx> ... </tx>\n"
+        "<int> ... </int>\n"
+        "<conv> ... </conv>\n"
+        "<update><10>Fresh start </10><20>with new IDs.</20></update>\n"
+        "</x>"
     )
     
     if provider_specific.strip():
@@ -297,17 +315,7 @@ def detect_and_execute_commands(text):
     for pattern in reset_patterns:
         if pattern in text_lower:
             print(f"\nCommand detected: '{pattern}' - Resetting conversation...")
-            CONVERSATION_HISTORY.clear()  # Keep for backward compatibility
-            LAST_TYPED_TEXT = ""
-            # Clear XML processing state
-            current_words.clear()
-            if word_parser:
-                word_parser.clear_buffer()
-            # Reset conversation state
-            if conversation_manager:
-                conversation_manager.reset_conversation()
-            # Remove the command from the text
-            # Find the command in the original text (case-insensitive) and remove it
+            reset_all_state()
             import re
             text = re.sub(re.escape(pattern), '', text, flags=re.IGNORECASE).strip()
             break
@@ -831,8 +839,19 @@ def process_streaming_chunk(chunk_text):
     # Add chunk to buffer
     streaming_buffer += chunk_text
     
-    # Try to extract complete XML tags from buffer
     import re
+
+    # Detect and handle <reset> tags in the stream
+    reset_pattern = re.compile(r'<reset\s*/>|<reset>.*?</reset>', re.DOTALL | re.IGNORECASE)
+    if reset_pattern.search(streaming_buffer):
+        last_match = None
+        for m in reset_pattern.finditer(streaming_buffer):
+            last_match = m
+        reset_all_state()
+        if last_match:
+            streaming_buffer = streaming_buffer[last_match.end():]
+    
+    # Try to extract complete XML tags from buffer
     
     # Look for complete <update> sections with word tags
     update_pattern = re.compile(r'<update>(.*?)</update>', re.DOTALL)
@@ -903,6 +922,23 @@ def reset_streaming_state():
     last_processed_position = 0
 
 
+def reset_all_state():
+    """Reset all stored state for a fresh conversation/update baseline."""
+    global CONVERSATION_HISTORY, LAST_TYPED_TEXT, current_words, word_parser, conversation_manager
+    # Clear conversation/history surfaces
+    CONVERSATION_HISTORY.clear()
+    LAST_TYPED_TEXT = ""
+    # Clear XML processing state
+    current_words.clear()
+    if word_parser:
+        word_parser.clear_buffer()
+    # Reset conversation state
+    if conversation_manager:
+        conversation_manager.reset_conversation()
+    # Reset streaming accumulators
+    reset_streaming_state()
+
+
 def process_xml_transcription(text):
     """Process XML transcription text using the word processing pipeline."""
     global current_words, word_parser, diff_engine, output_manager, conversation_manager
@@ -912,6 +948,12 @@ def process_xml_transcription(text):
         import re
         conversation_pattern = re.compile(r'<conversation>(.*?)</conversation>', re.DOTALL)
         conversation_matches = conversation_pattern.findall(text)
+
+        # Detect and handle <reset> tags before processing words
+        reset_pattern = re.compile(r'<reset\s*/>|<reset>.*?</reset>', re.DOTALL | re.IGNORECASE)
+        if reset_pattern.search(text):
+            reset_all_state()
+            text = reset_pattern.sub('', text)
         
         # Process conversation content
         for conversation_content in conversation_matches:
