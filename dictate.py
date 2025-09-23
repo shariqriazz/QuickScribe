@@ -8,14 +8,15 @@ import io
 import os
 import subprocess
 import sys
-import argparse
 import time
 import platform  # To detect OS for key combinations
 import shlex  # For safe shell argument escaping
 import re  # For regex processing
 import signal
 from pynput import keyboard
-from dotenv import load_dotenv
+
+# Configuration management
+from config_manager import ConfigManager
 
 # Import XML processing modules
 from lib.word_stream import WordStreamParser, DictationWord
@@ -82,41 +83,6 @@ GEMINI_SPECIFIC_INSTRUCTIONS = ""
 
 # --- Helper Functions ---
 
-def load_models_from_file(filename):
-    """Loads model names from a text file."""
-    try:
-        script_dir = os.path.dirname(__file__) # Get directory of the current script
-        filepath = os.path.join(script_dir, filename)
-        with open(filepath, 'r') as f:
-            models = [line.strip() for line in f if line.strip()]
-        return models
-    except FileNotFoundError:
-        print(f"Error: Model file '{filename}' not found in '{script_dir}'.", file=sys.stderr)
-        return []
-    except Exception as e:
-        print(f"Error reading model file '{filename}': {e}", file=sys.stderr)
-        return []
-
-def select_from_list(options, prompt):
-    """Prompts user to select an option from a list."""
-    if not options:
-        return None
-    print(prompt)
-    for i, option in enumerate(options):
-        print(f"{i + 1}. {option}")
-    while True:
-        try:
-            choice = input(f"Enter number (1-{len(options)}): ")
-            index = int(choice) - 1
-            if 0 <= index < len(options):
-                return options[index]
-            else:
-                print("Invalid choice.")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-        except EOFError:
-            print("\nSelection cancelled.")
-            return None # Handle Ctrl+D
 
 def initialize_xml_components():
     """Initialize the XML processing components."""
@@ -233,7 +199,8 @@ def get_xml_instructions(provider_specific=""):
         "- Include spaces, punctuation, and formatting within your tags as needed\n"
         "- Example: <10>Hello world, </10><20>this works perfectly!</20> renders as 'Hello world, this works perfectly!'\n"
         "- Bad: <10>Hello</10> <20>world</20> renders as 'Helloworld' (space between tags ignored)\n"
-        "- Good: <10>Hello world </10><20>today!</20> renders as 'Hello world today!' (space inside first tag)\n\n"
+        "- Good: <10>Hello world </10><20>today!</20> renders as 'Hello world today!' (space inside first tag)\n"
+        "- PRESERVE SPACING: Always include a leading space in a tag that follows punctuation. Example: <20>trees.</20><30> One day</30>\n\n"
         "DICTATION vs INSTRUCTION DETECTION:\n"
         "- DICTATION: User speaking content to be written (flows naturally, continues previous text)\n"
         "- INSTRUCTION: User giving you commands (phrases like 'fix this', 'change that', 'make it better', 'turn this into', 'correct the grammar')\n"
@@ -258,7 +225,7 @@ def get_xml_instructions(provider_specific=""):
         "- Use empty tags like <50></50> to delete word ID 50\n"
         "- YOU control all spacing, punctuation, and whitespace within tags\n"
         "- SPACES BETWEEN TAGS ARE IGNORED - only content inside tags is used\n"
-        "- All whitespace including carriage returns must be inside tags - anything between tags is completely ignored\n"
+        "- All whitespace including carriage returns must be inside tags - anything between tags is completely ignored. Newlines are preserved.\n"
         "- Escape XML characters: use &amp; for &, &gt; for >, &lt; for < inside content\n"
         "- Group words into logical phrases (3-8 words per tag ideal)\n"
         "- Continue from highest existing ID + 10\n"
@@ -323,133 +290,20 @@ def detect_and_execute_commands(text):
     return text
 
 # --- Configuration & Argument Parsing ---
-# Load .env file specifically from the script's directory
-script_dir = os.path.dirname(__file__)
-dotenv_path = os.path.join(script_dir, '.env')
-load_dotenv(dotenv_path=dotenv_path)
+# Initialize configuration manager
+config_manager = ConfigManager()
+if not config_manager.parse_configuration():
+    sys.exit(1)
 
-parser = argparse.ArgumentParser(
-    description="Real-time dictation using Groq or Gemini.",
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter # Show defaults in help
-)
-parser.add_argument(
-    "--provider",
-    type=str,
-    choices=['groq', 'gemini'],
-    default=None, # Default to None, will be determined later if not provided
-    help="The transcription provider to use ('groq' or 'gemini')."
-)
-parser.add_argument(
-    "--model",
-    type=str,
-    default=None, # Default to None
-    help="The specific model ID to use for the chosen provider."
-)
-parser.add_argument(
-    "--trigger-key",
-    type=str,
-    default=DEFAULT_TRIGGER_KEY,
-    help="The key name to trigger recording (e.g., 'alt_r', 'ctrl_r', 'f19'), or 'none' to disable."
-)
-parser.add_argument(
-    "--language",
-    type=str,
-    default=None,
-    help="Optional: Language code (e.g., 'en', 'es') for transcription (Groq only)."
-)
-parser.add_argument(
-    "--sample-rate",
-    type=int,
-    default=DEFAULT_SAMPLE_RATE,
-    help="Audio sample rate in Hz."
-)
-parser.add_argument(
-    "--channels",
-    type=int,
-    default=DEFAULT_CHANNELS,
-    help="Number of audio channels (e.g., 1 for mono)."
-)
-parser.add_argument(
-    "--use-xdotool",
-    action="store_true",
-    help="Use xdotool for typing text instead of clipboard paste. Linux only."
-)
-parser.add_argument(
-    "--no-trigger-key",
-    action="store_true",
-    help="Disable keyboard trigger; use POSIX signals (SIGUSR1/SIGUSR2) instead."
-)
-
-# Check if running interactively (no args other than script name, or only --use-xdotool)
-args_without_script = sys.argv[1:]
-interactive_mode = (len(args_without_script) == 0 or 
-                   (len(args_without_script) == 1 and args_without_script[0] == '--use-xdotool'))
-
-if interactive_mode:
-    print("Running in interactive mode...")
-    groq_key_present = bool(os.getenv("GROQ_API_KEY"))
-    gemini_key_present = bool(os.getenv("GOOGLE_API_KEY"))
-
-    if groq_key_present:
-        print("Found GROQ_API_KEY in .env, selecting Groq as provider.")
-        PROVIDER = 'groq'
-    elif gemini_key_present:
-        print("Found GOOGLE_API_KEY in .env (but no Groq key), selecting Gemini as provider.")
-        PROVIDER = 'gemini'
-    else:
-        print("No API keys found in .env.")
-        PROVIDER = select_from_list(['groq', 'gemini'], "Select a provider:")
-        if not PROVIDER:
-            print("No provider selected. Exiting.")
-            sys.exit(0)
-
-    # Select Model based on Provider
-    if PROVIDER == 'groq':
-        available_models = load_models_from_file("groq_models.txt")
-        if not available_models:
-             print("Could not load Groq models. Please ensure 'groq_models.txt' exists.", file=sys.stderr)
-             sys.exit(1)
-        MODEL_ID = select_from_list(available_models, f"Select a Groq model:")
-    elif PROVIDER == 'gemini':
-        available_models = load_models_from_file("gemini_models.txt")
-        if not available_models:
-             print("Could not load Gemini models. Please ensure 'gemini_models.txt' exists.", file=sys.stderr)
-             sys.exit(1)
-        MODEL_ID = select_from_list(available_models, f"Select a Gemini model:")
-
-    if not MODEL_ID:
-        print("No model selected. Exiting.")
-        sys.exit(0)
-
-    # Use default args for other settings in interactive mode
-    # Parse the actual args to capture --use-xdotool if present
-    args = parser.parse_args()
-    LANGUAGE = args.language
-    SAMPLE_RATE = args.sample_rate
-    CHANNELS = args.channels
-    TRIGGER_KEY_NAME = args.trigger_key
-    if getattr(args, "no_trigger_key", False):
-        TRIGGER_KEY_NAME = "none"
-    USE_XDOTOOL = args.use_xdotool
-
-else:
-    # Parse arguments normally if provided
-    args = parser.parse_args()
-    PROVIDER = args.provider
-    MODEL_ID = args.model
-    LANGUAGE = args.language
-    SAMPLE_RATE = args.sample_rate
-    CHANNELS = args.channels
-    TRIGGER_KEY_NAME = args.trigger_key
-    if getattr(args, "no_trigger_key", False):
-        TRIGGER_KEY_NAME = "none"
-    USE_XDOTOOL = args.use_xdotool
-
-    # Validate required args if not interactive
-    if not PROVIDER or not MODEL_ID:
-        parser.print_help()
-        print("\nError: --provider and --model are required when running with arguments.", file=sys.stderr)
-        sys.exit(1)
+# Get configuration values
+config = config_manager.get_config()
+PROVIDER = config['provider']
+MODEL_ID = config['model_id']
+LANGUAGE = config['language']
+SAMPLE_RATE = config['sample_rate']
+CHANNELS = config['channels']
+TRIGGER_KEY_NAME = config['trigger_key_name']
+USE_XDOTOOL = config['use_xdotool']
 
 
 # --- Check platform for xdotool compatibility ---
