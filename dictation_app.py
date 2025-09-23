@@ -89,13 +89,8 @@ class DictationApp:
                 print(chunk_text, end='', flush=True)
                 self.transcription_service.process_streaming_chunk(chunk_text, self.output_service.output_text_cross_platform)
             
-            def final_callback(full_text):
-                print()  # New line after streaming
-                if full_text:
-                    self.transcription_service.process_xml_transcription(full_text, self.output_service.output_text_cross_platform)
-            
-            # Use unified provider interface
-            self.provider.transcribe_audio(audio_np, context, streaming_callback, final_callback)
+            # Use unified provider interface - streaming only, no final callback
+            self.provider.transcribe_audio(audio_np, context, streaming_callback, None)
             
         except Exception as e:
             print(f"\nError in process_audio: {e}", file=sys.stderr)
