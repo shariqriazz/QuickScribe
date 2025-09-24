@@ -28,13 +28,13 @@ class TestDiffEngine(unittest.TestCase):
     def test_simple_append(self):
         """Test appending new words."""
         old_words = [
-            DictationWord(id=1, text="hello"),
+            DictationWord(id=1, text="hello "),
             DictationWord(id=2, text="world")
         ]
         new_words = [
-            DictationWord(id=1, text="hello"),
+            DictationWord(id=1, text="hello "),
             DictationWord(id=2, text="world"),
-            DictationWord(id=3, text="test")
+            DictationWord(id=3, text=" test")
         ]
         result = self.engine.compare(old_words, new_words)
         self.assertEqual(result, DiffResult(backspaces=0, new_text=" test"))
@@ -42,81 +42,81 @@ class TestDiffEngine(unittest.TestCase):
     def test_simple_deletion(self):
         """Test deleting words from the end."""
         old_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=2, text="world"),
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=2, text="world "),
             DictationWord(id=3, text="test")
         ]
         new_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=2, text="world")
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=2, text="world ")
         ]
         result = self.engine.compare(old_words, new_words)
-        self.assertEqual(result, DiffResult(backspaces=5, new_text=""))
+        self.assertEqual(result, DiffResult(backspaces=4, new_text=""))  # 'test' only
 
     def test_middle_modification(self):
         """Test modifying a word in the middle."""
         old_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=2, text="beautiful"),
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=2, text="beautiful "),
             DictationWord(id=3, text="world")
         ]
         new_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=4, text="wonderful"),
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=4, text="wonderful "),
             DictationWord(id=3, text="world")
         ]
         result = self.engine.compare(old_words, new_words)
-        self.assertEqual(result, DiffResult(backspaces=16, new_text=" wonderful world"))
+        self.assertEqual(result, DiffResult(backspaces=15, new_text="wonderful world"))  # 'beautiful world'
 
     def test_middle_insertion(self):
         """Test inserting a word in the middle."""
         old_words = [
-            DictationWord(id=1, text="hello"),
+            DictationWord(id=1, text="hello "),
             DictationWord(id=2, text="world")
         ]
         new_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=3, text="beautiful"),
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=3, text="beautiful "),
             DictationWord(id=2, text="world")
         ]
         result = self.engine.compare(old_words, new_words)
-        self.assertEqual(result, DiffResult(backspaces=6, new_text=" beautiful world"))
+        self.assertEqual(result, DiffResult(backspaces=5, new_text="beautiful world"))  # 'world'
 
     def test_middle_deletion(self):
         """Test deleting a word from the middle."""
         old_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=2, text="beautiful"),
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=2, text="beautiful "),
             DictationWord(id=3, text="world")
         ]
         new_words = [
-            DictationWord(id=1, text="hello"),
+            DictationWord(id=1, text="hello "),
             DictationWord(id=3, text="world")
         ]
         result = self.engine.compare(old_words, new_words)
-        self.assertEqual(result, DiffResult(backspaces=16, new_text=" world"))
+        self.assertEqual(result, DiffResult(backspaces=15, new_text="world"))  # 'beautiful world'
 
     def test_complex_changes(self):
         """Test multiple simultaneous changes."""
         old_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=2, text="beautiful"),
-            DictationWord(id=3, text="world"),
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=2, text="beautiful "),
+            DictationWord(id=3, text="world "),
             DictationWord(id=4, text="today")
         ]
         new_words = [
-            DictationWord(id=1, text="hello"),
-            DictationWord(id=5, text="wonderful"),
-            DictationWord(id=6, text="new"),
+            DictationWord(id=1, text="hello "),
+            DictationWord(id=5, text="wonderful "),
+            DictationWord(id=6, text="new "),
             DictationWord(id=7, text="universe")
         ]
         result = self.engine.compare(old_words, new_words)
-        self.assertEqual(result, DiffResult(backspaces=22, new_text=" wonderful new universe"))
+        self.assertEqual(result, DiffResult(backspaces=21, new_text="wonderful new universe"))  # 'beautiful world today'
 
     def test_empty_old_list(self):
         """Test with empty old list."""
         new_words = [
-            DictationWord(id=1, text="hello"),
+            DictationWord(id=1, text="hello "),
             DictationWord(id=2, text="world")
         ]
         result = self.engine.compare([], new_words)
@@ -125,7 +125,7 @@ class TestDiffEngine(unittest.TestCase):
     def test_empty_new_list(self):
         """Test with empty new list."""
         old_words = [
-            DictationWord(id=1, text="hello"),
+            DictationWord(id=1, text="hello "),
             DictationWord(id=2, text="world")
         ]
         result = self.engine.compare(old_words, [])
@@ -134,11 +134,11 @@ class TestDiffEngine(unittest.TestCase):
 
     def test_consecutive_words_from_xml(self):
         """Test that words extracted from consecutive XML tags are properly spaced."""
-        # Simulate words extracted from consecutive XML tags like <10>This</10><20>is</20><30>test</30>
+        # Model controls spacing - each word should include its trailing space if needed
         old_words = []
         new_words = [
-            DictationWord(id=10, text="This"),
-            DictationWord(id=20, text="is"),
+            DictationWord(id=10, text="This "),
+            DictationWord(id=20, text="is "),
             DictationWord(id=30, text="test")
         ]
         result = self.engine.compare(old_words, new_words)
