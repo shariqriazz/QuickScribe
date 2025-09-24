@@ -103,8 +103,11 @@ class DictationApp:
     
     def _initialize_services(self):
         """Initialize all service components."""
-        self.transcription_service = TranscriptionService(use_xdotool=self.use_xdotool)
         self.output_service = OutputService(use_xdotool=self.use_xdotool)
+        self.transcription_service = TranscriptionService(
+            use_xdotool=self.use_xdotool, 
+            output_service=self.output_service
+        )
         return True
     
     def _initialize_provider_client(self):

@@ -68,6 +68,10 @@ class OutputService:
             print(f"\nUnexpected error using xdotool: {e}", file=sys.stderr)
             return False
     
+    def reset_state(self):
+        """Reset output service state for fresh conversation."""
+        self.last_typed_text = ""
+    
     def output_text_cross_platform(self, text):
         """Outputs text using either xdotool or clipboard paste based on settings."""
         current_os = platform.system()

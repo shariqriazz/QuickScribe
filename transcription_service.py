@@ -11,8 +11,9 @@ from lib.conversation_state import ConversationManager
 class TranscriptionService:
     """Handles XML transcription processing and streaming."""
     
-    def __init__(self, use_xdotool=False):
+    def __init__(self, use_xdotool=False, output_service=None):
         self.use_xdotool = use_xdotool
+        self.output_service = output_service
         self.word_parser = WordStreamParser()
         self.diff_engine = DiffEngine()
         self.output_manager = OutputManager() if use_xdotool else None
@@ -23,7 +24,6 @@ class TranscriptionService:
         self.streaming_buffer = ""
         self.last_processed_position = 0
         self.conversation_history = []
-        self.last_typed_text = ""
         
         # Load conversation state
         self.conversation_manager.load_conversation()
@@ -60,7 +60,8 @@ class TranscriptionService:
         """Reset all stored state for a fresh conversation/update baseline."""
         # Clear conversation/history surfaces
         self.conversation_history.clear()
-        self.last_typed_text = ""
+        # Reset output service state (single point of truth)
+        self._reset_output_state()
         # Clear XML processing state
         self.current_words.clear()
         if self.word_parser:
@@ -70,6 +71,11 @@ class TranscriptionService:
             self.conversation_manager.reset_conversation()
         # Reset streaming accumulators
         self.reset_streaming_state()
+    
+    def _reset_output_state(self):
+        """Reset all output-related state through single point of coordination."""
+        if self.output_service:
+            self.output_service.reset_state()
     
     def process_streaming_chunk(self, chunk_text, output_callback=None):
         """Process streaming text chunks and apply real-time updates."""
