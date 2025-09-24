@@ -143,3 +143,5 @@ cython_debug/
 
 # VSCode settings
 .vscode/
+
+run.sh
