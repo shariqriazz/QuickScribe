@@ -18,8 +18,7 @@ from audio_handler import AudioHandler
 # Transcription processing
 from transcription_service import TranscriptionService
 
-# Output handling
-from output_service import OutputService
+# Output handling (removed - using direct xdotool via XMLStreamProcessor)
 
 # Input handling
 from input_controller import InputController
@@ -46,7 +45,6 @@ class DictationApp:
         # Service components
         self.audio_handler = None
         self.transcription_service = None
-        self.output_service = None
         self.input_controller = None
         self.provider = None
         
@@ -60,15 +58,15 @@ class DictationApp:
         self.use_xdotool = False
     
     def _get_conversation_context(self) -> ConversationContext:
-        """Build conversation context from transcription service."""
-        conversation_xml = ""
+        """Build conversation context from XMLStreamProcessor state."""
+        xml_markup = ""
         compiled_text = ""
-        if self.transcription_service.conversation_manager and self.transcription_service.conversation_manager.state.words:
-            conversation_xml = self.transcription_service.conversation_manager.state.to_xml()
-            compiled_text = self.transcription_service.conversation_manager.state.to_text()
+        if self.transcription_service:
+            xml_markup = self.transcription_service._build_xml_from_processor()
+            compiled_text = self.transcription_service._build_current_text()
         
         return ConversationContext(
-            xml_markup=conversation_xml,
+            xml_markup=xml_markup,
             compiled_text=compiled_text,
             sample_rate=self.sample_rate
         )
@@ -87,10 +85,17 @@ class DictationApp:
             # Define callbacks
             def streaming_callback(chunk_text):
                 print(chunk_text, end='', flush=True)
-                self.transcription_service.process_streaming_chunk(chunk_text, self.output_service.output_text_cross_platform)
+                self.transcription_service.process_streaming_chunk(chunk_text)
             
             # Use unified provider interface - streaming only, no final callback
             self.provider.transcribe_audio(audio_np, context, streaming_callback, None)
+            
+            # Show final clean state when streaming is complete
+            final_text = self.transcription_service._build_current_text()
+            if final_text:
+                print(f"\n{final_text}")  # New line and show final result
+            else:
+                print()  # Just add a newline
             
         except Exception as e:
             print(f"\nError in process_audio: {e}", file=sys.stderr)
@@ -103,11 +108,7 @@ class DictationApp:
     
     def _initialize_services(self):
         """Initialize all service components."""
-        self.output_service = OutputService(use_xdotool=self.use_xdotool)
-        self.transcription_service = TranscriptionService(
-            use_xdotool=self.use_xdotool, 
-            output_service=self.output_service
-        )
+        self.transcription_service = TranscriptionService(use_xdotool=self.use_xdotool)
         return True
     
     def _initialize_provider_client(self):
@@ -186,7 +187,7 @@ class DictationApp:
         print(f"Model:         {self.model_id}")
         print(f"Trigger Key:   {'disabled' if not self.input_controller.is_trigger_enabled() else self.trigger_key_name}")
         print(f"Audio:         {self.sample_rate}Hz, {self.channels} channel(s)")
-        print(f"Output Method: {'xdotool' if self.use_xdotool else 'clipboard paste'}")
+        print(f"Output Method: {'xdotool' if self.use_xdotool else 'none (test mode)'}")
         if self.provider_name == 'groq' and self.language:
             print(f"Language:      {self.language}")
         elif self.provider_name == 'gemini' and self.language:

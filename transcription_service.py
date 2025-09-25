@@ -2,31 +2,26 @@
 Transcription Service - Handles XML processing, streaming, and transcription processing.
 """
 import re
-from lib.word_stream import WordStreamParser, DictationWord
-from lib.diff_engine import DiffEngine
-from lib.output_manager import OutputManager, XdotoolError
-from lib.conversation_state import ConversationManager
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'lib', 'xml-stream'))
+from xml_stream_processor import XMLStreamProcessor
+from keyboard_injector import MockKeyboardInjector
+from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
 
 
 class TranscriptionService:
     """Handles XML transcription processing and streaming."""
     
-    def __init__(self, use_xdotool=False, output_service=None):
+    def __init__(self, use_xdotool=False):
         self.use_xdotool = use_xdotool
-        self.output_service = output_service
-        self.word_parser = WordStreamParser()
-        self.diff_engine = DiffEngine()
-        self.output_manager = OutputManager() if use_xdotool else None
-        self.conversation_manager = ConversationManager()
+        self.keyboard = XdotoolKeyboardInjector() if use_xdotool else MockKeyboardInjector()
+        self.processor = XMLStreamProcessor(self.keyboard)
         
         # State management
-        self.current_words = []
         self.streaming_buffer = ""
-        self.last_processed_position = 0
-        self.conversation_history = []
-        
-        # Load conversation state
-        self.conversation_manager.load_conversation()
+        self.last_update_position = 0
+        self.update_seen = False
     
     def detect_and_execute_commands(self, text):
         """Detect commands in transcribed text and execute them. Returns the text with commands removed."""
@@ -54,106 +49,52 @@ class TranscriptionService:
     def reset_streaming_state(self):
         """Reset streaming state for new transcription."""
         self.streaming_buffer = ""
-        self.last_processed_position = 0
+        self.last_update_position = 0
+        self.update_seen = False
+        # DO NOT reset self.processor - maintains state across transcriptions
     
     def reset_all_state(self):
         """Reset all stored state for a fresh conversation/update baseline."""
-        # Clear conversation/history surfaces
-        self.conversation_history.clear()
-        # Reset output service state (single point of truth)
-        self._reset_output_state()
-        # Clear XML processing state
-        self.current_words.clear()
-        if self.word_parser:
-            self.word_parser.clear_buffer()
-        # Reset conversation state
-        if self.conversation_manager:
-            self.conversation_manager.reset_conversation()
+        # Reset XML processing state
+        self.processor.reset({})
         # Reset streaming accumulators
         self.reset_streaming_state()
     
-    def _reset_output_state(self):
-        """Reset all output-related state through single point of coordination."""
-        if self.output_service:
-            self.output_service.reset_state()
-    
-    def process_streaming_chunk(self, chunk_text, output_callback=None):
+    def process_streaming_chunk(self, chunk_text):
         """Process streaming text chunks and apply real-time updates."""
         # Add chunk to buffer
         self.streaming_buffer += chunk_text
         
         # Detect and handle <reset> tags in the stream
-        reset_pattern = re.compile(r'<reset\s*/>|<reset>.*?</reset>', re.DOTALL | re.IGNORECASE)
-        if reset_pattern.search(self.streaming_buffer):
-            last_match = None
-            for m in reset_pattern.finditer(self.streaming_buffer):
-                last_match = m
-            self.reset_all_state()
-            if last_match:
-                self.streaming_buffer = self.streaming_buffer[last_match.end():]
+        if '<reset' in self.streaming_buffer:
+            # Find last reset tag
+            last_reset_idx = self.streaming_buffer.rfind('<reset')
+            if last_reset_idx != -1:
+                # Look for end of reset tag
+                reset_end = self.streaming_buffer.find('>', last_reset_idx)
+                if reset_end != -1:
+                    self.reset_all_state()
+                    # Keep content after reset tag
+                    self.streaming_buffer = self.streaming_buffer[reset_end + 1:]
+                    self.last_update_position = 0
+                    self.update_seen = False
         
-        # Look for complete <update> sections with word tags
-        update_pattern = re.compile(r'<update>(.*?)</update>', re.DOTALL)
-        update_matches = update_pattern.findall(self.streaming_buffer)
-        
-        if update_matches:
-            # Process the most recent complete update section
-            latest_update = update_matches[-1]
+        # Handle incremental streaming after <update> tag
+        if '<update>' in self.streaming_buffer:
+            if not self.update_seen:
+                # First time seeing update tag
+                self.update_seen = True
+                update_idx = self.streaming_buffer.find('<update>')
+                self.last_update_position = update_idx + 8  # len('<update>')
             
-            # Extract word tags from the update
-            word_pattern = re.compile(r'<(\d+)>(.*?)</\1>', re.DOTALL)
-            word_matches = word_pattern.findall(latest_update)
-            
-            if word_matches:
-                # Create word objects from matches
-                new_words = []
-                for word_id_str, word_text in word_matches:
-                    word_id = int(word_id_str)
-                    # Handle empty tags as deletions
-                    if word_text.strip() == "":
-                        new_words.append(DictationWord(id=word_id, text=None))
-                    else:
-                        new_words.append(DictationWord(id=word_id, text=word_text))
-                
-                # Update conversation state incrementally
-                if self.conversation_manager:
-                    for word in new_words:
-                        if word.text is None:
-                            self.conversation_manager.state.delete_word(word.id)
-                        else:
-                            self.conversation_manager.state.update_word(word.id, word.text)
-                    
-                    # Build updated words list
-                    word_items = list(self.conversation_manager.state.words.items())
-                    word_items.sort(key=lambda x: x[0])
-                    updated_words = [DictationWord(id=word_id, text=text) for word_id, text in word_items]
-                    
-                    # Calculate and apply diff for real-time updates
-                    diff_result = self.diff_engine.compare(self.current_words, updated_words)
-                    
-                    if self.output_manager and self.use_xdotool:
-                        try:
-                            self.output_manager.execute_diff(diff_result)
-                        except XdotoolError as e:
-                            print(f"\nxdotool error: {e}", file=sys.stderr)
-                            # Fall back to clipboard for this chunk
-                            if diff_result.new_text and output_callback:
-                                full_text = self.conversation_manager.state.to_text_from_words(updated_words)
-                                output_callback(full_text)
-                    else:
-                        # Use clipboard method for real-time updates
-                        if (diff_result.backspaces > 0 or diff_result.new_text) and output_callback:
-                            full_text = self.conversation_manager.state.to_text_from_words(updated_words)
-                            output_callback(full_text)
-                    
-                    # Update current words state
-                    self.current_words = updated_words
-                    
-                    # Show real-time progress
-                    compiled_text = self.conversation_manager.state.to_text()
-                    print(f"\r[Streaming] {compiled_text}", end='', flush=True)
+            # Stream new content only (content after last processed position)
+            if self.last_update_position < len(self.streaming_buffer):
+                new_content = self.streaming_buffer[self.last_update_position:]
+                if new_content:
+                    self.processor.process_chunk(new_content)
+                    self.last_update_position = len(self.streaming_buffer)
     
-    def process_xml_transcription(self, text, output_callback=None):
+    def process_xml_transcription(self, text):
         """Process XML transcription text using the word processing pipeline."""
         try:
             # Check for conversation tags first
@@ -178,78 +119,28 @@ class TranscriptionService:
             # Remove conversation tags from text before processing words
             text_without_conversation = conversation_pattern.sub('', text)
             
-            # Parse XML to extract words (including deletions)
-            newly_parsed_words = self.word_parser.parse(text_without_conversation)
-            if not newly_parsed_words:
-                return
-            
-            # Update conversation state with all parsed words
-            if self.conversation_manager:
-                for word in newly_parsed_words:
-                    if word.text is None:
-                        # Handle deletion
-                        self.conversation_manager.state.delete_word(word.id)
-                    else:
-                        # Handle update/addition
-                        self.conversation_manager.state.update_word(word.id, word.text)
-                
-                # Build current words list from conversation state for diff processing
-                word_items = list(self.conversation_manager.state.words.items())
-                word_items.sort(key=lambda x: x[0])  # Sort by ID
-                updated_words = [DictationWord(id=word_id, text=text) for word_id, text in word_items]
-            else:
-                # Fallback to old behavior if conversation manager not available
-                updated_words = self.current_words.copy()
-                
-                for new_word in newly_parsed_words:
-                    if new_word.text is None:
-                        # Handle deletion - remove from updated_words
-                        updated_words = [w for w in updated_words if w.id != new_word.id]
-                    else:
-                        # Find if this word ID already exists
-                        existing_index = None
-                        for i, existing_word in enumerate(updated_words):
-                            if existing_word.id == new_word.id:
-                                existing_index = i
-                                break
-                        
-                        if existing_index is not None:
-                            # Update existing word
-                            updated_words[existing_index] = new_word
-                        else:
-                            # Add new word, keeping words sorted by ID
-                            inserted = False
-                            for i, existing_word in enumerate(updated_words):
-                                if new_word.id < existing_word.id:
-                                    updated_words.insert(i, new_word)
-                                    inserted = True
-                                    break
-                            if not inserted:
-                                updated_words.append(new_word)
-            
-            # Calculate diff and execute changes
-            diff_result = self.diff_engine.compare(self.current_words, updated_words)
-            
-            if self.output_manager and self.use_xdotool:
-                # Use the sophisticated output manager for xdotool
-                try:
-                    self.output_manager.execute_diff(diff_result)
-                except XdotoolError as e:
-                    print(f"\nxdotool error: {e}", file=sys.stderr)
-                    print("Falling back to clipboard method...", file=sys.stderr)
-                    # Fall back to clipboard method
-                    if diff_result.new_text and output_callback:
-                        full_text = self.conversation_manager.state.to_text_from_words(updated_words)
-                        output_callback(full_text)
-            else:
-                # Use callback method - but we still need to handle the diff properly
-                if (diff_result.backspaces > 0 or diff_result.new_text) and output_callback:
-                    # For callback method, output the full corrected text
-                    full_text = self.conversation_manager.state.to_text_from_words(updated_words)
-                    output_callback(full_text)
-            
-            # Update current words state
-            self.current_words = updated_words
+            # Use XMLStreamProcessor for final processing
+            self.processor.process_chunk(text_without_conversation)
+            self.processor.end_stream()
         
         except Exception as e:
             print(f"\nError processing XML transcription: {e}", file=sys.stderr)
+    
+    def _build_current_text(self):
+        """Build current text from XMLStreamProcessor state."""
+        return self.processor._build_string_from_words(self.processor.current_words)
+    
+    def _build_xml_from_processor(self):
+        """Build XML markup from XMLStreamProcessor state."""
+        if not self.processor.current_words:
+            return ""
+        
+        # Build XML with proper escaping
+        xml_parts = []
+        for word_id in sorted(self.processor.current_words.keys()):
+            text = self.processor.current_words[word_id]
+            # Basic XML escaping
+            escaped_text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            xml_parts.append(f'<{word_id}>{escaped_text}</{word_id}>')
+        
+        return ''.join(xml_parts)
