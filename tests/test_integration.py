@@ -20,9 +20,14 @@ class TestXMLStreamIntegration(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment."""
+        # Create mock config for tests
+        class MockConfig:
+            use_xdotool = False
+            debug_enabled = False
+
         self.keyboard = MockKeyboardInjector()
         self.processor = XMLStreamProcessor(self.keyboard)
-        self.transcription_service = TranscriptionService(use_xdotool=False)
+        self.transcription_service = TranscriptionService(MockConfig())
 
     def test_single_word_processing(self):
         """Test transcription of a single complete word."""
@@ -142,7 +147,10 @@ class TestXMLStreamIntegration(unittest.TestCase):
     def test_transcription_service_integration(self):
         """Test TranscriptionService with XMLStreamProcessor."""
         # Create transcription service with mock keyboard
-        service = TranscriptionService(use_xdotool=False)
+        class MockConfig:
+            use_xdotool = False
+            debug_enabled = False
+        service = TranscriptionService(MockConfig())
         
         # Mock the processor to use our test keyboard
         service.keyboard = self.keyboard
@@ -158,7 +166,10 @@ class TestXMLStreamIntegration(unittest.TestCase):
 
     def test_reset_handling(self):
         """Test reset tag processing in transcription service."""
-        service = TranscriptionService(use_xdotool=False)
+        class MockConfig:
+            use_xdotool = False
+            debug_enabled = False
+        service = TranscriptionService(MockConfig())
         service.keyboard = self.keyboard
         service.processor = XMLStreamProcessor(self.keyboard)
         
@@ -175,7 +186,10 @@ class TestXMLStreamIntegration(unittest.TestCase):
 
     def test_conversation_tag_processing(self):
         """Test conversation tags are processed correctly."""
-        service = TranscriptionService(use_xdotool=False)
+        class MockConfig:
+            use_xdotool = False
+            debug_enabled = False
+        service = TranscriptionService(MockConfig())
         service.keyboard = self.keyboard  
         service.processor = XMLStreamProcessor(self.keyboard)
         service.processor.reset({})

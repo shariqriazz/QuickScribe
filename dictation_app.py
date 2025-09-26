@@ -47,15 +47,6 @@ class DictationApp:
         self.transcription_service = None
         self.input_controller = None
         self.provider = None
-        
-        # Configuration values
-        self.provider_name = None
-        self.model_id = None
-        self.language = None
-        self.sample_rate = DEFAULT_SAMPLE_RATE
-        self.channels = DEFAULT_CHANNELS
-        self.trigger_key_name = DEFAULT_TRIGGER_KEY
-        self.use_xdotool = False
     
     def _get_conversation_context(self) -> ConversationContext:
         """Build conversation context from XMLStreamProcessor state."""
@@ -64,11 +55,11 @@ class DictationApp:
         if self.transcription_service:
             xml_markup = self.transcription_service._build_xml_from_processor()
             compiled_text = self.transcription_service._build_current_text()
-        
+
         return ConversationContext(
             xml_markup=xml_markup,
             compiled_text=compiled_text,
-            sample_rate=self.sample_rate
+            sample_rate=self.config.sample_rate
         )
     
     def _process_audio(self, audio_np):
@@ -102,19 +93,19 @@ class DictationApp:
         finally:
             # Remind user how to record again
             if self.input_controller and self.input_controller.is_trigger_enabled():
-                print(f"\nHold '{self.trigger_key_name}' to record...")
+                print(f"\nHold '{self.config.trigger_key_name}' to record...")
             else:
                 print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
     
     def _initialize_services(self):
         """Initialize all service components."""
-        self.transcription_service = TranscriptionService(use_xdotool=self.use_xdotool)
+        self.transcription_service = TranscriptionService(self.config)
         return True
     
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
         try:
-            self.provider = ProviderFactory.create_provider(self.provider_name, self.model_id, self.language)
+            self.provider = ProviderFactory.create_provider(self.config.provider, self.config.model_id, self.config.language)
             if self.provider.initialize():
                 return True
             else:
@@ -137,7 +128,7 @@ class DictationApp:
                 self.audio_handler.stop_recording_and_process(self._process_audio)
         
         self.input_controller = InputController(
-            trigger_key_name=self.trigger_key_name,
+            trigger_key_name=self.config.trigger_key_name,
             start_callback=start_recording_callback,
             stop_callback=stop_recording_callback
         )
@@ -148,16 +139,7 @@ class DictationApp:
         # Parse configuration
         if not self.config_manager.parse_configuration():
             return False
-        self.config = self.config_manager.get_config()
-        
-        # Set configuration values
-        self.provider_name = self.config['provider']
-        self.model_id = self.config['model_id']
-        self.language = self.config['language']
-        self.sample_rate = self.config['sample_rate']
-        self.channels = self.config['channels']
-        self.trigger_key_name = self.config['trigger_key_name']
-        self.use_xdotool = self.config['use_xdotool']
+        self.config = self.config_manager
         
         # Initialize services
         if not self._initialize_services():
@@ -173,8 +155,7 @@ class DictationApp:
         
         # Initialize audio handler
         self.audio_handler = AudioHandler(
-            sample_rate=self.sample_rate,
-            channels=self.channels,
+            self.config,
             dtype=DTYPE
         )
         
@@ -183,18 +164,18 @@ class DictationApp:
     def _display_configuration(self):
         """Display startup configuration."""
         print(f"\n--- Configuration ---")
-        print(f"Provider:      {self.provider_name.upper()}")
-        print(f"Model:         {self.model_id}")
-        print(f"Trigger Key:   {'disabled' if not self.input_controller.is_trigger_enabled() else self.trigger_key_name}")
-        print(f"Audio:         {self.sample_rate}Hz, {self.channels} channel(s)")
-        print(f"Output Method: {'xdotool' if self.use_xdotool else 'none (test mode)'}")
-        if self.provider_name == 'groq' and self.language:
-            print(f"Language:      {self.language}")
-        elif self.provider_name == 'gemini' and self.language:
-            print(f"Language:      '{self.language}' (Note: Ignored by Gemini)")
+        print(f"Provider:      {self.config.provider.upper()}")
+        print(f"Model:         {self.config.model_id}")
+        print(f"Trigger Key:   {'disabled' if not self.input_controller.is_trigger_enabled() else self.config.trigger_key_name}")
+        print(f"Audio:         {self.config.sample_rate}Hz, {self.config.channels} channel(s)")
+        print(f"Output Method: {'xdotool' if self.config.use_xdotool else 'none (test mode)'}")
+        if self.config.provider == 'groq' and self.config.language:
+            print(f"Language:      {self.config.language}")
+        elif self.config.provider == 'gemini' and self.config.language:
+            print(f"Language:      '{self.config.language}' (Note: Ignored by Gemini)")
         print("--------------------")
         print("Ensure Terminal/IDE has Microphone and Accessibility/Input Monitoring permissions.")
-        if self.provider_name == 'gemini':
+        if self.config.provider == 'gemini':
             print("Note: Gemini currently only transcribes English audio well.")
         print("Press Ctrl+C to exit.")
     
@@ -220,7 +201,7 @@ class DictationApp:
         self._display_xml_instructions()
         
         if self.input_controller.is_trigger_enabled():
-            print(f"\nHold '{self.trigger_key_name}' to record...")
+            print(f"\nHold '{self.config.trigger_key_name}' to record...")
         else:
             print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
 

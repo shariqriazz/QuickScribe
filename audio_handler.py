@@ -12,9 +12,8 @@ from typing import Callable, Optional
 class AudioHandler:
     """Handles audio recording and processing."""
     
-    def __init__(self, sample_rate: int = 16000, channels: int = 1, dtype: str = 'int16'):
-        self.sample_rate = sample_rate
-        self.channels = channels
+    def __init__(self, config, dtype: str = 'int16'):
+        self.config = config
         self.dtype = dtype
         self.is_recording = False
         self.audio_queue = queue.Queue()
@@ -46,8 +45,8 @@ class AudioHandler:
 
         try:
             self.recording_stream = sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
+                samplerate=self.config.sample_rate,
+                channels=self.config.channels,
                 dtype=self.dtype,
                 callback=self.audio_callback
             )
@@ -119,9 +118,9 @@ class AudioHandler:
         """Test if audio device is working."""
         try:
             with sd.InputStream(
-                samplerate=self.sample_rate, 
-                channels=self.channels, 
-                dtype=self.dtype, 
+                samplerate=self.config.sample_rate,
+                channels=self.config.channels,
+                dtype=self.dtype,
                 callback=lambda i,f,t,s: None
             ):
                 pass

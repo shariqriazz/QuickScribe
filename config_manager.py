@@ -15,7 +15,9 @@ class ConfigManager:
         self.channels = 1
         self.trigger_key_name = 'alt_r'
         self.use_xdotool = False
+        self.debug_enabled = False
         self.no_trigger_key = False
+        self.xdotool_rate = None
         
         # Load environment variables
         script_dir = os.path.dirname(__file__)
@@ -116,6 +118,18 @@ class ConfigManager:
             action="store_true",
             help="Disable keyboard trigger; use POSIX signals (SIGUSR1/SIGUSR2) instead."
         )
+        parser.add_argument(
+            "-D", "--debug",
+            action="store_true",
+            help="Enable debug output (shows XML processing details after streaming completes)."
+        )
+        parser.add_argument(
+            "--xdotool-hz", "--xdotool-cps",
+            type=float,
+            default=None,
+            dest="xdotool_rate",
+            help="Set xdotool keystroke rate in Hz/CPS (keystrokes per second)."
+        )
         return parser
     
     def handle_interactive_mode(self):
@@ -157,53 +171,41 @@ class ConfigManager:
         
         return True
     
+    def _apply_parsed_args(self, args):
+        """Apply parsed arguments to instance variables (single point of truth)."""
+        self.language = args.language
+        self.sample_rate = args.sample_rate
+        self.channels = args.channels
+        self.trigger_key_name = args.trigger_key
+        if getattr(args, "no_trigger_key", False):
+            self.trigger_key_name = "none"
+        self.use_xdotool = args.use_xdotool
+        self.debug_enabled = args.debug
+        self.xdotool_rate = args.xdotool_rate
+
     def parse_configuration(self):
         """Parse configuration from command line arguments or interactive mode."""
         parser = self.setup_argument_parser()
         args_without_script = sys.argv[1:]
-        
+        args = parser.parse_args()
+
         if self.is_interactive_mode(args_without_script):
             if not self.handle_interactive_mode():
                 return False
-            
-            # Parse args for additional settings in interactive mode
-            args = parser.parse_args()
-            self.language = args.language
-            self.sample_rate = args.sample_rate
-            self.channels = args.channels
-            self.trigger_key_name = args.trigger_key
-            if getattr(args, "no_trigger_key", False):
-                self.trigger_key_name = "none"
-            self.use_xdotool = args.use_xdotool
+            # Apply all other args in interactive mode
+            self._apply_parsed_args(args)
         else:
-            # Parse arguments normally if provided
-            args = parser.parse_args()
+            # Non-interactive mode: get provider/model from args
             self.provider = args.provider
             self.model_id = args.model
-            self.language = args.language
-            self.sample_rate = args.sample_rate
-            self.channels = args.channels
-            self.trigger_key_name = args.trigger_key
-            if getattr(args, "no_trigger_key", False):
-                self.trigger_key_name = "none"
-            self.use_xdotool = args.use_xdotool
+            # Apply all other args
+            self._apply_parsed_args(args)
 
             # Validate required args if not interactive
             if not self.provider or not self.model_id:
                 parser.print_help()
                 print("\nError: --provider and --model are required when running with arguments.", file=sys.stderr)
                 return False
-        
+
         return True
     
-    def get_config(self):
-        """Return configuration as a dictionary."""
-        return {
-            'provider': self.provider,
-            'model_id': self.model_id,
-            'language': self.language,
-            'sample_rate': self.sample_rate,
-            'channels': self.channels,
-            'trigger_key_name': self.trigger_key_name,
-            'use_xdotool': self.use_xdotool
-        }

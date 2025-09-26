@@ -23,7 +23,10 @@ class TestIncrementalStreaming(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment."""
-        self.service = TranscriptionService(use_xdotool=False)
+        class MockConfig:
+            use_xdotool = False
+            debug_enabled = False
+        self.service = TranscriptionService(MockConfig())
         # Access the mock keyboard directly
         self.keyboard = self.service.keyboard
         

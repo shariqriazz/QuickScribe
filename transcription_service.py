@@ -13,10 +13,10 @@ from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
 class TranscriptionService:
     """Handles XML transcription processing and streaming."""
     
-    def __init__(self, use_xdotool=False):
-        self.use_xdotool = use_xdotool
-        self.keyboard = XdotoolKeyboardInjector() if use_xdotool else MockKeyboardInjector()
-        self.processor = XMLStreamProcessor(self.keyboard)
+    def __init__(self, config):
+        self.config = config
+        self.keyboard = XdotoolKeyboardInjector(config) if config.use_xdotool else MockKeyboardInjector()
+        self.processor = XMLStreamProcessor(self.keyboard, debug_enabled=config.debug_enabled)
         
         # State management
         self.streaming_buffer = ""
@@ -62,37 +62,51 @@ class TranscriptionService:
     
     def process_streaming_chunk(self, chunk_text):
         """Process streaming text chunks and apply real-time updates."""
-        # Add chunk to buffer
-        self.streaming_buffer += chunk_text
-        
-        # Detect and handle <reset> tags in the stream
-        if '<reset' in self.streaming_buffer:
-            # Find last reset tag
-            last_reset_idx = self.streaming_buffer.rfind('<reset')
-            if last_reset_idx != -1:
-                # Look for end of reset tag
-                reset_end = self.streaming_buffer.find('>', last_reset_idx)
-                if reset_end != -1:
-                    self.reset_all_state()
-                    # Keep content after reset tag
-                    self.streaming_buffer = self.streaming_buffer[reset_end + 1:]
-                    self.last_update_position = 0
-                    self.update_seen = False
-        
-        # Handle incremental streaming after <update> tag
-        if '<update>' in self.streaming_buffer:
-            if not self.update_seen:
-                # First time seeing update tag
-                self.update_seen = True
-                update_idx = self.streaming_buffer.find('<update>')
-                self.last_update_position = update_idx + 8  # len('<update>')
-            
-            # Stream new content only (content after last processed position)
-            if self.last_update_position < len(self.streaming_buffer):
-                new_content = self.streaming_buffer[self.last_update_position:]
-                if new_content:
-                    self.processor.process_chunk(new_content)
-                    self.last_update_position = len(self.streaming_buffer)
+        try:
+            # Start streaming mode on first chunk with <update>
+            if not self.processor.streaming_active and '<update>' in chunk_text:
+                self.processor.start_stream()
+
+            # Add chunk to buffer
+            self.streaming_buffer += chunk_text
+
+            # Detect and handle <reset> tags in the stream
+            if '<reset' in self.streaming_buffer:
+                # Find last reset tag
+                last_reset_idx = self.streaming_buffer.rfind('<reset')
+                if last_reset_idx != -1:
+                    # Look for end of reset tag
+                    reset_end = self.streaming_buffer.find('>', last_reset_idx)
+                    if reset_end != -1:
+                        self.reset_all_state()
+                        # Keep content after reset tag
+                        self.streaming_buffer = self.streaming_buffer[reset_end + 1:]
+                        self.last_update_position = 0
+                        self.update_seen = False
+
+            # Handle incremental streaming after <update> tag
+            if '<update>' in self.streaming_buffer:
+                if not self.update_seen:
+                    # First time seeing update tag
+                    self.update_seen = True
+                    update_idx = self.streaming_buffer.find('<update>')
+                    self.last_update_position = update_idx + 8  # len('<update>')
+
+                # Stream new content only (content after last processed position)
+                if self.last_update_position < len(self.streaming_buffer):
+                    new_content = self.streaming_buffer[self.last_update_position:]
+                    if new_content:
+                        self.processor.process_chunk(new_content)
+                        self.last_update_position = len(self.streaming_buffer)
+
+        except Exception as e:
+            print(f"\n❌ STREAMING ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+            print(f"Last processed position: {self.last_update_position}", file=sys.stderr)
+            print(f"Buffer length: {len(self.streaming_buffer)}", file=sys.stderr)
+            print(f"Buffer content: {repr(self.streaming_buffer[-100:])}", file=sys.stderr)
+            # Always flush debug on error
+            self.processor._flush_debug_buffer()
+            raise
     
     def process_xml_transcription(self, text):
         """Process XML transcription text using the word processing pipeline."""

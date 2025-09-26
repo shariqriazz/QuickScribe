@@ -23,7 +23,10 @@ class TestXMLStreamConversationIntegration(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment."""
-        self.service = TranscriptionService(use_xdotool=False)
+        class MockConfig:
+            use_xdotool = False
+            debug_enabled = False
+        self.service = TranscriptionService(MockConfig())
         self.keyboard = self.service.keyboard  # Use the keyboard from the service
         
     def test_conversation_processing(self):
