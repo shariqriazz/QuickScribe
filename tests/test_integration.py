@@ -65,15 +65,14 @@ class TestXMLStreamIntegration(unittest.TestCase):
         self.processor.process_chunk("<20>world </20>")
         self.processor.end_stream()
         
-        # XMLStreamProcessor calculates backspace from common prefix
-        # Original: "hello word " vs Modified: "hello world " -> backspace 2 chars ("d "), emit "world "
+        # With new word-level logic: backspace to start of changed word (word 20)
+        # Word 10: "hello " (6 chars preserved), backspace 11-6=5 chars, emit "world "
         expected_operations = [
-            ('bksp', 2),  # backspace "d " from "word " 
+            ('bksp', 5),  # Remove "word " to preserve "hello "
             ('emit', 'world ')
         ]
         self.assertEqual(self.keyboard.operations, expected_operations)
-        # After backspacing 2 chars from end: "hello word " -> "hello wor" -> "hello worworld "
-        self.assertEqual(self.keyboard.output, "hello worworld ")
+        self.assertEqual(self.keyboard.output, "hello world ")
 
     def test_gap_filling(self):
         """Test gap filling between non-consecutive updates."""
@@ -85,12 +84,19 @@ class TestXMLStreamIntegration(unittest.TestCase):
         self.processor.process_chunk("<40>dog </40>")
         self.processor.end_stream()
         
-        # Should backspace to "The " then emit rest
+        # Incremental processing: each update emits only up to its sequence
+        # First update: word 20 changes, backspace and emit only word 20
+        # Second update: word 40 changes, emit gap-fill word 30 then word 40
+        # Calculate expected backspace to word 20 position dynamically
+        expected_backspace = len("The ")  # Length before word 20
+        total_length = len("The quick brown fox ")  # Total initial length
+        expected_backspace = total_length - len("The ")  # 16 - 4 = 12 chars to backspace
+
         expected_operations = [
-            ('bksp', 16),  # len("The quick brown fox ") - len("The ")
-            ('emit', 'fast '),
-            ('emit', 'brown '),  # Gap fill
-            ('emit', 'dog ')
+            ('bksp', expected_backspace),  # Backspace to word 20 position
+            ('emit', 'fast '),  # Emit only word 20
+            ('emit', 'brown '),  # Gap-fill: emit word 30
+            ('emit', 'dog ')   # Emit word 40
         ]
         self.assertEqual(self.keyboard.operations, expected_operations)
         self.assertEqual(self.keyboard.output, "fast brown dog ")
@@ -104,10 +110,13 @@ class TestXMLStreamIntegration(unittest.TestCase):
         self.processor.process_chunk("<20></20>")
         self.processor.end_stream()
         
-        # Should emit remaining words
+        # Word deletion with incremental emission:
+        # Word 20 deleted (empty), backspace to word 20 position, emit empty then word 30
+        expected_backspace = len("The quick brown ") - len("The ")  # 12 chars
         expected_operations = [
-            ('bksp', 12),  # len("The quick brown ") - len("The ")
-            ('emit', 'brown ')
+            ('bksp', expected_backspace),
+            ('emit', ''),  # Empty emission for deleted word 20
+            ('emit', 'brown ')  # Word 30 emitted
         ]
         self.assertEqual(self.keyboard.operations, expected_operations)
         self.assertEqual(self.keyboard.output, 'brown ')
@@ -204,11 +213,15 @@ class TestXMLStreamIntegration(unittest.TestCase):
         self.processor.process_chunk("<10>A </10><20>fast </20>")
         self.processor.end_stream()
         
+        # Multiple tags in single chunk: processed sequentially with incremental emission
+        # First: word 10 changes, triggers backspace and emits up to word 10
+        # Second: word 20 changes, emits up to word 20 (including gaps)
+        total_length = len("The quick brown ")  # 16 chars
         expected_operations = [
-            ('bksp', 16),  # len("The quick brown ") - len("")
-            ('emit', "A "),
-            ('emit', "fast "),
-            ('emit', "brown ")  # End stream emits remaining
+            ('bksp', total_length),  # Backspace entire text when word 10 changes
+            ('emit', 'A '),  # Emit only word 10
+            ('emit', 'fast '),  # Emit word 20
+            ('emit', 'brown ')  # Gap-fill word 30 when emitting up to word 20
         ]
         self.assertEqual(self.keyboard.operations, expected_operations)
         self.assertEqual(self.keyboard.output, "A fast brown ")

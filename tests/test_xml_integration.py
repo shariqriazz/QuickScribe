@@ -78,18 +78,20 @@ class TestXMLStreamConversationIntegration(unittest.TestCase):
     def test_streaming_chunk_processing(self):
         """Test streaming chunk processing with update tags."""
         self.service.processor.reset({})
-        
+
         # Simulate streaming chunks
         chunk1 = '<update><10>Hello </10></update>'
         chunk2 = '<update><10>Hello </10><20>world </20></update>'
-        
-        # Process chunks
+
+        # Process first chunk
         self.service.process_streaming_chunk(chunk1)
-        self.keyboard.reset()  # Clear for next test
-        
+        # Verify intermediate state
+        self.assertEqual(self.keyboard.output, "Hello ")
+
+        # Process second chunk (cumulative streaming)
         self.service.process_streaming_chunk(chunk2)
-        
-        # Should have processed the latest complete update
+
+        # Should have processed the complete cumulative update
         self.assertEqual(self.keyboard.output, "Hello world ")
 
     def test_reset_command_detection(self):
@@ -153,12 +155,12 @@ class TestXMLStreamConversationIntegration(unittest.TestCase):
         # Manually call end_stream to emit remaining
         self.service.processor.end_stream()
         
-        # Should emit updated first word and remaining original words
+        # Incremental behavior: first update emits only word 10, end_stream flushes rest
         expected_operations = [
-            ('bksp', 18),  # len("Hello there friend ") - len("")
-            ('emit', 'Hi '),
-            ('emit', 'there '),
-            ('emit', 'friend ')
+            ('bksp', 19),  # Backspace entire text (word 10 at position 0)
+            ('emit', 'Hi '),  # Emit only word 10
+            ('emit', 'there '),  # end_stream flushes word 20
+            ('emit', 'friend ')  # end_stream flushes word 30
         ]
         self.assertEqual(self.keyboard.operations, expected_operations)
         self.assertEqual(self.keyboard.output, "Hi there friend ")

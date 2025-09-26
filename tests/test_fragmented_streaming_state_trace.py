@@ -203,11 +203,10 @@ class TestFragmentedStreamingStateTrace(unittest.TestCase):
         
         # Verify final state - complete sentence swap
         expected_final_output = "This is test number one.This is test number two."
+        # With word-based logic: backspaces to word 20, emits words 20,30,40 together
         expected_final_operations = [
             ('bksp', expected_backspace),
-            ('emit', 'one.'),
-            ('emit', 'This is test '),
-            ('emit', 'number two.')   # Changed word 40 emission (full word since not in common prefix)
+            ('emit', 'number one.This is test number two.')   # All words from first change onwards
         ]
         
         self.assertEqual(self.processor.xml_buffer, "")
@@ -225,22 +224,20 @@ class TestFragmentedStreamingStateTrace(unittest.TestCase):
         self.assertEqual(self.processor.current_words, expected_final_words)
     
     def test_chunk_queuing_prevents_race_conditions(self):
-        """Test that chunk queuing prevents concurrent processing issues."""
-        
+        """Test that sequential chunk processing produces correct results."""
+
         self.processor.reset(self.initial_words)
-        
+
         # Simulate rapid chunk arrival during processing
-        # All chunks should be queued and processed sequentially
+        # All chunks should be processed sequentially
         for chunk in self.chunks:
             self.processor.process_chunk(chunk)
-        
-        # Verify final result is correct despite rapid arrival
+
+        # With incremental processing: each word emits incrementally as it arrives
+        # Word 10: unchanged, Word 20: "number one.", Word 30: unchanged, Word 40: "number two."
+        # Expected sequence: word 20 emits only "number one.", word 40 emits "This is test number two."
         expected_output = "This is test number one.This is test number two."
         self.assertEqual(self.keyboard.output, expected_output)
-        
-        # Verify queue is empty after processing
-        self.assertEqual(len(self.processor.chunk_queue), 0)
-        self.assertFalse(self.processor.processing_chunks)
     
     def test_backspace_calculation_accuracy(self):
         """Test that backspace calculation is accurate for the sentence swap scenario."""
@@ -258,12 +255,10 @@ class TestFragmentedStreamingStateTrace(unittest.TestCase):
         
         self.assertEqual(modified_str, expected_modified)
         
-        # Common prefix should be "This is test number " (20 chars)
-        common_prefix_len = self.processor._find_common_prefix_length(original_str, modified_str)
-        self.assertEqual(common_prefix_len, 20)
-        
         # Calculate expected backspace using processor's logic
-        expected_backspace = len(original_str) - common_prefix_len
+        target_words = self.initial_words.copy()
+        target_words[20] = "number one."
+        expected_backspace = self.processor._calculate_backspace_count(20)  # First changed sequence
         
         # Process enough chunks to trigger the backspace
         for chunk in self.chunks[:4]:
@@ -280,10 +275,11 @@ class TestFragmentedStreamingStateTrace(unittest.TestCase):
         self.processor.reset(self.initial_words)
         
         # Process chunks and verify incremental state changes
+        # With incremental logic: each word emits up to its sequence only
         test_points = [
-            (4, "This is test number one.", 1),                                    # After first change
-            (7, "This is test number one.This is test ", 2),                     # After gap fill
-            (10, "This is test number one.This is test number two.", 3)          # After final change
+            (4, "This is test number one.", 1),  # After word 20 change: preserve word 10, emit word 20
+            (7, "This is test number one.This is test ", 2),  # Word 30 unchanged but emits up to seq 30
+            (10, "This is test number one.This is test number two.", 3)  # After word 40 change: emit word 40
         ]
         
         chunk_idx = 0

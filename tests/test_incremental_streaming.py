@@ -120,8 +120,10 @@ class TestIncrementalStreaming(unittest.TestCase):
         chunk2 = '<30>red </30>'
         self.service.process_streaming_chunk(chunk2)
         
-        # Final output should be corrected text
-        # After backspace and rewrite: "The " -> emit "fast " -> emit "red "
+        # With incremental emission:
+        # First chunk: word 20 changes, emits "fast " only
+        # Second chunk: word 30 changes, emits "red " only (no gap-fill needed since 30 is being updated)
+        # Result: "fast " + "red " = "fast red "
         self.assertEqual(self.keyboard.output, "fast red ")
         
     def test_partial_tags_across_chunks(self):
