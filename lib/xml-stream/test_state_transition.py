@@ -104,19 +104,29 @@ class TestXMLStateTransition:
             70: "to a tree ",
             80: "1,000 miles away."
         }
-        self.processor.reset(initial_words)
+        self.service.processor.reset(initial_words)
+
+        # Emit the initial content to the keyboard first
+        for seq in sorted(initial_words.keys()):
+            self.keyboard.emit(initial_words[seq])
+
+        # Clear operations to focus on the replacement behavior
+        self.keyboard.operations.clear()
+
+        # Start streaming mode for incremental processing
+        self.service.processor.start_stream()
 
         # Incrementally process new state chunk by chunk
-        self.processor.process_chunk("<90>Sounds great. </90>")
+        self.service.processor.process_chunk("<90>Sounds great. </90>")
         # Should backspace all content and emit first chunk
         expected_after_first = [
-            ('bksp', 115),  # Length of the entire original text
+            ('bksp', 120),  # Length of the entire original text
             ('emit', "Sounds great. ")
         ]
         assert self.keyboard.operations == expected_after_first
 
         # Process second chunk
-        self.processor.process_chunk("<100>I will give </100>")
+        self.service.processor.process_chunk("<100>I will give </100>")
         # Should emit second chunk (no backspace needed)
         expected_after_second = expected_after_first + [
             ('emit', "I will give ")
@@ -124,8 +134,8 @@ class TestXMLStateTransition:
         assert self.keyboard.operations == expected_after_second
 
         # Process third chunk and end stream
-        self.processor.process_chunk("<110>it a shot.</110>")
-        self.processor.end_stream()
+        self.service.processor.process_chunk("<110>it a shot.</110>")
+        self.service.processor.end_stream()
         # Should emit third chunk
         expected_final = expected_after_second + [
             ('emit', "it a shot.")

@@ -80,7 +80,10 @@ class DictationApp:
             
             # Use unified provider interface - streaming only, no final callback
             self.provider.transcribe_audio(audio_np, context, streaming_callback, None)
-            
+
+            # CRITICAL: Complete the stream to handle any remaining content
+            self.transcription_service.complete_stream()
+
             # Show final clean state when streaming is complete
             final_text = self.transcription_service._build_current_text()
             if final_text:

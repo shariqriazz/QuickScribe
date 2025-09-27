@@ -59,6 +59,44 @@ class TranscriptionService:
         self.processor.reset({})
         # Reset streaming accumulators
         self.reset_streaming_state()
+
+    def complete_stream(self):
+        """Complete streaming by processing any remaining content and calling end_stream."""
+        try:
+            # Only operate if we're in streaming mode (have streaming_buffer content)
+            if not self.streaming_buffer:
+                if self.config.debug_enabled:
+                    print(f"[DEBUG] complete_stream: no streaming buffer, skipping", file=sys.stderr)
+                return
+
+            # Process any remaining complete tags in the streaming buffer
+            import re
+            matches = re.finditer(r'<(\d+)>(.*?)</\1>', self.streaming_buffer, re.DOTALL)
+            remaining_tags = []
+
+            for match in matches:
+                seq_num = int(match.group(1))
+                word_content = match.group(2)
+                # Only process if not already in processor
+                if seq_num not in self.processor.current_words:
+                    remaining_tags.append(f'<{seq_num}>{word_content}</{seq_num}>')
+
+            # Process any remaining complete tags
+            if remaining_tags:
+                remaining_xml = ''.join(remaining_tags)
+                if self.config.debug_enabled:
+                    print(f"[DEBUG] complete_stream: processing remaining tags: {remaining_xml}", file=sys.stderr)
+                self.processor.process_chunk(remaining_xml)
+
+            # Only call end_stream if we're in streaming mode and backspace was performed
+            if self.processor.streaming_active:
+                self.processor.end_stream()
+
+            if self.config.debug_enabled:
+                print(f"[DEBUG] complete_stream: stream completed", file=sys.stderr)
+
+        except Exception as e:
+            print(f"Error in complete_stream: {e}", file=sys.stderr)
     
     def process_streaming_chunk(self, chunk_text):
         """Process streaming text chunks and apply real-time updates."""
