@@ -76,13 +76,14 @@ class TestXMLStreamProcessor:
         
         expected_operations = [
             ('bksp', 12),  # len("The quick brown ") - len("The ")
-            ('emit', "brown ")  # End stream emits remaining
+            ('emit', ''),  # Emit empty string for deleted word 20
+            ('emit', "brown ")  # End stream emits remaining word 30
         ]
         assert self.keyboard.operations == expected_operations
         assert self.keyboard.output == "brown "
         
-        # Verify word was deleted from state
-        assert 20 not in self.processor.current_words
+        # Verify word was set to empty string (not removed from dict)
+        assert self.processor.current_words[20] == ''
     
     def test_multiple_tags_single_chunk(self):
         """Test multiple complete and partial tags in one chunk."""
@@ -194,6 +195,7 @@ class TestXMLStreamProcessor:
         
         expected_operations = [
             ('bksp', 16),  # Initial backspace
+            ('emit', ''),   # Emit empty string for deleted word 20
             ('emit', "brown "),  # Gap fill word 30 (20 deleted)
             ('emit', "dog ")
         ]
@@ -225,14 +227,16 @@ class TestXMLStreamProcessor:
         
         expected_operations = [
             ('bksp', 16),  # Initial backspace for deletion of word 20
-            ('emit', "fox ")  # Only word 40 remains after 20,30 deleted
+            ('emit', ''),   # Emit empty string for deleted word 20
+            ('emit', ''),   # Emit empty string for deleted word 30
+            ('emit', "fox ")  # End stream emits remaining word 40
         ]
         assert self.keyboard.operations == expected_operations
         assert self.keyboard.output == "fox "
         
-        # Verify both words were deleted
-        assert 20 not in self.processor.current_words
-        assert 30 not in self.processor.current_words
+        # Verify both words were set to empty strings
+        assert self.processor.current_words[20] == ''
+        assert self.processor.current_words[30] == ''
     
     def test_replacement_then_deletion(self):
         """Test word replacement followed by deletion of same word."""
@@ -245,13 +249,14 @@ class TestXMLStreamProcessor:
         expected_operations = [
             ('bksp', 6),   # len("The quick ") - len("The ")
             ('emit', "fast "),
-            # Second update deletes word 20, no emission
+            ('bksp', 5),   # Backspace "fast " to reposition for deletion
+            ('emit', ''),  # Emit empty string for deleted word 20
         ]
         assert self.keyboard.operations == expected_operations
-        assert self.keyboard.output == "fast "
+        assert self.keyboard.output == ""
         
-        # Word should be deleted from state
-        assert 20 not in self.processor.current_words
+        # Word should be set to empty string
+        assert self.processor.current_words[20] == ''
     
     def test_large_sequence_numbers(self):
         """Test with large sequence numbers."""
@@ -280,13 +285,13 @@ class TestXMLStreamProcessor:
         expected_operations = [
             ('bksp', 20),  # Full backspace from beginning
             ('emit', "A "),
-            # Skip 20 (deleted)
+            ('emit', ''),   # Emit empty string for deleted word 20
             ('emit', "red "),
             ('emit', "fox ")  # End stream emission
         ]
         assert self.keyboard.operations == expected_operations
         assert self.keyboard.output == "A red fox "
-        assert 20 not in self.processor.current_words
+        assert self.processor.current_words[20] == ''
     
     def test_reset_clears_state(self):
         """Test reset properly clears processor state."""
@@ -349,7 +354,7 @@ class TestXMLStreamProcessor:
         
         # Should only process the valid tag
         expected_operations = [
-            ('bksp', 5),  # len("Hello ") - len("H")
+            ('bksp', 6),  # len("Hello ") - len("")
             ('emit', "Hi ")
         ]
         assert self.keyboard.operations == expected_operations

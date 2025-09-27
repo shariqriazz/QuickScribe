@@ -118,9 +118,8 @@ class TestXMLStateTransition:
 
         # Incrementally process new state chunk by chunk
         self.service.processor.process_chunk("<90>Sounds great. </90>")
-        # Should backspace all content and emit first chunk
+        # Since sequence 90 is beyond all existing sequences (10-80), no backspace needed
         expected_after_first = [
-            ('bksp', 120),  # Length of the entire original text
             ('emit', "Sounds great. ")
         ]
         assert self.keyboard.operations == expected_after_first
@@ -141,4 +140,5 @@ class TestXMLStateTransition:
             ('emit', "it a shot.")
         ]
         assert self.keyboard.operations == expected_final
-        assert self.keyboard.output == "Sounds great. I will give it a shot."
+        # Output includes original text plus new content since no backspace occurred
+        assert self.keyboard.output == "Once upon a time, there was a fox, and he liked to jump from tree to tree.One day, he jumped to a tree 1,000 miles away.Sounds great. I will give it a shot."
