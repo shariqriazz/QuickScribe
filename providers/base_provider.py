@@ -260,3 +260,46 @@ class BaseProvider(ABC):
     def get_provider_specific_instructions(self) -> str:
         """Get provider-specific instructions. Override in subclasses if needed."""
         return ""
+
+    def _handle_provider_error(self, error: Exception, operation: str) -> None:
+        """Common error handling for provider operations."""
+        if hasattr(self, 'google_exceptions'):
+            # Gemini-specific errors
+            if isinstance(error, self.google_exceptions.InvalidArgument):
+                print(f"\nGemini API Error (Invalid Argument): {error}", file=sys.stderr)
+            elif isinstance(error, self.google_exceptions.PermissionDenied):
+                print(f"\nGemini API Error (Permission Denied): {error}", file=sys.stderr)
+            elif isinstance(error, self.google_exceptions.ResourceExhausted):
+                print(f"\nGemini API Error (Rate Limit/Quota): {error}", file=sys.stderr)
+            else:
+                print(f"\nUnexpected error during {operation}: {error}", file=sys.stderr)
+        elif hasattr(self, 'GroqError'):
+            # Groq-specific errors
+            if isinstance(error, self.GroqError):
+                print(f"\nGroq API Error: {error}", file=sys.stderr)
+            else:
+                print(f"\nUnexpected error during {operation}: {error}", file=sys.stderr)
+        else:
+            print(f"\nUnexpected error during {operation}: {error}", file=sys.stderr)
+
+    def _display_conversation_context(self, context: 'ConversationContext', audio_info: str = ""):
+        """Display conversation context in standard format."""
+        print("\n" + "="*60)
+        print("SENDING TO MODEL:")
+        print("[conversation context being sent]")
+        print(f"XML markup: {context.xml_markup if context.xml_markup else '[no conversation history]'}")
+        print(f"Rendered text: {context.compiled_text if context.compiled_text else '[empty]'}")
+        if audio_info:
+            print(f"Audio file: {audio_info}")
+        print("-" * 60)
+
+    def _display_text_context(self, context: 'ConversationContext', text: str):
+        """Display text processing context in standard format."""
+        print("\n" + "="*60)
+        print("SENDING TO MODEL:")
+        print("CURRENT STATE (already processed):")
+        print(f"  XML markup: {context.xml_markup if context.xml_markup else '[empty]'}")
+        print(f"  Rendered text: {context.compiled_text if context.compiled_text else '[empty]'}")
+        print("NEW INPUT (requires processing):")
+        print(f"  Mechanical transcription: {text}")
+        print("-" * 60)

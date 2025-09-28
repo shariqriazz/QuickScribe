@@ -70,12 +70,9 @@ class GroqProvider(BaseProvider):
                 # Create transcription
                 transcription = self.client.audio.transcriptions.create(**transcription_params)
                 return transcription.text
-                
-        except self.GroqError as e:
-            print(f"\nGroq API Error: {e}", file=sys.stderr)
-            return None
+
         except Exception as e:
-            print(f"\nUnexpected error during Groq transcription: {e}", file=sys.stderr)
+            self._handle_provider_error(e, "Groq transcription")
             return None
         finally:
             # Clean up temporary file
@@ -104,13 +101,7 @@ class GroqProvider(BaseProvider):
             compiled_text = context.compiled_text
             
             # Display conversation flow
-            print("\n" + "="*60)
-            print("SENDING TO MODEL:")
-            print("[conversation context being sent]")
-            print(f"XML markup: {conversation_xml if conversation_xml else '[no conversation history]'}")
-            print(f"Rendered text: {compiled_text if compiled_text else '[empty]'}")
-            print(f"Audio file: {os.path.basename(tmp_filename)}")
-            print("-" * 60)
+            self._display_conversation_context(context, os.path.basename(tmp_filename))
             
             # Transcribe with provider
             result = self._transcribe_audio_file(tmp_filename, conversation_xml, compiled_text)
@@ -152,12 +143,9 @@ class GroqProvider(BaseProvider):
                 
                 transcription = self.client.audio.transcriptions.create(**transcription_params)
                 return transcription.text
-                
-        except self.GroqError as e:
-            print(f"\nGroq API Error: {e}", file=sys.stderr)
-            return None
+
         except Exception as e:
-            print(f"\nUnexpected error during Groq transcription: {e}", file=sys.stderr)
+            self._handle_provider_error(e, "Groq transcription")
             return None
     
     def _transcribe_audio_bytes(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "", 
@@ -202,14 +190,7 @@ class GroqProvider(BaseProvider):
             compiled_text = context.compiled_text
 
             # Display conversation flow
-            print("\n" + "="*60)
-            print("SENDING TO MODEL:")
-            print("CURRENT STATE (already processed):")
-            print(f"  XML markup: {conversation_xml if conversation_xml else '[empty]'}")
-            print(f"  Rendered text: {compiled_text if compiled_text else '[empty]'}")
-            print("NEW INPUT (requires processing):")
-            print(f"  Mechanical transcription: {text}")
-            print("-" * 60)
+            self._display_text_context(context, text)
 
             # Process with Groq chat API
             result = self._transcribe_text_chat(text, conversation_xml, compiled_text, streaming_callback)
@@ -270,13 +251,7 @@ class GroqProvider(BaseProvider):
 
             return accumulated_text
 
-        except self.GroqError as e:
-            print(f"\nGroq API Error: {e}", file=sys.stderr)
-            return None
         except Exception as e:
-            print(f"\nUnexpected error during Groq text processing: {e}", file=sys.stderr)
+            self._handle_provider_error(e, "Groq text processing")
             return None
 
-    def get_provider_specific_instructions(self) -> str:
-        """Get provider-specific instructions for prompts."""
-        return ""  # Currently blank, can be customized per provider

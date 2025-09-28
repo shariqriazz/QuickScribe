@@ -165,13 +165,7 @@ class GeminiProvider(BaseProvider):
             compiled_text = context.compiled_text
             
             # Display conversation flow
-            print("\n" + "="*60)
-            print("SENDING TO MODEL:")
-            print("[conversation context being sent]")
-            print(f"XML markup: {conversation_xml if conversation_xml else '[no conversation history]'}")
-            print(f"Rendered text: {compiled_text if compiled_text else '[empty]'}")
-            print(f"Audio file: [audio_data.wav]")
-            print("-" * 60)
+            self._display_conversation_context(context, "[audio_data.wav]")
             
             print("\nRECEIVED FROM MODEL (streaming):")
             self._transcribe_audio_bytes(wav_bytes, conversation_xml, compiled_text, 
@@ -246,14 +240,8 @@ class GeminiProvider(BaseProvider):
                 if final_callback:
                     final_callback(text_to_output)
 
-        except self.google_exceptions.InvalidArgument as e:
-            print(f"\nGemini API Error (Invalid Argument): {e}", file=sys.stderr)
-        except self.google_exceptions.PermissionDenied as e:
-            print(f"\nGemini API Error (Permission Denied): {e}", file=sys.stderr)
-        except self.google_exceptions.ResourceExhausted as e:
-            print(f"\nGemini API Error (Rate Limit/Quota): {e}", file=sys.stderr)
         except Exception as e:
-            print(f"\nUnexpected error during Gemini transcription: {e}", file=sys.stderr)
+            self._handle_provider_error(e, "Gemini transcription")
     
     def _transcribe_audio_bytes_sync(self, wav_bytes: bytes, conversation_xml: str = "", compiled_text: str = "") -> Optional[str]:
         """Synchronous version of transcribe_audio_bytes."""
@@ -279,14 +267,7 @@ class GeminiProvider(BaseProvider):
             compiled_text = context.compiled_text
 
             # Display conversation flow
-            print("\n" + "="*60)
-            print("SENDING TO MODEL:")
-            print("CURRENT STATE (already processed):")
-            print(f"  XML markup: {conversation_xml if conversation_xml else '[empty]'}")
-            print(f"  Rendered text: {compiled_text if compiled_text else '[empty]'}")
-            print("NEW INPUT (requires processing):")
-            print(f"  Mechanical transcription: {text}")
-            print("-" * 60)
+            self._display_text_context(context, text)
 
             # Process with Gemini chat API
             result = self._transcribe_text_chat(text, conversation_xml, compiled_text, streaming_callback)
@@ -368,9 +349,6 @@ class GeminiProvider(BaseProvider):
                     return None
 
         except Exception as e:
-            print(f"\nUnexpected error during Gemini text processing: {e}", file=sys.stderr)
+            self._handle_provider_error(e, "Gemini text processing")
             return None
 
-    def get_provider_specific_instructions(self) -> str:
-        """Get provider-specific instructions for prompts."""
-        return ""  # Currently blank, can be customized per provider
