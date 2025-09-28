@@ -275,6 +275,12 @@ class DictationApp:
                 print("Error: No provider initialized", file=sys.stderr)
                 return False
 
+            # Apply performance configuration
+            self.provider.enable_reasoning = self.config.enable_reasoning
+            self.provider.temperature = self.config.temperature
+            self.provider.max_tokens = self.config.max_tokens
+            self.provider.top_p = self.config.top_p
+
             if self.provider.initialize():
                 return True
             else:

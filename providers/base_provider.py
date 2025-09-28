@@ -14,6 +14,20 @@ class BaseProvider(ABC):
         self.model_id = model_id
         self.language = language
         self._initialized = False
+
+        # Provider performance controls
+        self.enable_reasoning = False  # Reasoning disabled by default for speed
+        self.temperature = 0.2  # Optimal temperature for focused output (2025 best practices)
+        self.max_tokens = None  # No output limit by default - let provider use its maximum
+        self.top_p = 0.9  # Nucleus sampling for quality
+
+        # Latency optimization settings
+        self.enable_streaming = True  # Streaming enabled for responsiveness
+        self.response_format = "text"  # Simple text format for speed
+
+        # Note: max_tokens is optional and provider-specific
+        # - Groq: Uses max_tokens parameter if specified
+        # - Gemini: max_output_tokens excluded from generation_config due to streaming issues
     
     @abstractmethod
     def initialize(self) -> bool:
@@ -262,25 +276,36 @@ class BaseProvider(ABC):
         return ""
 
     def _handle_provider_error(self, error: Exception, operation: str) -> None:
-        """Common error handling for provider operations."""
+        """Common error handling for provider operations with full error details."""
+        import traceback
+
+        # Print full error details for debugging
+        print(f"\n❌ ERROR during {operation}:", file=sys.stderr)
+        print(f"Error Type: {type(error).__name__}", file=sys.stderr)
+        print(f"Error Message: {str(error)}", file=sys.stderr)
+
         if hasattr(self, 'google_exceptions'):
             # Gemini-specific errors
             if isinstance(error, self.google_exceptions.InvalidArgument):
-                print(f"\nGemini API Error (Invalid Argument): {error}", file=sys.stderr)
+                print(f"Gemini API Error (Invalid Argument) - check your request parameters", file=sys.stderr)
             elif isinstance(error, self.google_exceptions.PermissionDenied):
-                print(f"\nGemini API Error (Permission Denied): {error}", file=sys.stderr)
+                print(f"Gemini API Error (Permission Denied) - check your API key and permissions", file=sys.stderr)
             elif isinstance(error, self.google_exceptions.ResourceExhausted):
-                print(f"\nGemini API Error (Rate Limit/Quota): {error}", file=sys.stderr)
+                print(f"Gemini API Error (Rate Limit/Quota) - you may have exceeded usage limits", file=sys.stderr)
             else:
-                print(f"\nUnexpected error during {operation}: {error}", file=sys.stderr)
+                print(f"Gemini API Error - see details above", file=sys.stderr)
         elif hasattr(self, 'GroqError'):
             # Groq-specific errors
             if isinstance(error, self.GroqError):
-                print(f"\nGroq API Error: {error}", file=sys.stderr)
+                print(f"Groq API Error - see details above", file=sys.stderr)
             else:
-                print(f"\nUnexpected error during {operation}: {error}", file=sys.stderr)
+                print(f"Groq Provider Error - see details above", file=sys.stderr)
         else:
-            print(f"\nUnexpected error during {operation}: {error}", file=sys.stderr)
+            print(f"Provider Error - see details above", file=sys.stderr)
+
+        # Print stack trace for debugging
+        print(f"Stack trace:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
 
     def _display_conversation_context(self, context: 'ConversationContext', audio_info: str = ""):
         """Display conversation context in standard format."""
@@ -303,3 +328,13 @@ class BaseProvider(ABC):
         print("NEW INPUT (requires processing):")
         print(f"  Mechanical transcription: {text}")
         print("-" * 60)
+
+    def _get_generation_config(self) -> dict:
+        """Get provider-agnostic generation configuration."""
+        return {
+            'temperature': self.temperature,
+            'max_output_tokens': self.max_tokens,
+            'top_p': self.top_p,
+            'enable_reasoning': self.enable_reasoning,
+            'response_format': self.response_format
+        }

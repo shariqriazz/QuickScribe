@@ -22,6 +22,12 @@ class ConfigManager:
         # VOSK configuration
         self.vosk_model_path = None
         self.vosk_lgraph_path = None
+
+        # Provider performance controls
+        self.enable_reasoning = False
+        self.temperature = 0.2  # Optimal for focused output (2025 best practices)
+        self.max_tokens = None  # No output limit by default
+        self.top_p = 0.9
         
         # Load environment variables
         script_dir = os.path.dirname(__file__)
@@ -146,6 +152,29 @@ class ConfigManager:
             default=None,
             help="Path to VOSK L-graph file for grammar-constrained recognition."
         )
+        parser.add_argument(
+            "--enable-reasoning",
+            action="store_true",
+            help="Enable reasoning/chain-of-thought in AI models (increases latency)."
+        )
+        parser.add_argument(
+            "--temperature",
+            type=float,
+            default=0.2,
+            help="Response randomness (0.0-2.0, lower = more focused, 0.2 optimal for transcription)."
+        )
+        parser.add_argument(
+            "--max-tokens",
+            type=int,
+            default=None,
+            help="Maximum response length in tokens (default: unlimited, use provider's maximum)."
+        )
+        parser.add_argument(
+            "--top-p",
+            type=float,
+            default=0.9,
+            help="Nucleus sampling parameter (0.0-1.0)."
+        )
         return parser
     
     def handle_interactive_mode(self):
@@ -202,6 +231,12 @@ class ConfigManager:
         # VOSK configuration
         self.vosk_model_path = getattr(args, 'vosk_model', None)
         self.vosk_lgraph_path = getattr(args, 'vosk_lgraph', None)
+
+        # Provider performance controls
+        self.enable_reasoning = getattr(args, 'enable_reasoning', False)
+        self.temperature = getattr(args, 'temperature', 0.2)
+        self.max_tokens = getattr(args, 'max_tokens', None)
+        self.top_p = getattr(args, 'top_p', 0.9)
 
     def parse_configuration(self):
         """Parse configuration from command line arguments or interactive mode."""

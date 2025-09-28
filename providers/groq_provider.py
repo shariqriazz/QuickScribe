@@ -234,11 +234,20 @@ class GroqProvider(BaseProvider):
                 {"role": "user", "content": prompt}
             ]
 
-            completion = self.client.chat.completions.create(
-                model=self.model_id,
-                messages=messages,
-                stream=True
-            )
+            # Build completion parameters
+            completion_params = {
+                "model": self.model_id,
+                "messages": messages,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "stream": True
+            }
+
+            # Only include max_tokens if specified
+            if self.max_tokens is not None:
+                completion_params["max_tokens"] = self.max_tokens
+
+            completion = self.client.chat.completions.create(**completion_params)
 
             print("\nRECEIVED FROM MODEL (streaming):")
             accumulated_text = ""

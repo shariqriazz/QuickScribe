@@ -124,9 +124,17 @@ class GeminiProvider(BaseProvider):
             audio_blob = {"mime_type": "audio/wav", "data": wav_bytes}
             contents = [full_prompt, audio_blob]
             
-            # Generate streaming content
+            # Generate streaming content with 2025 optimized config
+            generation_config = {
+                'temperature': self.temperature,
+                'top_p': self.top_p,
+                'top_k': 40,  # Recommended for speed optimization
+                'candidate_count': 1  # Single response for maximum speed
+            }
+
             response = self.model.generate_content(
                 contents=contents,
+                generation_config=generation_config,
                 stream=True
             )
             
@@ -200,45 +208,32 @@ class GeminiProvider(BaseProvider):
             
             audio_blob = {"mime_type": "audio/wav", "data": wav_bytes}
             contents = [prompt, audio_blob]
-            
-            # Use streaming
-            try:
-                response = self.model.generate_content(
-                    contents=contents,
-                    stream=True
-                )
 
-                accumulated_text = ""
-                for chunk in response:
-                    if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                        chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
-                        if chunk_text:
-                            if streaming_callback:
-                                streaming_callback(chunk_text)
-                            accumulated_text += chunk_text
+            # Use streaming with 2025 optimized generation config
+            generation_config = {
+                'temperature': self.temperature,
+                'top_p': self.top_p,
+                'top_k': 40,  # Recommended for speed optimization
+                'candidate_count': 1  # Single response for maximum speed
+            }
 
-                if final_callback:
-                    final_callback(accumulated_text)
+            response = self.model.generate_content(
+                contents=contents,
+                generation_config=generation_config,
+                stream=True
+            )
 
-            except Exception as stream_error:
-                print(f"Streaming failed, using standard response: {stream_error}")
-                response = self.model.generate_content(contents=contents)
+            accumulated_text = ""
+            for chunk in response:
+                if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
+                    chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
+                    if chunk_text:
+                        if streaming_callback:
+                            streaming_callback(chunk_text)
+                        accumulated_text += chunk_text
 
-                # Check for safety ratings first
-                if response.candidates and response.candidates[0].safety_ratings:
-                    print("\nSafety Ratings:")
-                    for rating in response.candidates[0].safety_ratings:
-                        print(f"  {rating.category.name}: {rating.probability.name}")
-
-                # Check response structure carefully
-                text_to_output = None
-                if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                    text_to_output = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
-                elif hasattr(response, 'text'):
-                    text_to_output = response.text
-
-                if final_callback:
-                    final_callback(text_to_output)
+            if final_callback:
+                final_callback(accumulated_text)
 
         except Exception as e:
             self._handle_provider_error(e, "Gemini transcription")
@@ -305,48 +300,31 @@ class GeminiProvider(BaseProvider):
             prompt += "\n- Handle false starts, fillers, and speech patterns"
             prompt += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
 
-            # Use streaming
-            try:
-                response = self.model.generate_content(
-                    contents=[prompt],
-                    stream=True
-                )
+            # Use streaming with 2025 optimized generation config
+            generation_config = {
+                'temperature': self.temperature,
+                'top_p': self.top_p,
+                'top_k': 40,  # Recommended for speed optimization
+                'candidate_count': 1  # Single response for maximum speed
+            }
 
-                print("\nRECEIVED FROM MODEL (streaming):")
-                accumulated_text = ""
-                for chunk in response:
-                    if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                        chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
-                        if chunk_text:
-                            if streaming_callback:
-                                streaming_callback(chunk_text)
-                            accumulated_text += chunk_text
+            response = self.model.generate_content(
+                contents=[prompt],
+                generation_config=generation_config,
+                stream=True
+            )
 
-                return accumulated_text
+            print("\nRECEIVED FROM MODEL (streaming):")
+            accumulated_text = ""
+            for chunk in response:
+                if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
+                    chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
+                    if chunk_text:
+                        if streaming_callback:
+                            streaming_callback(chunk_text)
+                        accumulated_text += chunk_text
 
-            except Exception as stream_error:
-                print(f"Streaming failed, using standard response: {stream_error}")
-                response = self.model.generate_content(contents=[prompt])
-
-                # Check for safety ratings first
-                if response.candidates and response.candidates[0].safety_ratings:
-                    print("\nSafety Ratings:")
-                    for rating in response.candidates[0].safety_ratings:
-                        print(f"  {rating.category.name}: {rating.probability.name}")
-
-                # Check response structure carefully
-                if (response.candidates and
-                    len(response.candidates) > 0 and
-                    response.candidates[0].content and
-                    response.candidates[0].content.parts):
-
-                    full_text = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
-                    if streaming_callback:
-                        streaming_callback(full_text)
-                    return full_text
-                else:
-                    print("\nError: No valid response content from Gemini")
-                    return None
+            return accumulated_text
 
         except Exception as e:
             self._handle_provider_error(e, "Gemini text processing")
