@@ -189,6 +189,94 @@ class GroqProvider(BaseProvider):
                 except OSError as e:
                     print(f"\nError deleting temp file {tmp_filename}: {e}", file=sys.stderr)
     
+    def transcribe_text(self, text: str, context: ConversationContext,
+                       streaming_callback=None, final_callback=None) -> None:
+        """Process pre-transcribed text through Groq chat API."""
+        if not self.is_initialized():
+            print("\nError: Groq client not initialized.", file=sys.stderr)
+            return
+
+        try:
+            # Get conversation context
+            conversation_xml = context.xml_markup
+            compiled_text = context.compiled_text
+
+            # Display conversation flow
+            print("\n" + "="*60)
+            print("SENDING TO MODEL:")
+            print("CURRENT STATE (already processed):")
+            print(f"  XML markup: {conversation_xml if conversation_xml else '[empty]'}")
+            print(f"  Rendered text: {compiled_text if compiled_text else '[empty]'}")
+            print("NEW INPUT (requires processing):")
+            print(f"  Mechanical transcription: {text}")
+            print("-" * 60)
+
+            # Process with Groq chat API
+            result = self._transcribe_text_chat(text, conversation_xml, compiled_text, streaming_callback)
+            if result and final_callback:
+                final_callback(result)
+
+        except Exception as e:
+            print(f"\nError during Groq text transcription: {e}", file=sys.stderr)
+
+    def _transcribe_text_chat(self, text: str, conversation_xml: str = "", compiled_text: str = "",
+                             streaming_callback=None) -> Optional[str]:
+        """Process text using Groq chat completion API."""
+        if not self.is_initialized():
+            print("\nError: Groq client not initialized.", file=sys.stderr)
+            return None
+
+        try:
+            xml_instructions = self.get_xml_instructions()
+
+            # Build prompt for text processing
+            prompt = xml_instructions
+
+            prompt += f"\n\nCURRENT STATE (already processed):"
+            prompt += f"\nXML markup: {conversation_xml if conversation_xml else '[empty]'}"
+            prompt += f"\nRendered text: {compiled_text if compiled_text else '[empty]'}"
+
+            prompt += f"\n\nNEW INPUT (requires processing):"
+            prompt += f"\nMechanical transcription: {text}"
+
+            prompt += "\n\nCRITICAL: The 'mechanical transcription' above is raw output from automatic speech recognition (VOSK). It requires the SAME analysis as audio input:"
+            prompt += "\n- Treat as if you just heard the audio yourself"
+            prompt += "\n- Identify sound-alike errors: \"there/their\", \"to/too\", \"no/know\", etc."
+            prompt += "\n- Fix misrecognized words based on context"
+            prompt += "\n- Apply ALL copy editing and formatting rules"
+            prompt += "\n- Handle false starts, fillers, and speech patterns"
+            prompt += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
+
+            # Use chat completion
+            messages = [
+                {"role": "system", "content": "You are an intelligent transcription assistant."},
+                {"role": "user", "content": prompt}
+            ]
+
+            completion = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=messages,
+                stream=True
+            )
+
+            print("\nRECEIVED FROM MODEL (streaming):")
+            accumulated_text = ""
+            for chunk in completion:
+                if chunk.choices[0].delta.content is not None:
+                    chunk_text = chunk.choices[0].delta.content
+                    if streaming_callback:
+                        streaming_callback(chunk_text)
+                    accumulated_text += chunk_text
+
+            return accumulated_text
+
+        except self.GroqError as e:
+            print(f"\nGroq API Error: {e}", file=sys.stderr)
+            return None
+        except Exception as e:
+            print(f"\nUnexpected error during Groq text processing: {e}", file=sys.stderr)
+            return None
+
     def get_provider_specific_instructions(self) -> str:
         """Get provider-specific instructions for prompts."""
         return ""  # Currently blank, can be customized per provider

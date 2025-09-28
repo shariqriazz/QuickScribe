@@ -71,7 +71,11 @@ class DictationApp:
     
     def _process_audio_result(self, result: AudioResult):
         """Process audio result from any audio source."""
-        if not self.provider or not self.transcription_service:
+        if not self.transcription_service:
+            return
+
+        # Provider is required for both audio and text processing
+        if not self.provider:
             return
 
         try:
@@ -79,12 +83,8 @@ class DictationApp:
             if isinstance(result, AudioDataResult):
                 self._process_audio_data(result.audio_data)
             elif isinstance(result, AudioTextResult):
-                # Future: handle pre-transcribed text
-                # For now, fall back to audio data if available
-                if result.audio_data is not None:
-                    self._process_audio_data(result.audio_data)
-                else:
-                    print("Text-only results not yet supported", file=sys.stderr)
+                # Handle pre-transcribed text from VOSK
+                self._process_transcribed_text(result.transcribed_text)
             else:
                 print(f"Unsupported audio result type: {type(result)}", file=sys.stderr)
         except Exception as e:
@@ -92,6 +92,10 @@ class DictationApp:
 
     def _process_audio_data(self, audio_np):
         """Process raw audio data using provider."""
+        if not self.provider:
+            print("Error: No provider available for audio transcription", file=sys.stderr)
+            return
+
         self.transcription_service.reset_streaming_state()
 
         # Get conversation context
@@ -104,6 +108,35 @@ class DictationApp:
 
         # Use unified provider interface - streaming only, no final callback
         self.provider.transcribe_audio(audio_np, context, streaming_callback, None)
+
+        # CRITICAL: Complete the stream to handle any remaining content
+        self.transcription_service.complete_stream()
+
+        # Show final clean state when streaming is complete
+        final_text = self.transcription_service._build_current_text()
+        if final_text:
+            print(f"\n{final_text}")  # New line and show final result
+        else:
+            print()  # Just add a newline
+
+    def _process_transcribed_text(self, text):
+        """Process pre-transcribed text from VOSK through AI provider."""
+        if not text or not text.strip():
+            return
+
+        # Reset streaming state for fresh processing
+        self.transcription_service.reset_streaming_state()
+
+        # Get conversation context
+        context = self._get_conversation_context()
+
+        # Define callbacks (same as audio processing)
+        def streaming_callback(chunk_text):
+            print(chunk_text, end='', flush=True)
+            self.transcription_service.process_streaming_chunk(chunk_text)
+
+        # Send VOSK text to AI provider for processing
+        self.provider.transcribe_text(text, context, streaming_callback, None)
 
         # CRITICAL: Complete the stream to handle any remaining content
         self.transcription_service.complete_stream()
@@ -236,6 +269,12 @@ class DictationApp:
         """Initialize the provider client based on the selected provider."""
         try:
             self.provider = ProviderFactory.create_provider(self.config.provider, self.config.model_id, self.config.language)
+
+            # Provider should never be None now
+            if self.provider is None:
+                print("Error: No provider initialized", file=sys.stderr)
+                return False
+
             if self.provider.initialize():
                 return True
             else:
@@ -263,11 +302,20 @@ class DictationApp:
         if not self._initialize_provider_client():
             return False
 
-        # Initialize audio source
-        self.audio_source = MicrophoneAudioSource(
-            self.config,
-            dtype=DTYPE
-        )
+        # Initialize audio source based on VOSK model path
+        if self.config.vosk_model_path:
+            from vosk_audio_source import VoskAudioSource
+            self.audio_source = VoskAudioSource(
+                self.config,
+                model_path=self.config.vosk_model_path,
+                lgraph_path=self.config.vosk_lgraph_path,
+                dtype=DTYPE
+            )
+        else:
+            self.audio_source = MicrophoneAudioSource(
+                self.config,
+                dtype=DTYPE
+            )
 
         # Initialize and test audio source
         if not self.audio_source.initialize():

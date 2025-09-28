@@ -266,6 +266,111 @@ class GeminiProvider(BaseProvider):
         self._transcribe_audio_bytes(wav_bytes, conversation_xml, compiled_text, final_callback=final_callback)
         return result
     
+    def transcribe_text(self, text: str, context: ConversationContext,
+                       streaming_callback=None, final_callback=None) -> None:
+        """Process pre-transcribed text through Gemini chat API."""
+        if not self.is_initialized():
+            print("\nError: Gemini model not initialized.", file=sys.stderr)
+            return
+
+        try:
+            # Get conversation context
+            conversation_xml = context.xml_markup
+            compiled_text = context.compiled_text
+
+            # Display conversation flow
+            print("\n" + "="*60)
+            print("SENDING TO MODEL:")
+            print("CURRENT STATE (already processed):")
+            print(f"  XML markup: {conversation_xml if conversation_xml else '[empty]'}")
+            print(f"  Rendered text: {compiled_text if compiled_text else '[empty]'}")
+            print("NEW INPUT (requires processing):")
+            print(f"  Mechanical transcription: {text}")
+            print("-" * 60)
+
+            # Process with Gemini chat API
+            result = self._transcribe_text_chat(text, conversation_xml, compiled_text, streaming_callback)
+            if result and final_callback:
+                final_callback(result)
+
+        except Exception as e:
+            print(f"\nError during Gemini text transcription: {e}", file=sys.stderr)
+
+    def _transcribe_text_chat(self, text: str, conversation_xml: str = "", compiled_text: str = "",
+                             streaming_callback=None) -> Optional[str]:
+        """Process text using Gemini chat completion API."""
+        if not self.is_initialized():
+            print("\nError: Gemini model not initialized.", file=sys.stderr)
+            return None
+
+        try:
+            xml_instructions = self.get_xml_instructions()
+
+            # Build prompt for text processing
+            prompt = f"Transcript with XML formatting: {xml_instructions}"
+
+            prompt += f"\n\nCURRENT STATE (already processed):"
+            prompt += f"\nXML markup: {conversation_xml if conversation_xml else '[empty]'}"
+            prompt += f"\nRendered text: {compiled_text if compiled_text else '[empty]'}"
+
+            prompt += f"\n\nNEW INPUT (requires processing):"
+            prompt += f"\nMechanical transcription: {text}"
+
+            prompt += "\n\nCRITICAL: The 'mechanical transcription' above is raw output from automatic speech recognition (VOSK). It requires the SAME analysis as audio input:"
+            prompt += "\n- Treat as if you just heard the audio yourself"
+            prompt += "\n- Identify sound-alike errors: \"there/their\", \"to/too\", \"no/know\", etc."
+            prompt += "\n- Fix misrecognized words based on context"
+            prompt += "\n- Apply ALL copy editing and formatting rules"
+            prompt += "\n- Handle false starts, fillers, and speech patterns"
+            prompt += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
+
+            # Use streaming
+            try:
+                response = self.model.generate_content(
+                    contents=[prompt],
+                    stream=True
+                )
+
+                print("\nRECEIVED FROM MODEL (streaming):")
+                accumulated_text = ""
+                for chunk in response:
+                    if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
+                        chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
+                        if chunk_text:
+                            if streaming_callback:
+                                streaming_callback(chunk_text)
+                            accumulated_text += chunk_text
+
+                return accumulated_text
+
+            except Exception as stream_error:
+                print(f"Streaming failed, using standard response: {stream_error}")
+                response = self.model.generate_content(contents=[prompt])
+
+                # Check for safety ratings first
+                if response.candidates and response.candidates[0].safety_ratings:
+                    print("\nSafety Ratings:")
+                    for rating in response.candidates[0].safety_ratings:
+                        print(f"  {rating.category.name}: {rating.probability.name}")
+
+                # Check response structure carefully
+                if (response.candidates and
+                    len(response.candidates) > 0 and
+                    response.candidates[0].content and
+                    response.candidates[0].content.parts):
+
+                    full_text = "".join(part.text for part in response.candidates[0].content.parts if hasattr(part, 'text'))
+                    if streaming_callback:
+                        streaming_callback(full_text)
+                    return full_text
+                else:
+                    print("\nError: No valid response content from Gemini")
+                    return None
+
+        except Exception as e:
+            print(f"\nUnexpected error during Gemini text processing: {e}", file=sys.stderr)
+            return None
+
     def get_provider_specific_instructions(self) -> str:
         """Get provider-specific instructions for prompts."""
         return ""  # Currently blank, can be customized per provider

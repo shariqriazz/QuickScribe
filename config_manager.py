@@ -18,6 +18,10 @@ class ConfigManager:
         self.debug_enabled = False
         self.no_trigger_key = False
         self.xdotool_rate = None
+
+        # VOSK configuration
+        self.vosk_model_path = None
+        self.vosk_lgraph_path = None
         
         # Load environment variables
         script_dir = os.path.dirname(__file__)
@@ -130,6 +134,18 @@ class ConfigManager:
             dest="xdotool_rate",
             help="Set xdotool keystroke rate in Hz/CPS (keystrokes per second)."
         )
+        parser.add_argument(
+            "--vosk-model",
+            type=str,
+            default=None,
+            help="Path to VOSK model directory (required for VOSK provider)."
+        )
+        parser.add_argument(
+            "--vosk-lgraph",
+            type=str,
+            default=None,
+            help="Path to VOSK L-graph file for grammar-constrained recognition."
+        )
         return parser
     
     def handle_interactive_mode(self):
@@ -182,6 +198,10 @@ class ConfigManager:
         self.use_xdotool = args.use_xdotool
         self.debug_enabled = args.debug
         self.xdotool_rate = args.xdotool_rate
+
+        # VOSK configuration
+        self.vosk_model_path = getattr(args, 'vosk_model', None)
+        self.vosk_lgraph_path = getattr(args, 'vosk_lgraph', None)
 
     def parse_configuration(self):
         """Parse configuration from command line arguments or interactive mode."""

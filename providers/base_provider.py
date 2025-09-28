@@ -30,9 +30,23 @@ class BaseProvider(ABC):
                         streaming_callback=None, final_callback=None) -> None:
         """
         Unified transcription interface for all providers.
-        
+
         Args:
             audio_np: Audio data as numpy array
+            context: Conversation context with XML markup and compiled text
+            streaming_callback: Optional callback for streaming text chunks
+            final_callback: Optional callback for final result
+        """
+        pass
+
+    @abstractmethod
+    def transcribe_text(self, text: str, context: ConversationContext,
+                       streaming_callback=None, final_callback=None) -> None:
+        """
+        Process pre-transcribed text through AI model.
+
+        Args:
+            text: Pre-transcribed text from VOSK or other source
             context: Conversation context with XML markup and compiled text
             streaming_callback: Optional callback for streaming text chunks
             final_callback: Optional callback for final result
