@@ -63,34 +63,34 @@ class TranscriptionService:
     def complete_stream(self):
         """Complete streaming by processing any remaining content and calling end_stream."""
         try:
-            # Only operate if we're in streaming mode (have streaming_buffer content)
-            if not self.streaming_buffer:
-                if self.config.debug_enabled:
-                    print(f"[DEBUG] complete_stream: no streaming buffer, skipping", file=sys.stderr)
-                return
+            # Process any remaining complete tags in the streaming buffer (if any)
+            if self.streaming_buffer:
+                import re
+                matches = re.finditer(r'<(\d+)>(.*?)</\1>', self.streaming_buffer, re.DOTALL)
+                remaining_tags = []
 
-            # Process any remaining complete tags in the streaming buffer
-            import re
-            matches = re.finditer(r'<(\d+)>(.*?)</\1>', self.streaming_buffer, re.DOTALL)
-            remaining_tags = []
+                for match in matches:
+                    seq_num = int(match.group(1))
+                    word_content = match.group(2)
+                    # Only process if not already in processor
+                    if seq_num not in self.processor.current_words:
+                        remaining_tags.append(f'<{seq_num}>{word_content}</{seq_num}>')
 
-            for match in matches:
-                seq_num = int(match.group(1))
-                word_content = match.group(2)
-                # Only process if not already in processor
-                if seq_num not in self.processor.current_words:
-                    remaining_tags.append(f'<{seq_num}>{word_content}</{seq_num}>')
+                # Process any remaining complete tags
+                if remaining_tags:
+                    remaining_xml = ''.join(remaining_tags)
+                    if self.config.debug_enabled:
+                        print(f"[DEBUG] complete_stream: processing remaining tags: {remaining_xml}", file=sys.stderr)
+                    self.processor.process_chunk(remaining_xml)
 
-            # Process any remaining complete tags
-            if remaining_tags:
-                remaining_xml = ''.join(remaining_tags)
-                if self.config.debug_enabled:
-                    print(f"[DEBUG] complete_stream: processing remaining tags: {remaining_xml}", file=sys.stderr)
-                self.processor.process_chunk(remaining_xml)
-
-            # Only call end_stream if we're in streaming mode and backspace was performed
-            if self.processor.streaming_active:
-                self.processor.end_stream()
+            # Always call end_stream if there are words that haven't been emitted yet
+            # This ensures all words get flushed regardless of streaming state
+            if self.processor.current_words:
+                max_seq = max(self.processor.current_words.keys())
+                if self.processor.last_emitted_seq < max_seq:
+                    if self.config.debug_enabled:
+                        print(f"[DEBUG] complete_stream: calling end_stream to flush remaining words (last_emitted: {self.processor.last_emitted_seq}, max_seq: {max_seq})", file=sys.stderr)
+                    self.processor.end_stream()
 
             if self.config.debug_enabled:
                 print(f"[DEBUG] complete_stream: stream completed", file=sys.stderr)
