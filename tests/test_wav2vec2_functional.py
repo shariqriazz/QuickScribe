@@ -52,8 +52,8 @@ def test_model_instructions():
 
     # Check for phoneme-specific content
     assert "PHONETIC TRANSCRIPTION ASSISTANCE" in instructions
-    assert "eSpeak phoneme notation" in instructions
-    assert "h ɛ l oʊ" in instructions
+    assert "phoneme sequences" in instructions
+    assert "HH EH L OW" in instructions
     assert "homophone disambiguation" in instructions
     print("✓ Model instructions include phoneme processing guidance")
 

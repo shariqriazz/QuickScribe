@@ -313,8 +313,8 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
 
         # Verify phoneme-specific instructions are included
         self.assertIn("PHONETIC TRANSCRIPTION ASSISTANCE", instructions)
-        self.assertIn("eSpeak phoneme notation", instructions)
-        self.assertIn("h ɛ l oʊ", instructions)
+        self.assertIn("phoneme sequences", instructions)
+        self.assertIn("HH EH L OW", instructions)
         self.assertIn("homophone disambiguation", instructions)
 
     def test_phoneme_instruction_examples(self):
@@ -331,8 +331,8 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
         instructions = provider.get_xml_instructions()
 
         # Check for specific examples
-        self.assertIn('"h ɛ l oʊ" → "hello"', instructions)
-        self.assertIn('"t uː" → "to/too/two"', instructions)
+        self.assertIn('"HH EH L OW" → "hello"', instructions)
+        self.assertIn('"T UW" → "to/too/two"', instructions)
         self.assertIn("mechanical transcription", instructions)
 
 
