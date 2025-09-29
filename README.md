@@ -21,6 +21,7 @@ A Python script that listens for a configurable trigger key, records audio while
 *   **Operating System Permissions:**
     *   **Microphone Access:** The script needs permission to access your microphone for recording.
     *   **Accessibility / Input Monitoring (macOS) or similar (Windows/Linux):** The script requires permissions to monitor keyboard input (for the trigger key) and simulate keyboard events (for pasting). Grant these permissions when prompted by your OS.
+    *   **macOS Accessibility Permission:** When using the default keyboard injection on macOS, you must grant accessibility permissions to your Python interpreter or Terminal app in System Settings → Privacy & Security → Accessibility. This allows the script to inject keyboard events for text pasting.
 
 ## Installation
 

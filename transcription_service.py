@@ -8,6 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'lib', 'xml-stream'))
 from xml_stream_processor import XMLStreamProcessor
 from keyboard_injector import MockKeyboardInjector
 from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
+from lib.keyboard_injector_macos import MacOSKeyboardInjector
 
 
 class TranscriptionService:
@@ -15,7 +16,15 @@ class TranscriptionService:
     
     def __init__(self, config):
         self.config = config
-        self.keyboard = XdotoolKeyboardInjector(config) if config.use_xdotool else MockKeyboardInjector()
+
+        # Select keyboard injector based on platform and configuration
+        if sys.platform == 'darwin':
+            self.keyboard = MacOSKeyboardInjector(config)
+        elif config.use_xdotool:
+            self.keyboard = XdotoolKeyboardInjector(config)
+        else:
+            self.keyboard = MockKeyboardInjector()
+
         self.processor = XMLStreamProcessor(self.keyboard, debug_enabled=config.debug_enabled)
         
         # State management
