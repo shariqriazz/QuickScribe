@@ -264,7 +264,15 @@ class BaseProvider(ABC):
             #" - Content does NOT exist in context → DICTATION (talking about it)\n"
             #" - TX: Literal instruction, INT: Description, UPDATE: Generated content itself\n"
             #" - Example: \"Elaborate about error handling\" (exists) → UPDATE contains elaborated content\n\n"
-            "Remember: Polish, don't rewrite. Preserve speaker's voice."
+            "Remember: Polish, don't rewrite. Preserve speaker's voice.\n\n"
+            "PHONETIC TRANSCRIPTION ASSISTANCE:\n"
+            "When you receive eSpeak phoneme sequences, treat them as literal phonetic transcription requiring word conversion:\n"
+            "- Input: Raw eSpeak phoneme notation (e.g., \"h ɛ l oʊ w ɜː l d\")\n"
+            "- Task: Convert phonemes to natural words based on phonetic pronunciation and context\n"
+            "- Example: \"h ɛ l oʊ\" → \"hello\", \"t uː\" → \"to/too/two\" (choose based on context)\n"
+            "- Handle homophone disambiguation using surrounding context\n"
+            "- Maintain same XML structure and processing as regular transcription\n"
+            "- Treat phoneme input as mechanical transcription requiring the same analysis as audio input"
         )
         
         if provider_specific.strip():
