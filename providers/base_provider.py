@@ -4,6 +4,8 @@ Base provider class with common XML instructions.
 from abc import ABC, abstractmethod
 from typing import Optional
 import numpy as np
+import time
+import sys
 from .conversation_context import ConversationContext
 
 
@@ -28,6 +30,10 @@ class BaseProvider(ABC):
         # Note: max_tokens is optional and provider-specific
         # - Groq: Uses max_tokens parameter if specified
         # - Gemini: max_output_tokens excluded from generation_config due to streaming issues
+
+        # Timing tracking
+        self.model_start_time = None
+        self.first_response_time = None
     
     @abstractmethod
     def initialize(self) -> bool:
@@ -302,6 +308,24 @@ class BaseProvider(ABC):
         """Get provider-specific instructions. Override in subclasses if needed."""
         return ""
 
+
+    def start_model_timer(self):
+        """Mark the start of model processing for timing measurements."""
+        self.model_start_time = time.time()
+        self.first_response_time = None  # Reset for new request
+
+    def mark_first_response(self):
+        """Mark when the first response chunk is received."""
+        if self.first_response_time is None:
+            self.first_response_time = time.time()
+            self._print_timing_stats()
+
+    def _print_timing_stats(self):
+        """Print timing statistics."""
+        if self.model_start_time and self.first_response_time:
+            model_time = self.first_response_time - self.model_start_time
+            print(f"🚀 Model processing time: {model_time:.3f}s")
+
     def _handle_provider_error(self, error: Exception, operation: str) -> None:
         """Common error handling for provider operations with full error details."""
         import traceback
@@ -344,6 +368,7 @@ class BaseProvider(ABC):
         if audio_info:
             print(f"Audio file: {audio_info}")
         print("-" * 60)
+        self.start_model_timer()
 
     def _display_text_context(self, context: 'ConversationContext', text: str):
         """Display text processing context in standard format."""
@@ -355,6 +380,7 @@ class BaseProvider(ABC):
         print("NEW INPUT (requires processing):")
         print(f"  IPA/mechanical transcription: {text}")
         print("-" * 60)
+        self.start_model_timer()
 
     def _get_generation_config(self) -> dict:
         """Get provider-agnostic generation configuration."""

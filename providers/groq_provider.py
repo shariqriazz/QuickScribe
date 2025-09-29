@@ -254,6 +254,8 @@ class GroqProvider(BaseProvider):
             for chunk in completion:
                 if chunk.choices[0].delta.content is not None:
                     chunk_text = chunk.choices[0].delta.content
+                    # Mark first response timing
+                    self.mark_first_response()
                     if streaming_callback:
                         streaming_callback(chunk_text)
                     accumulated_text += chunk_text
