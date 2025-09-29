@@ -22,6 +22,13 @@ except ImportError:
 
 from audio_source import AudioChunkHandler, AudioResult, AudioTextResult, AudioDataResult
 from microphone_audio_source import MicrophoneAudioSource
+from phoneme_mapper import process_wav2vec2_output
+
+
+def format_phoneme_output(raw_phonemes: str) -> str:
+    """Format phoneme output showing both IPA and alphanumeric versions."""
+    alpha_phonemes = process_wav2vec2_output(raw_phonemes)
+    return f"\n    IPA: {raw_phonemes.strip()}\n  ALPHA: {alpha_phonemes.strip()}"
 
 
 class Wav2Vec2ChunkHandler(AudioChunkHandler):
@@ -145,7 +152,9 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
                 predicted_ids = torch.argmax(logits, dim=-1)
 
                 # Decode to phonemes
-                self.phoneme_text = self.tokenizer.batch_decode(predicted_ids)[0]
+                raw_phonemes = self.tokenizer.batch_decode(predicted_ids)[0]
+                # Format with both IPA and alphanumeric
+                self.phoneme_text = format_phoneme_output(raw_phonemes)
 
             self.is_complete = True
             return self.phoneme_text.strip()
@@ -278,9 +287,15 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
 
                 logits = self.model(input_values).logits
                 predicted_ids = torch.argmax(logits, dim=-1)
-                phoneme_text = self._decode_phonemes(predicted_ids)
+                raw_phonemes = self._decode_phonemes(predicted_ids)
 
-                return phoneme_text.strip()
+                # Show before and after mapping
+                alpha_phonemes = process_wav2vec2_output(raw_phonemes)
+                print(f"Raw IPA phonemes: {raw_phonemes}")
+                print(f"Mapped alphanumeric: {alpha_phonemes}")
+
+                # Return formatted output with both IPA and alphanumeric
+                return format_phoneme_output(raw_phonemes)
 
         except Exception as e:
             print(f"Error processing audio with Wav2Vec2: {e}", file=sys.stderr)

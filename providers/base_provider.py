@@ -266,13 +266,32 @@ class BaseProvider(ABC):
             #" - Example: \"Elaborate about error handling\" (exists) → UPDATE contains elaborated content\n\n"
             "Remember: Polish, don't rewrite. Preserve speaker's voice.\n\n"
             "PHONETIC TRANSCRIPTION ASSISTANCE:\n"
-            "When you receive eSpeak phoneme sequences, treat them as literal phonetic transcription requiring word conversion:\n"
-            "- Input: Raw eSpeak phoneme notation (e.g., \"h ɛ l oʊ w ɜː l d\")\n"
+            "When mechanical transcription contains phoneme sequences, convert to natural words:\n"
+            "- Mechanical transcription: Pre-processed phonetic data provided to model for word conversion\n"
+            "- Input format: Alphanumeric phoneme codes (e.g., \"HH EH L OW W ER L D\")\n"
             "- Task: Convert phonemes to natural words based on phonetic pronunciation and context\n"
-            "- Example: \"h ɛ l oʊ\" → \"hello\", \"t uː\" → \"to/too/two\" (choose based on context)\n"
+            "- Example: \"HH EH L OW\" → \"hello\", \"T UW\" → \"to/too/two\" (choose based on context)\n"
             "- Handle homophone disambiguation using surrounding context\n"
             "- Maintain same XML structure and processing as regular transcription\n"
-            "- Treat phoneme input as mechanical transcription requiring the same analysis as audio input"
+            "- Treat phoneme input as mechanical transcription requiring the same analysis as audio input\n\n"
+            "PHONEME MAPPING REFERENCE:\n"
+            "Original IPA phonemes are converted to alphanumeric codes in mechanical transcription:\n"
+            "IPA → ALPHA mapping:\n"
+            "Vowels: i→IY, ɪ→IH, e→EY, ɛ→EH, æ→AE, ə→AH, ɜ→ER, ɚ→ERR, ʌ→UH, ɐ→AA, a→AX, ᵻ→IX\n"
+            "Back vowels: ɑ→AO, ɔ→OR, o→OW, ʊ→UU, u→UW, ɑː→AAR\n"
+            "Consonants: p→P, b→B, t→T, d→D, k→K, g→G, f→F, v→V, s→S, z→Z, h→H\n"
+            "Fricatives: θ→TH, ð→DH, ʃ→SH, ʒ→ZH, x→KH\n"
+            "Affricates: tʃ→CH, dʒ→JH\n"
+            "Nasals: m→M, n→N, ŋ→NG, ɲ→NY\n"
+            "Liquids: l→L, r→R, ɹ→RR, ɾ→T\n"
+            "Glides: j→Y, w→W, ɥ→WY\n"
+            "Diphthongs: aɪ→AY, aʊ→AW, ɔɪ→OY, eɪ→EY, oʊ→OW, ɪə→IHR, ɛə→EHR, ʊə→UHR\n"
+            "Markers: ː→LONG, ˈ→STRESS1, ˌ→STRESS2, .→SYLDIV, |→WORDSEP\n\n"
+            "ALPHA → IPA reverse mapping:\n"
+            "IY→i, IH→ɪ, EY→e, EH→ɛ, AE→æ, AH→ə, ER→ɜ, ERR→ɚ, UH→ʌ, AA→ɐ, AX→a, IX→ᵻ\n"
+            "AO→ɑ, OR→ɔ, OW→o, UU→ʊ, UW→u, AAR→ɑː, P→p, B→b, T→t, D→d, K→k, G→g\n"
+            "F→f, V→v, S→s, Z→z, H→h, TH→θ, DH→ð, SH→ʃ, ZH→ʒ, KH→x, CH→tʃ, JH→dʒ\n"
+            "M→m, N→n, NG→ŋ, NY→ɲ, L→l, R→r, RR→ɹ, Y→j, W→w, WY→ɥ"
         )
         
         if provider_specific.strip():
@@ -334,7 +353,7 @@ class BaseProvider(ABC):
         print(f"  XML markup: {context.xml_markup if context.xml_markup else '[empty]'}")
         print(f"  Rendered text: {context.compiled_text if context.compiled_text else '[empty]'}")
         print("NEW INPUT (requires processing):")
-        print(f"  Mechanical transcription: {text}")
+        print(f"  IPA/mechanical transcription: {text}")
         print("-" * 60)
 
     def _get_generation_config(self) -> dict:
