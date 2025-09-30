@@ -294,5 +294,16 @@ class ConfigManager:
                 print(f"\nError: Model '{self.model_id}' is malformed. Required format: provider/model (e.g., gemini/gemini-2.5-flash)", file=sys.stderr)
                 return False
 
+        # Validate audio source requirements
+        if self.audio_source == 'vosk' and not self.vosk_model_path:
+            parser.print_help()
+            print("\nError: --vosk-model is required when --audio-source is 'vosk'", file=sys.stderr)
+            return False
+
+        if self.audio_source == 'wav2vec' and not self.wav2vec2_model_path:
+            parser.print_help()
+            print("\nError: --wav2vec2-model is required when --audio-source is 'wav2vec'", file=sys.stderr)
+            return False
+
         return True
     
