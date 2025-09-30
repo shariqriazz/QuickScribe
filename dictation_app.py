@@ -268,25 +268,12 @@ class DictationApp:
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
         try:
-            self.provider = BaseProvider(
-                self.config.model_id,
-                self.config.language,
-                self.config.api_key
-            )
+            self.provider = BaseProvider(self.config)
 
             # Provider should never be None now
             if self.provider is None:
                 print("Error: No provider initialized", file=sys.stderr)
                 return False
-
-            # Apply performance configuration
-            self.provider.enable_reasoning = self.config.enable_reasoning
-            self.provider.thinking_budget = self.config.thinking_budget
-            self.provider.temperature = self.config.temperature
-            self.provider.max_tokens = self.config.max_tokens
-            self.provider.top_p = self.config.top_p
-            self.provider.debug_enabled = self.config.debug_enabled
-            self.provider.litellm_debug = self.config.litellm_debug
 
             if self.provider.initialize():
                 return True

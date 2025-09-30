@@ -81,7 +81,7 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
         audio_source = Wav2Vec2AudioSource(self.config, "test_model")
 
         # Check basic attributes
-        self.assertEqual(audio_source.sample_rate, 16000)
+        self.assertEqual(audio_source.config.sample_rate, 16000)
         self.assertEqual(audio_source.model_path, "test_model")
         self.assertIsNotNone(audio_source.feature_extractor)
         self.assertIsNotNone(audio_source.model)
@@ -172,7 +172,7 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
 
         # Basic functionality should work
         self.assertEqual(audio_source.model_path, "test_model")
-        self.assertEqual(audio_source.sample_rate, 16000)
+        self.assertEqual(audio_source.config.sample_rate, 16000)
 
     def test_chunk_processing(self):
         """Test that audio processing works (replaces old chunk processing)."""

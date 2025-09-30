@@ -180,7 +180,6 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
         super().__init__(config, dtype)
 
         self.model_path = model_path
-        self.sample_rate = config.sample_rate
 
         # Speed factors for multi-speed processing
         self.speed_factors = [0.7, 0.8, 0.9, 1.0]
@@ -276,7 +275,7 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
         try:
             # Apply time stretching if not 1.0
             if speed_factor != 1.0:
-                stretched_audio = pyrb.time_stretch(audio_data, self.sample_rate, speed_factor)
+                stretched_audio = pyrb.time_stretch(audio_data, self.config.sample_rate, speed_factor)
             else:
                 stretched_audio = audio_data
 
@@ -284,7 +283,7 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
             with torch.no_grad():
                 input_values = self.feature_extractor(
                     stretched_audio,
-                    sampling_rate=self.sample_rate,
+                    sampling_rate=self.config.sample_rate,
                     return_tensors="pt"
                 ).input_values
 
@@ -314,7 +313,7 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
                 audio_data = np.squeeze(audio_data)
 
             # Check minimum length
-            min_samples = max(320, self.sample_rate // 50)
+            min_samples = max(320, self.config.sample_rate // 50)
             if len(audio_data) < min_samples:
                 print(f"Audio too short for Wav2Vec2: {len(audio_data)} samples (need {min_samples})", file=sys.stderr)
                 return ""

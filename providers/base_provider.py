@@ -14,29 +14,10 @@ from .conversation_context import ConversationContext
 class BaseProvider:
     """Unified provider using LiteLLM abstraction."""
 
-    def __init__(self, model_id: str, language: Optional[str] = None, api_key: Optional[str] = None):
-        self.model_id = model_id  # Format: "provider/model" (e.g., "groq/whisper-large-v3")
-        self.language = language
-        self.api_key = api_key
+    def __init__(self, config):
+        self.config = config
         self._initialized = False
         self.litellm = None
-        self.debug_enabled = False  # Set via configuration after instantiation
-        self.litellm_debug = False  # Set via configuration after instantiation
-
-        # Provider performance controls
-        self.enable_reasoning = 'low'  # Low reasoning effort by default
-        self.thinking_budget = 128  # Small thinking budget by default
-        self.temperature = 0.2  # Optimal temperature for focused output (2025 best practices)
-        self.max_tokens = None  # No output limit by default - let provider use its maximum
-        # self.top_p = 1.0  # Default (disabled) - best practice: alter temperature OR top_p, not both
-
-        # Latency optimization settings
-        self.enable_streaming = True  # Streaming enabled for responsiveness
-        self.response_format = "text"  # Simple text format for speed
-
-        # Note: max_tokens is optional and provider-specific
-        # - Groq: Uses max_tokens parameter if specified
-        # - Gemini: max_output_tokens excluded from generation_config due to streaming issues
 
         # Timing tracking
         self.model_start_time = None
@@ -53,25 +34,25 @@ class BaseProvider:
             self.litellm = litellm
             self.litellm_exceptions = exceptions
 
-            if self.litellm_debug:
+            if self.config.litellm_debug:
                 litellm._turn_on_debug()
 
-            if self.api_key:
-                print(f"Using provided API key for {self.model_id.split('/')[0]}")
+            if self.config.api_key:
+                print(f"Using provided API key for {self.config.model_id.split('/')[0]}")
 
-            print(f"LiteLLM initialized with model: {self.model_id}")
+            print(f"LiteLLM initialized with model: {self.config.model_id}")
 
             # Validate model with minimal API call
             print("Validating model access...", end=' ', flush=True)
             try:
                 completion_params = {
-                    "model": self.model_id,
+                    "model": self.config.model_id,
                     "messages": [{"role": "user", "content": "test"}],
                     "max_tokens": 1,
                     "stream": False
                 }
-                if self.api_key:
-                    completion_params["api_key"] = self.api_key
+                if self.config.api_key:
+                    completion_params["api_key"] = self.config.api_key
 
                 test_response = self.litellm.completion(**completion_params)
                 print("✓")
@@ -79,21 +60,21 @@ class BaseProvider:
                 return True
             except self.litellm_exceptions.AuthenticationError as e:
                 print("✗")
-                print(f"Error: Authentication failed for model '{self.model_id}'", file=sys.stderr)
+                print(f"Error: Authentication failed for model '{self.config.model_id}'", file=sys.stderr)
                 print(f"Check your API key environment variable for this provider", file=sys.stderr)
                 return False
             except self.litellm_exceptions.NotFoundError as e:
                 print("✗")
-                print(f"Error: Model '{self.model_id}' not found", file=sys.stderr)
+                print(f"Error: Model '{self.config.model_id}' not found", file=sys.stderr)
                 print(f"Verify the model name and provider prefix are correct", file=sys.stderr)
                 return False
             except self.litellm_exceptions.RateLimitError as e:
                 print("✗")
-                print(f"Error: Rate limit exceeded for model '{self.model_id}'", file=sys.stderr)
+                print(f"Error: Rate limit exceeded for model '{self.config.model_id}'", file=sys.stderr)
                 return False
             except Exception as e:
                 print("✗")
-                print(f"Error validating model '{self.model_id}': {e}", file=sys.stderr)
+                print(f"Error validating model '{self.config.model_id}': {e}", file=sys.stderr)
                 return False
 
         except ImportError:
@@ -157,7 +138,7 @@ class BaseProvider:
             # Anthropic requires explicit cache_control, others use automatic caching
             system_content = {"type": "text", "text": xml_instructions}
 
-            provider = self.model_id.split('/')[0].lower() if '/' in self.model_id else ''
+            provider = self.config.model_id.split('/')[0].lower() if '/' in self.config.model_id else ''
             if provider == 'anthropic':
                 system_content["cache_control"] = {"type": "ephemeral"}
 
@@ -183,27 +164,27 @@ class BaseProvider:
 
             # Call LiteLLM
             completion_params = {
-                "model": self.model_id,
+                "model": self.config.model_id,
                 "messages": messages,
                 "stream": True,
                 "stream_options": {"include_usage": True},
-                "temperature": self.temperature
+                "temperature": self.config.temperature
             }
 
-            if self.max_tokens is not None:
-                completion_params["max_tokens"] = self.max_tokens
+            if self.config.max_tokens is not None:
+                completion_params["max_tokens"] = self.config.max_tokens
 
-            if self.api_key:
-                completion_params["api_key"] = self.api_key
+            if self.config.api_key:
+                completion_params["api_key"] = self.config.api_key
 
             # Reasoning control
-            if self.enable_reasoning == 'none':
+            if self.config.enable_reasoning == 'none':
                 completion_params["thinking"] = {"type": "disabled"}
-            elif self.enable_reasoning in ['low', 'medium', 'high']:
-                completion_params["reasoning_effort"] = self.enable_reasoning
+            elif self.config.enable_reasoning in ['low', 'medium', 'high']:
+                completion_params["reasoning_effort"] = self.config.enable_reasoning
 
-            if self.thinking_budget > 0:
-                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.thinking_budget}
+            if self.config.thinking_budget > 0:
+                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.config.thinking_budget}
 
             response = self.litellm.completion(**completion_params)
 
@@ -289,7 +270,7 @@ class BaseProvider:
             # Anthropic requires explicit cache_control, others use automatic caching
             system_content = {"type": "text", "text": xml_instructions}
 
-            provider = self.model_id.split('/')[0].lower() if '/' in self.model_id else ''
+            provider = self.config.model_id.split('/')[0].lower() if '/' in self.config.model_id else ''
             if provider == 'anthropic':
                 system_content["cache_control"] = {"type": "ephemeral"}
 
@@ -323,27 +304,27 @@ class BaseProvider:
 
             # Call LiteLLM
             completion_params = {
-                "model": self.model_id,
+                "model": self.config.model_id,
                 "messages": messages,
                 "stream": True,
                 "stream_options": {"include_usage": True},
-                "temperature": self.temperature
+                "temperature": self.config.temperature
             }
 
-            if self.max_tokens is not None:
-                completion_params["max_tokens"] = self.max_tokens
+            if self.config.max_tokens is not None:
+                completion_params["max_tokens"] = self.config.max_tokens
 
-            if self.api_key:
-                completion_params["api_key"] = self.api_key
+            if self.config.api_key:
+                completion_params["api_key"] = self.config.api_key
 
             # Reasoning control
-            if self.enable_reasoning == 'none':
+            if self.config.enable_reasoning == 'none':
                 completion_params["thinking"] = {"type": "disabled"}
-            elif self.enable_reasoning in ['low', 'medium', 'high']:
-                completion_params["reasoning_effort"] = self.enable_reasoning
+            elif self.config.enable_reasoning in ['low', 'medium', 'high']:
+                completion_params["reasoning_effort"] = self.config.enable_reasoning
 
-            if self.thinking_budget > 0:
-                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.thinking_budget}
+            if self.config.thinking_budget > 0:
+                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.config.thinking_budget}
 
             response = self.litellm.completion(**completion_params)
 
@@ -695,7 +676,7 @@ class BaseProvider:
 
     def _display_cache_stats(self, usage_data, completion_response=None) -> None:
         """Display cache statistics and cost from usage data."""
-        if not self.debug_enabled:
+        if not self.config.debug_enabled:
             return
 
         print("\n" + "-" * 60)
@@ -796,13 +777,13 @@ class BaseProvider:
     def _get_generation_config(self) -> dict:
         """Get provider-agnostic generation configuration."""
         config = {
-            'temperature': self.temperature,
-            'enable_reasoning': self.enable_reasoning,
-            'response_format': self.response_format
+            'temperature': self.config.temperature,
+            'enable_reasoning': self.config.enable_reasoning,
+            'response_format': 'text'
         }
 
-        if self.max_tokens is not None:
-            config['max_output_tokens'] = self.max_tokens
+        if self.config.max_tokens is not None:
+            config['max_output_tokens'] = self.config.max_tokens
 
         # top_p not included - using default to avoid conflicting with temperature
 
