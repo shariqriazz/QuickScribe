@@ -18,16 +18,17 @@ class XdotoolKeyboardInjector(KeyboardInjector):
             config: Configuration object with xdotool_rate and debug_enabled
             typing_delay: Default millisecond delay between keystrokes if no config
         """
-        if config and config.xdotool_rate:
+        xdotool_rate = getattr(config, 'xdotool_rate', None) if config else None
+        if xdotool_rate:
             # Convert Hz to milliseconds delay: delay = 1000 / rate
-            self.typing_delay = int(1000 / config.xdotool_rate)
-            if config.debug_enabled:
-                print(f"[DEBUG] XdotoolKeyboardInjector: typing_rate={config.xdotool_rate}Hz -> delay={self.typing_delay}ms", file=sys.stderr)
+            self.typing_delay = int(1000 / xdotool_rate)
+            if getattr(config, 'debug_enabled', False):
+                print(f"[DEBUG] XdotoolKeyboardInjector: typing_rate={xdotool_rate}Hz -> delay={self.typing_delay}ms", file=sys.stderr)
         else:
             self.typing_delay = typing_delay
-            if config and config.debug_enabled:
+            if config and getattr(config, 'debug_enabled', False):
                 print(f"[DEBUG] XdotoolKeyboardInjector: using default typing_delay={self.typing_delay}ms", file=sys.stderr)
-        self.debug_enabled = config.debug_enabled if config else False
+        self.debug_enabled = getattr(config, 'debug_enabled', False) if config else False
         # Detect if we're running in test mode
         self.test_mode = (
             os.getenv("TESTING", "false").lower() == "true" or 

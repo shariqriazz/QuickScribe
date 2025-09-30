@@ -18,10 +18,12 @@ class TestXMLStateTransition:
     def setup_method(self):
         """Set up test fixtures."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         self.service = TranscriptionService(MockConfig())
-        self.keyboard = self.service.keyboard
+        # Replace with MockKeyboardInjector for testing
+        self.keyboard = MockKeyboardInjector()
+        self.service.keyboard = self.keyboard
+        self.service.processor.keyboard = self.keyboard
 
     def test_integration_state_transition_via_xml_transcription(self):
         """Integration test: fake initial state, reset, real initial state, new sequences."""

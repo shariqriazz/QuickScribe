@@ -14,7 +14,6 @@ class ConfigManager:
         self.sample_rate = 16000
         self.channels = 1
         self.trigger_key_name = 'alt_r'
-        self.use_xdotool = False
         self.debug_enabled = False
         self.no_trigger_key = False
         self.xdotool_rate = None
@@ -79,8 +78,7 @@ class ConfigManager:
     
     def is_interactive_mode(self, args_without_script):
         """Determine if running in interactive mode."""
-        return (len(args_without_script) == 0 or 
-                (len(args_without_script) == 1 and args_without_script[0] == '--use-xdotool'))
+        return len(args_without_script) == 0
     
     def setup_argument_parser(self):
         """Setup and return the argument parser."""
@@ -124,11 +122,6 @@ class ConfigManager:
             type=int,
             default=1,
             help="Number of audio channels (e.g., 1 for mono)."
-        )
-        parser.add_argument(
-            "--use-xdotool",
-            action="store_true",
-            help="Use xdotool for typing text instead of clipboard paste. Linux only."
         )
         parser.add_argument(
             "--no-trigger-key",
@@ -249,7 +242,6 @@ class ConfigManager:
         self.trigger_key_name = args.trigger_key
         if getattr(args, "no_trigger_key", False):
             self.trigger_key_name = "none"
-        self.use_xdotool = args.use_xdotool
         self.debug_enabled = args.debug
         self.xdotool_rate = args.xdotool_rate
         self.reset_state_each_response = getattr(args, 'once', False)

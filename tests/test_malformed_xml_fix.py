@@ -21,12 +21,15 @@ class TestMalformedXMLFix(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = True
 
         self.config = MockConfig()
         self.service = TranscriptionService(self.config)
-        self.keyboard = self.service.keyboard
+        # Replace with MockKeyboardInjector for testing
+        from keyboard_injector import MockKeyboardInjector
+        self.keyboard = MockKeyboardInjector()
+        self.service.keyboard = self.keyboard
+        self.service.processor.keyboard = self.keyboard
 
     def test_user_reported_malformed_xml_scenario(self):
         """

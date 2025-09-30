@@ -16,46 +16,38 @@ class TestImportErrorHandling(unittest.TestCase):
     def setUp(self):
         """Set up mock config."""
         self.config = Mock()
-        self.config.use_xdotool = False
         self.config.debug_enabled = False
-        self.config.xdotool_rate = 20  # Add numeric value for xdotool_rate
+        self.config.xdotool_rate = 20
 
     @patch('sys.platform', 'darwin')
     def test_macos_injector_import_error(self):
-        """Test that ImportError from MacOSKeyboardInjector is handled."""
-        # Mock the MacOSKeyboardInjector to raise ImportError
+        """Test that ImportError from MacOSKeyboardInjector falls back to MockKeyboardInjector."""
         with patch('transcription_service.MacOSKeyboardInjector') as mock_macos:
             mock_macos.side_effect = ImportError("PyObjC framework not available")
 
-            # This should fail since macOS platform tries to use MacOSKeyboardInjector
-            with self.assertRaises(ImportError):
-                from transcription_service import TranscriptionService
-                service = TranscriptionService(self.config)
+            from transcription_service import TranscriptionService
+            service = TranscriptionService(self.config)
+
+            from keyboard_injector import MockKeyboardInjector
+            self.assertIsInstance(service.keyboard, MockKeyboardInjector)
 
     def test_successful_linux_instantiation(self):
-        """Test that TranscriptionService works normally on Linux."""
-        # Ensure we're not on macOS platform
+        """Test that TranscriptionService uses XdotoolKeyboardInjector on Linux."""
         with patch('sys.platform', 'linux'):
             from transcription_service import TranscriptionService
 
-            # Should succeed and use MockKeyboardInjector
             service = TranscriptionService(self.config)
 
-            # Verify it's using MockKeyboardInjector
-            from keyboard_injector import MockKeyboardInjector
-            self.assertIsInstance(service.keyboard, MockKeyboardInjector)
+            from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
+            self.assertIsInstance(service.keyboard, XdotoolKeyboardInjector)
 
     @patch('sys.platform', 'linux')
     def test_xdotool_injector_on_linux(self):
         """Test that XdotoolKeyboardInjector works on Linux."""
-        self.config.use_xdotool = True
-
         from transcription_service import TranscriptionService
 
-        # Should succeed and use XdotoolKeyboardInjector
         service = TranscriptionService(self.config)
 
-        # Verify it's using XdotoolKeyboardInjector
         from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
         self.assertIsInstance(service.keyboard, XdotoolKeyboardInjector)
 
