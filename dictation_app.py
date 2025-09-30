@@ -286,6 +286,7 @@ class DictationApp:
             self.provider.max_tokens = self.config.max_tokens
             self.provider.top_p = self.config.top_p
             self.provider.debug_enabled = self.config.debug_enabled
+            self.provider.litellm_debug = self.config.litellm_debug
 
             if self.provider.initialize():
                 return True

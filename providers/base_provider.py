@@ -21,10 +21,11 @@ class BaseProvider:
         self._initialized = False
         self.litellm = None
         self.debug_enabled = False  # Set via configuration after instantiation
+        self.litellm_debug = False  # Set via configuration after instantiation
 
         # Provider performance controls
-        self.enable_reasoning = 'none'  # Reasoning disabled by default for speed
-        self.thinking_budget = 0  # No thinking budget by default
+        self.enable_reasoning = 'low'  # Low reasoning effort by default
+        self.thinking_budget = 128  # Small thinking budget by default
         self.temperature = 0.2  # Optimal temperature for focused output (2025 best practices)
         self.max_tokens = None  # No output limit by default - let provider use its maximum
         # self.top_p = 1.0  # Default (disabled) - best practice: alter temperature OR top_p, not both
@@ -51,6 +52,9 @@ class BaseProvider:
             from litellm import exceptions
             self.litellm = litellm
             self.litellm_exceptions = exceptions
+
+            if self.litellm_debug:
+                litellm._turn_on_debug()
 
             if self.api_key:
                 print(f"Using provided API key for {self.model_id.split('/')[0]}")
@@ -207,10 +211,35 @@ class BaseProvider:
             accumulated_text = ""
             usage_data = None
             last_chunk = None
+            reasoning_header_shown = False
+            thinking_header_shown = False
+            output_header_shown = False
+
             for chunk in response:
                 last_chunk = chunk
-                if chunk.choices[0].delta.content is not None:
-                    chunk_text = chunk.choices[0].delta.content
+                delta = chunk.choices[0].delta
+
+                # Display reasoning content (extended thinking)
+                if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                    if not reasoning_header_shown:
+                        print("\n[REASONING]")
+                        reasoning_header_shown = True
+                    print(delta.reasoning_content, end='', flush=True)
+
+                # Display thinking blocks (Anthropic-specific)
+                if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
+                    if not thinking_header_shown:
+                        print("\n[THINKING]")
+                        thinking_header_shown = True
+                    for block in delta.thinking_blocks:
+                        if 'thinking' in block:
+                            print(block['thinking'], end='', flush=True)
+
+                if delta.content is not None:
+                    if not output_header_shown:
+                        print("\n[OUTPUT]")
+                        output_header_shown = True
+                    chunk_text = delta.content
                     self.mark_first_response()
                     if streaming_callback:
                         streaming_callback(chunk_text)
@@ -219,6 +248,9 @@ class BaseProvider:
                 # Capture usage data from final chunk
                 if hasattr(chunk, 'usage') and chunk.usage is not None:
                     usage_data = chunk.usage
+
+            # Print timing after streaming completes
+            self._print_timing_stats()
 
             # Display cache statistics and cost
             if usage_data:
@@ -319,10 +351,35 @@ class BaseProvider:
             accumulated_text = ""
             usage_data = None
             last_chunk = None
+            reasoning_header_shown = False
+            thinking_header_shown = False
+            output_header_shown = False
+
             for chunk in response:
                 last_chunk = chunk
-                if chunk.choices[0].delta.content is not None:
-                    chunk_text = chunk.choices[0].delta.content
+                delta = chunk.choices[0].delta
+
+                # Display reasoning content (extended thinking)
+                if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                    if not reasoning_header_shown:
+                        print("\n[REASONING]")
+                        reasoning_header_shown = True
+                    print(delta.reasoning_content, end='', flush=True)
+
+                # Display thinking blocks (Anthropic-specific)
+                if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
+                    if not thinking_header_shown:
+                        print("\n[THINKING]")
+                        thinking_header_shown = True
+                    for block in delta.thinking_blocks:
+                        if 'thinking' in block:
+                            print(block['thinking'], end='', flush=True)
+
+                if delta.content is not None:
+                    if not output_header_shown:
+                        print("\n[OUTPUT]")
+                        output_header_shown = True
+                    chunk_text = delta.content
                     self.mark_first_response()
                     if streaming_callback:
                         streaming_callback(chunk_text)
@@ -331,6 +388,9 @@ class BaseProvider:
                 # Capture usage data from final chunk
                 if hasattr(chunk, 'usage') and chunk.usage is not None:
                     usage_data = chunk.usage
+
+            # Print timing after streaming completes
+            self._print_timing_stats()
 
             # Display cache statistics and cost
             if usage_data:
@@ -594,13 +654,12 @@ class BaseProvider:
         """Mark when the first response chunk is received."""
         if self.first_response_time is None:
             self.first_response_time = time.time()
-            self._print_timing_stats()
 
     def _print_timing_stats(self):
         """Print timing statistics."""
         if self.model_start_time and self.first_response_time:
             model_time = self.first_response_time - self.model_start_time
-            print(f"🚀 Model processing time: {model_time:.3f}s")
+            print(f"\n🚀 Model processing time: {model_time:.3f}s")
 
     def _handle_provider_error(self, error: Exception, operation: str) -> None:
         """Common error handling for provider operations with full error details."""
