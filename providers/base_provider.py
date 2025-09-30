@@ -20,12 +20,13 @@ class BaseProvider:
         self.api_key = api_key
         self._initialized = False
         self.litellm = None
+        self.debug_enabled = False  # Set via configuration after instantiation
 
         # Provider performance controls
         self.enable_reasoning = False  # Reasoning disabled by default for speed
         self.temperature = 0.2  # Optimal temperature for focused output (2025 best practices)
         self.max_tokens = None  # No output limit by default - let provider use its maximum
-        self.top_p = 0.9  # Nucleus sampling for quality
+        # self.top_p = 1.0  # Default (disabled) - best practice: alter temperature OR top_p, not both
 
         # Latency optimization settings
         self.enable_streaming = True  # Streaming enabled for responsiveness
@@ -38,6 +39,9 @@ class BaseProvider:
         # Timing tracking
         self.model_start_time = None
         self.first_response_time = None
+
+        # Cost tracking
+        self.total_cost = 0.0
     
     def initialize(self) -> bool:
         """Initialize LiteLLM and validate model."""
@@ -117,6 +121,7 @@ class BaseProvider:
 
         return prompt
 
+
     def transcribe_audio(self, audio_np: np.ndarray, context: ConversationContext,
                         streaming_callback=None, final_callback=None) -> None:
         """
@@ -140,25 +145,44 @@ class BaseProvider:
             # Encode audio to base64
             audio_b64 = self._encode_audio_to_base64(audio_np, context.sample_rate)
 
-            # Build prompt
-            prompt = self._build_prompt(context)
+            # Build messages with system/user separation and caching
+            xml_instructions = self.get_xml_instructions()
 
-            # Create multimodal message
-            messages = [{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}}
-                ]
-            }]
+            # System message: Static instructions (cached)
+            # Anthropic requires explicit cache_control, others use automatic caching
+            system_content = {"type": "text", "text": xml_instructions}
+
+            provider = self.model_id.split('/')[0].lower() if '/' in self.model_id else ''
+            if provider == 'anthropic':
+                system_content["cache_control"] = {"type": "ephemeral"}
+
+            system_message = {
+                "role": "system",
+                "content": [system_content]
+            }
+
+            # User message: Conversation context + audio
+            user_content = []
+
+            if context.xml_markup:
+                context_text = f"Current conversation XML: {context.xml_markup}"
+                context_text += f"\nCurrent conversation text: {context.compiled_text}"
+                user_content.append({"type": "text", "text": context_text})
+
+            user_content.append({"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}})
+
+            messages = [
+                system_message,
+                {"role": "user", "content": user_content}
+            ]
 
             # Call LiteLLM
             completion_params = {
                 "model": self.model_id,
                 "messages": messages,
                 "stream": True,
-                "temperature": self.temperature,
-                "top_p": self.top_p
+                "stream_options": {"include_usage": True},
+                "temperature": self.temperature
             }
 
             if self.max_tokens is not None:
@@ -171,13 +195,24 @@ class BaseProvider:
 
             print("\nRECEIVED FROM MODEL (streaming):")
             accumulated_text = ""
+            usage_data = None
+            last_chunk = None
             for chunk in response:
+                last_chunk = chunk
                 if chunk.choices[0].delta.content is not None:
                     chunk_text = chunk.choices[0].delta.content
                     self.mark_first_response()
                     if streaming_callback:
                         streaming_callback(chunk_text)
                     accumulated_text += chunk_text
+
+                # Capture usage data from final chunk
+                if hasattr(chunk, 'usage') and chunk.usage is not None:
+                    usage_data = chunk.usage
+
+            # Display cache statistics and cost
+            if usage_data:
+                self._display_cache_stats(usage_data, completion_response=last_chunk)
 
             if final_callback:
                 final_callback(accumulated_text)
@@ -205,30 +240,52 @@ class BaseProvider:
             self._display_text_context(context, text)
             self.start_model_timer()
 
-            # Build prompt
-            prompt = self._build_prompt(context)
+            # Build messages with system/user separation and caching
+            xml_instructions = self.get_xml_instructions()
 
-            prompt += f"\n\nNEW INPUT (requires processing):"
-            prompt += f"\nMechanical transcription: {text}"
+            # System message: Static instructions (cached)
+            # Anthropic requires explicit cache_control, others use automatic caching
+            system_content = {"type": "text", "text": xml_instructions}
 
-            prompt += "\n\nCRITICAL: The 'mechanical transcription' above is raw output from automatic speech recognition. It requires the SAME analysis as audio input:"
-            prompt += "\n- Treat as if you just heard the audio yourself"
-            prompt += "\n- Identify sound-alike errors: \"there/their\", \"to/too\", \"no/know\", etc."
-            prompt += "\n- Fix misrecognized words based on context"
-            prompt += "\n- Apply ALL copy editing and formatting rules"
-            prompt += "\n- Handle false starts, fillers, and speech patterns"
-            prompt += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
+            provider = self.model_id.split('/')[0].lower() if '/' in self.model_id else ''
+            if provider == 'anthropic':
+                system_content["cache_control"] = {"type": "ephemeral"}
 
-            # Create text message
-            messages = [{"role": "user", "content": prompt}]
+            system_message = {
+                "role": "system",
+                "content": [system_content]
+            }
+
+            # User message: Conversation context + new input
+            user_text = ""
+
+            if context.xml_markup:
+                user_text += f"Current conversation XML: {context.xml_markup}"
+                user_text += f"\nCurrent conversation text: {context.compiled_text}"
+                user_text += "\n\n"
+
+            user_text += f"NEW INPUT (requires processing):"
+            user_text += f"\nMechanical transcription: {text}"
+            user_text += "\n\nCRITICAL: The 'mechanical transcription' above is raw output from automatic speech recognition. It requires the SAME analysis as audio input:"
+            user_text += "\n- Treat as if you just heard the audio yourself"
+            user_text += "\n- Identify sound-alike errors: \"there/their\", \"to/too\", \"no/know\", etc."
+            user_text += "\n- Fix misrecognized words based on context"
+            user_text += "\n- Apply ALL copy editing and formatting rules"
+            user_text += "\n- Handle false starts, fillers, and speech patterns"
+            user_text += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
+
+            messages = [
+                system_message,
+                {"role": "user", "content": user_text}
+            ]
 
             # Call LiteLLM
             completion_params = {
                 "model": self.model_id,
                 "messages": messages,
                 "stream": True,
-                "temperature": self.temperature,
-                "top_p": self.top_p
+                "stream_options": {"include_usage": True},
+                "temperature": self.temperature
             }
 
             if self.max_tokens is not None:
@@ -241,13 +298,24 @@ class BaseProvider:
 
             print("\nRECEIVED FROM MODEL (streaming):")
             accumulated_text = ""
+            usage_data = None
+            last_chunk = None
             for chunk in response:
+                last_chunk = chunk
                 if chunk.choices[0].delta.content is not None:
                     chunk_text = chunk.choices[0].delta.content
                     self.mark_first_response()
                     if streaming_callback:
                         streaming_callback(chunk_text)
                     accumulated_text += chunk_text
+
+                # Capture usage data from final chunk
+                if hasattr(chunk, 'usage') and chunk.usage is not None:
+                    usage_data = chunk.usage
+
+            # Display cache statistics and cost
+            if usage_data:
+                self._display_cache_stats(usage_data, completion_response=last_chunk)
 
             if final_callback:
                 final_callback(accumulated_text)
@@ -547,6 +615,82 @@ class BaseProvider:
         print(f"Stack trace:", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
 
+    def _display_cache_stats(self, usage_data, completion_response=None) -> None:
+        """Display cache statistics and cost from usage data."""
+        if not self.debug_enabled:
+            return
+
+        print("\n" + "-" * 60)
+        print("USAGE STATISTICS:")
+
+        # Standard token counts
+        if hasattr(usage_data, 'prompt_tokens'):
+            print(f"  Prompt tokens: {usage_data.prompt_tokens}")
+        if hasattr(usage_data, 'completion_tokens'):
+            print(f"  Completion tokens: {usage_data.completion_tokens}")
+        if hasattr(usage_data, 'total_tokens'):
+            print(f"  Total tokens: {usage_data.total_tokens}")
+
+        # Anthropic-specific cache fields
+        if hasattr(usage_data, 'cache_creation_input_tokens') and usage_data.cache_creation_input_tokens:
+            print(f"  Cache creation tokens: {usage_data.cache_creation_input_tokens} (Anthropic: written to cache)")
+
+        if hasattr(usage_data, 'cache_read_input_tokens') and usage_data.cache_read_input_tokens:
+            print(f"  Cache read tokens: {usage_data.cache_read_input_tokens} (Anthropic: read from cache)")
+
+        # DeepSeek-specific cache fields
+        if hasattr(usage_data, 'prompt_cache_hit_tokens') and usage_data.prompt_cache_hit_tokens:
+            print(f"  Cache hit tokens: {usage_data.prompt_cache_hit_tokens} (DeepSeek: cache hits)")
+
+        if hasattr(usage_data, 'prompt_cache_miss_tokens') and usage_data.prompt_cache_miss_tokens:
+            print(f"  Cache miss tokens: {usage_data.prompt_cache_miss_tokens} (DeepSeek: cache misses)")
+
+        # OpenAI/Gemini format: prompt_tokens_details
+        if hasattr(usage_data, 'prompt_tokens_details') and usage_data.prompt_tokens_details:
+            details = usage_data.prompt_tokens_details
+
+            # Show audio tokens if present
+            if hasattr(details, 'audio_tokens') and details.audio_tokens:
+                print(f"  Audio tokens: {details.audio_tokens}")
+
+            # Show text tokens if present
+            if hasattr(details, 'text_tokens') and details.text_tokens:
+                print(f"  Text tokens: {details.text_tokens}")
+
+            # Show cached tokens (None = no caching, 0 = cache warming, >0 = cache hit)
+            if hasattr(details, 'cached_tokens'):
+                if details.cached_tokens is None:
+                    print(f"  Cached tokens: None (no implicit caching detected)")
+                elif details.cached_tokens == 0:
+                    print(f"  Cached tokens: 0 (cache warming - first request)")
+                else:
+                    print(f"  Cached tokens: {details.cached_tokens} (cache hit!)")
+
+        # Completion token details
+        if hasattr(usage_data, 'completion_tokens_details') and usage_data.completion_tokens_details:
+            details = usage_data.completion_tokens_details
+
+            # Show reasoning tokens if present (extended thinking)
+            if hasattr(details, 'reasoning_tokens') and details.reasoning_tokens:
+                print(f"  Reasoning tokens: {details.reasoning_tokens} (extended thinking)")
+
+        # Gemini-specific: cached_content_token_count (alternative field)
+        if hasattr(usage_data, 'cached_content_token_count') and usage_data.cached_content_token_count:
+            print(f"  Cached content tokens: {usage_data.cached_content_token_count} (Gemini: implicit cache)")
+
+        # Calculate and display cost
+        if completion_response:
+            try:
+                current_cost = self.litellm.completion_cost(completion_response=completion_response)
+                self.total_cost += current_cost
+                print(f"\nCOST:")
+                print(f"  Current request: ${current_cost:.6f}")
+                print(f"  Total session: ${self.total_cost:.6f}")
+            except Exception as e:
+                print(f"\nCOST: Unable to calculate ({str(e)})")
+
+        print("-" * 60)
+
     def _display_conversation_context(self, context: 'ConversationContext', audio_info: str = ""):
         """Display conversation context in standard format."""
         print("\n" + "="*60)
@@ -573,10 +717,15 @@ class BaseProvider:
 
     def _get_generation_config(self) -> dict:
         """Get provider-agnostic generation configuration."""
-        return {
+        config = {
             'temperature': self.temperature,
-            'max_output_tokens': self.max_tokens,
-            'top_p': self.top_p,
             'enable_reasoning': self.enable_reasoning,
             'response_format': self.response_format
         }
+
+        if self.max_tokens is not None:
+            config['max_output_tokens'] = self.max_tokens
+
+        # top_p not included - using default to avoid conflicting with temperature
+
+        return config
