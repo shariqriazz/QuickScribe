@@ -1,164 +1,173 @@
 #!/usr/bin/env python3
 """
-Quick test to verify XML conversation tag processing works correctly.
+Test XML stream processor integration with conversation and streaming processing.
 """
 
 import sys
 import os
-import re
+import unittest
+from unittest.mock import Mock, patch
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, parent_dir)
+sys.path.append(os.path.join(parent_dir, 'lib', 'xml-stream'))
 
-from lib.word_stream import WordStreamParser, DictationWord
-from lib.diff_engine import DiffEngine
-from lib.output_manager import OutputManager, XdotoolError
+from xml_stream_processor import XMLStreamProcessor
+from keyboard_injector import MockKeyboardInjector
+from transcription_service import TranscriptionService
 
-# Mock the necessary parts of dictate module for testing
-class MockDictate:
-    def __init__(self):
-        self.current_words = []
-        self.word_parser = WordStreamParser()
-        self.diff_engine = DiffEngine()
-        self.output_manager = None
-        self.CONVERSATION_HISTORY = []
-        self.USE_XDOTOOL = False
-    
-    def detect_and_execute_commands(self, text):
-        """Mock command detection - just return text with 'reset' commands removed."""
-        reset_patterns = ["reset conversation", "clear conversation", "start over", "new conversation", "clear context"]
-        for pattern in reset_patterns:
-            if pattern in text.lower():
-                self.CONVERSATION_HISTORY.clear()
-                self.current_words = []
-                return text.replace(pattern, "").strip()
-        return text
-    
-    def process_xml_transcription(self, text):
-        """Process XML transcription text using the word processing pipeline."""
-        try:
-            # Check for conversation tags first
-            conversation_pattern = re.compile(r'<conversation>(.*?)</conversation>', re.DOTALL)
-            conversation_matches = conversation_pattern.findall(text)
-            
-            # Process conversation content
-            for conversation_content in conversation_matches:
-                content = conversation_content.strip()
-                if content:
-                    # Process commands in conversation content
-                    cleaned_content = self.detect_and_execute_commands(content)
-                    if cleaned_content.strip():
-                        self.CONVERSATION_HISTORY.append(cleaned_content)
-                        # Keep only last 10 exchanges
-                        if len(self.CONVERSATION_HISTORY) > 10:
-                            self.CONVERSATION_HISTORY.pop(0)
-            
-            # Remove conversation tags from text before processing words
-            text_without_conversation = conversation_pattern.sub('', text)
-            
-            # Parse XML to extract words
-            newly_completed_words = self.word_parser.parse(text_without_conversation)
-            if not newly_completed_words:
-                return
-            
-            # Update current state with newly completed words
-            updated_words = self.current_words.copy()
-            
-            for new_word in newly_completed_words:
-                # Find if this word ID already exists
-                existing_index = None
-                for i, existing_word in enumerate(updated_words):
-                    if existing_word.id == new_word.id:
-                        existing_index = i
-                        break
-                
-                if existing_index is not None:
-                    # Update existing word
-                    updated_words[existing_index] = new_word
-                else:
-                    # Add new word, keeping words sorted by ID
-                    inserted = False
-                    for i, existing_word in enumerate(updated_words):
-                        if new_word.id < existing_word.id:
-                            updated_words.insert(i, new_word)
-                            inserted = True
-                            break
-                    if not inserted:
-                        updated_words.append(new_word)
-            
-            # Update current words
-            self.current_words = updated_words
-            
-        except Exception as e:
-            print(f"Error in XML processing: {e}")
 
-# Create a global mock instance for tests
-dictate = MockDictate()
+class TestXMLStreamConversationIntegration(unittest.TestCase):
+    """Test XMLStreamProcessor integration with conversation processing."""
+    
+    def setUp(self):
+        """Set up test environment."""
+        class MockConfig:
+            use_xdotool = False
+            debug_enabled = False
+        self.service = TranscriptionService(MockConfig())
+        self.keyboard = self.service.keyboard  # Use the keyboard from the service
+        
+    def test_conversation_processing(self):
+        """Test that conversation tags are properly detected and processed."""
+        self.service.processor.reset({})
+        
+        # Test text with both conversation and word tags
+        test_xml = '<conversation>Let me help you with that.</conversation><10>hello </10><20>world </20>'
+        
+        # Process the XML
+        with patch('builtins.print') as mock_print:
+            self.service.process_xml_transcription(test_xml)
+            
+            # Verify conversation was processed (printed)
+            mock_print.assert_called()
+            
+        # Verify word processing worked
+        self.assertEqual(self.keyboard.output, "hello world ")
 
-def test_conversation_processing():
-    """Test that conversation tags are properly detected and processed."""
-    
-    # Reset state
-    dictate.current_words = []
-    dictate.word_parser = WordStreamParser()
-    dictate.diff_engine = DiffEngine()
-    dictate.output_manager = None  # Don't actually execute xdotool
-    dictate.CONVERSATION_HISTORY = []
-    dictate.USE_XDOTOOL = False
-    
-    # Test text with both conversation and word tags
-    test_xml = '<conversation>Let me reset the conversation now.</conversation><10>hello</10><20>world</20>'
-    
-    # Process the XML
-    dictate.process_xml_transcription(test_xml)
-    
-    # Verify results
-    assert len(dictate.CONVERSATION_HISTORY) > 0, "Conversation should be in history"
-    assert len(dictate.current_words) == 2, "Should have 2 words"
-    assert dictate.current_words[0].text == "hello", "First word should be 'hello'"
-    assert dictate.current_words[1].text == "world", "Second word should be 'world'"
+    def test_word_only_processing(self):
+        """Test processing XML with only word tags."""
+        self.service.processor.reset({})
+        
+        # Test text with only word tags
+        test_xml = '<10>hello </10><20>beautiful </20><30>world </30>'
+        
+        # Process the XML
+        self.service.process_xml_transcription(test_xml)
+        
+        # Verify results
+        self.assertEqual(self.keyboard.output, "hello beautiful world ")
 
-def test_word_only_processing():
-    """Test processing XML with only word tags."""
-    
-    # Reset state
-    dictate.current_words = []
-    dictate.word_parser = WordStreamParser()
-    dictate.diff_engine = DiffEngine()
-    dictate.output_manager = None
-    dictate.CONVERSATION_HISTORY = []
-    dictate.USE_XDOTOOL = False
-    
-    # Test text with only word tags
-    test_xml = '<10>hello</10><20>beautiful</20><30>world</30>'
-    
-    # Process the XML
-    dictate.process_xml_transcription(test_xml)
-    
-    # Verify results
-    assert len(dictate.current_words) == 3, "Should have 3 words"
-    assert dictate.current_words[0].text == "hello", "First word should be 'hello'"
-    assert dictate.current_words[1].text == "beautiful", "Second word should be 'beautiful'"
-    assert dictate.current_words[2].text == "world", "Third word should be 'world'"
+    def test_conversation_only_processing(self):
+        """Test processing XML with only conversation tags."""
+        self.service.processor.reset({})
+        
+        # Test text with only conversation tags
+        test_xml = '<conversation>This is a response from the AI assistant.</conversation>'
+        
+        # Process the XML
+        with patch('builtins.print') as mock_print:
+            self.service.process_xml_transcription(test_xml)
+            
+            # Verify conversation was printed
+            mock_print.assert_called()
+            call_args = str(mock_print.call_args_list)
+            self.assertIn("AI assistant", call_args)
+        
+        # No word processing should occur
+        self.assertEqual(self.keyboard.output, "")
 
-def test_conversation_only_processing():
-    """Test processing XML with only conversation tags."""
-    
-    # Reset state
-    dictate.current_words = []
-    dictate.word_parser = WordStreamParser()
-    dictate.diff_engine = DiffEngine()
-    dictate.output_manager = None
-    dictate.CONVERSATION_HISTORY = []
-    dictate.USE_XDOTOOL = False
-    
-    # Test text with only conversation tags
-    test_xml = '<conversation>This is a response from the AI assistant.</conversation>'
-    
-    # Process the XML
-    dictate.process_xml_transcription(test_xml)
-    
-    # Verify results
-    assert len(dictate.CONVERSATION_HISTORY) == 1, "Should have 1 conversation entry"
-    assert len(dictate.current_words) == 0, "Should have no words"
-    assert "AI assistant" in dictate.CONVERSATION_HISTORY[0], "Conversation should contain AI assistant text"
+    def test_streaming_chunk_processing(self):
+        """Test streaming chunk processing with update tags."""
+        self.service.processor.reset({})
+
+        # Simulate streaming chunks
+        chunk1 = '<update><10>Hello </10></update>'
+        chunk2 = '<update><10>Hello </10><20>world </20></update>'
+
+        # Process first chunk
+        self.service.process_streaming_chunk(chunk1)
+        # Verify intermediate state
+        self.assertEqual(self.keyboard.output, "Hello ")
+
+        # Process second chunk (cumulative streaming)
+        self.service.process_streaming_chunk(chunk2)
+
+        # Should have processed the complete cumulative update
+        self.assertEqual(self.keyboard.output, "Hello world ")
+
+    def test_reset_command_detection(self):
+        """Test reset command detection in conversation text."""
+        self.service.processor.reset({10: "Initial ", 20: "text "})
+        
+        # Send conversation with reset command
+        test_xml = '<conversation>reset conversation</conversation><10>New </10><20>content </20>'
+        
+        with patch('builtins.print') as mock_print:
+            self.service.process_xml_transcription(test_xml)
+        
+        # After reset, should have new content
+        self.assertEqual(self.keyboard.output, "New content ")
+
+    def test_streaming_reset_handling(self):
+        """Test reset tag processing in streaming mode."""
+        self.service.processor.reset({10: "Old ", 20: "text "})
+        
+        # Send reset separately then update
+        self.service.process_streaming_chunk('<reset/>')
+        self.service.process_streaming_chunk('<update><10>Fresh </10><20>start </20></update>')
+        
+        # Should only have new content after reset
+        self.assertEqual(self.keyboard.output, "Fresh start ")
+
+    def test_partial_update_streaming(self):
+        """Test partial XML updates in streaming mode."""
+        self.service.processor.reset({})
+        
+        # Simulate partial streaming
+        self.service.process_streaming_chunk('<upda')
+        self.service.process_streaming_chunk('te><10>Test</10></upd')
+        self.service.process_streaming_chunk('ate>')
+        
+        # Should process when complete
+        self.assertEqual(self.keyboard.output, "Test")
+
+    def test_mixed_conversation_and_streaming(self):
+        """Test mixed conversation tags and streaming updates."""
+        self.service.processor.reset({})
+        
+        # First process conversation
+        conv_xml = '<conversation>Starting dictation session</conversation>'
+        with patch('builtins.print'):
+            self.service.process_xml_transcription(conv_xml)
+        
+        # Then streaming updates
+        stream_chunk = '<update><10>Streaming </10><20>text </20></update>'
+        self.service.process_streaming_chunk(stream_chunk)
+        
+        self.assertEqual(self.keyboard.output, "Streaming text ")
+
+    def test_end_stream_behavior(self):
+        """Test end_stream behavior with remaining words."""
+        initial_words = {10: "Hello ", 20: "there ", 30: "friend "}
+        self.service.processor.reset(initial_words)
+        
+        # Update first word only
+        self.service.processor.process_chunk("<10>Hi </10>")
+        # Manually call end_stream to emit remaining
+        self.service.processor.end_stream()
+        
+        # Incremental behavior: first update emits only word 10, end_stream flushes rest
+        expected_operations = [
+            ('bksp', 19),  # Backspace entire text (word 10 at position 0)
+            ('emit', 'Hi '),  # Emit only word 10
+            ('emit', 'there '),  # end_stream flushes word 20
+            ('emit', 'friend ')  # end_stream flushes word 30
+        ]
+        self.assertEqual(self.keyboard.operations, expected_operations)
+        self.assertEqual(self.keyboard.output, "Hi there friend ")
+
+
+if __name__ == '__main__':
+    unittest.main()
