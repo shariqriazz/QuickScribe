@@ -284,6 +284,7 @@ class DictationApp:
             self.provider.temperature = self.config.temperature
             self.provider.max_tokens = self.config.max_tokens
             self.provider.top_p = self.config.top_p
+            self.provider.debug_enabled = self.config.debug_enabled
 
             if self.provider.initialize():
                 return True
