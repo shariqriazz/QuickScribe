@@ -4,6 +4,8 @@ Base provider class with common XML instructions.
 from abc import ABC, abstractmethod
 from typing import Optional
 import numpy as np
+import time
+import sys
 from .conversation_context import ConversationContext
 
 
@@ -28,6 +30,10 @@ class BaseProvider(ABC):
         # Note: max_tokens is optional and provider-specific
         # - Groq: Uses max_tokens parameter if specified
         # - Gemini: max_output_tokens excluded from generation_config due to streaming issues
+
+        # Timing tracking
+        self.model_start_time = None
+        self.first_response_time = None
     
     @abstractmethod
     def initialize(self) -> bool:
@@ -264,7 +270,34 @@ class BaseProvider(ABC):
             #" - Content does NOT exist in context → DICTATION (talking about it)\n"
             #" - TX: Literal instruction, INT: Description, UPDATE: Generated content itself\n"
             #" - Example: \"Elaborate about error handling\" (exists) → UPDATE contains elaborated content\n\n"
-            "Remember: Polish, don't rewrite. Preserve speaker's voice."
+            "Remember: Polish, don't rewrite. Preserve speaker's voice.\n\n"
+            "PHONETIC TRANSCRIPTION ASSISTANCE:\n"
+            "When mechanical transcription contains phoneme sequences, convert to natural words:\n"
+            "- Mechanical transcription: Pre-processed phonetic data provided to model for word conversion\n"
+            "- Input format: Alphanumeric phoneme codes (e.g., \"HH EH L OW W ER L D\")\n"
+            "- Task: Convert phonemes to natural words based on phonetic pronunciation and context\n"
+            "- Example: \"HH EH L OW\" → \"hello\", \"T UW\" → \"to/too/two\" (choose based on context)\n"
+            "- Handle homophone disambiguation using surrounding context\n"
+            "- Maintain same XML structure and processing as regular transcription\n"
+            "- Treat phoneme input as mechanical transcription requiring the same analysis as audio input\n\n"
+            "PHONEME MAPPING REFERENCE:\n"
+            "Original IPA phonemes are converted to alphanumeric codes in mechanical transcription:\n"
+            "IPA → ALPHA mapping:\n"
+            "Vowels: i→IY, ɪ→IH, e→EY, ɛ→EH, æ→AE, ə→AH, ɜ→ER, ɚ→ERR, ʌ→UH, ɐ→AA, a→AX, ᵻ→IX\n"
+            "Back vowels: ɑ→AO, ɔ→OR, o→OW, ʊ→UU, u→UW, ɑː→AAR\n"
+            "Consonants: p→P, b→B, t→T, d→D, k→K, g→G, f→F, v→V, s→S, z→Z, h→H\n"
+            "Fricatives: θ→TH, ð→DH, ʃ→SH, ʒ→ZH, x→KH\n"
+            "Affricates: tʃ→CH, dʒ→JH\n"
+            "Nasals: m→M, n→N, ŋ→NG, ɲ→NY\n"
+            "Liquids: l→L, r→R, ɹ→RR, ɾ→T\n"
+            "Glides: j→Y, w→W, ɥ→WY\n"
+            "Diphthongs: aɪ→AY, aʊ→AW, ɔɪ→OY, eɪ→EY, oʊ→OW, ɪə→IHR, ɛə→EHR, ʊə→UHR\n"
+            "Markers: ː→LONG, ˈ→STRESS1, ˌ→STRESS2, .→SYLDIV, |→WORDSEP\n\n"
+            "ALPHA → IPA reverse mapping:\n"
+            "IY→i, IH→ɪ, EY→e, EH→ɛ, AE→æ, AH→ə, ER→ɜ, ERR→ɚ, UH→ʌ, AA→ɐ, AX→a, IX→ᵻ\n"
+            "AO→ɑ, OR→ɔ, OW→o, UU→ʊ, UW→u, AAR→ɑː, P→p, B→b, T→t, D→d, K→k, G→g\n"
+            "F→f, V→v, S→s, Z→z, H→h, TH→θ, DH→ð, SH→ʃ, ZH→ʒ, KH→x, CH→tʃ, JH→dʒ\n"
+            "M→m, N→n, NG→ŋ, NY→ɲ, L→l, R→r, RR→ɹ, Y→j, W→w, WY→ɥ"
         )
         
         if provider_specific.strip():
@@ -274,6 +307,24 @@ class BaseProvider(ABC):
     def get_provider_specific_instructions(self) -> str:
         """Get provider-specific instructions. Override in subclasses if needed."""
         return ""
+
+
+    def start_model_timer(self):
+        """Mark the start of model processing for timing measurements."""
+        self.model_start_time = time.time()
+        self.first_response_time = None  # Reset for new request
+
+    def mark_first_response(self):
+        """Mark when the first response chunk is received."""
+        if self.first_response_time is None:
+            self.first_response_time = time.time()
+            self._print_timing_stats()
+
+    def _print_timing_stats(self):
+        """Print timing statistics."""
+        if self.model_start_time and self.first_response_time:
+            model_time = self.first_response_time - self.model_start_time
+            print(f"🚀 Model processing time: {model_time:.3f}s")
 
     def _handle_provider_error(self, error: Exception, operation: str) -> None:
         """Common error handling for provider operations with full error details."""
@@ -317,6 +368,7 @@ class BaseProvider(ABC):
         if audio_info:
             print(f"Audio file: {audio_info}")
         print("-" * 60)
+        self.start_model_timer()
 
     def _display_text_context(self, context: 'ConversationContext', text: str):
         """Display text processing context in standard format."""
@@ -326,8 +378,9 @@ class BaseProvider(ABC):
         print(f"  XML markup: {context.xml_markup if context.xml_markup else '[empty]'}")
         print(f"  Rendered text: {context.compiled_text if context.compiled_text else '[empty]'}")
         print("NEW INPUT (requires processing):")
-        print(f"  Mechanical transcription: {text}")
+        print(f"  IPA/mechanical transcription: {text}")
         print("-" * 60)
+        self.start_model_timer()
 
     def _get_generation_config(self) -> dict:
         """Get provider-agnostic generation configuration."""

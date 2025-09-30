@@ -23,6 +23,12 @@ class ConfigManager:
         self.vosk_model_path = None
         self.vosk_lgraph_path = None
 
+        # Audio source configuration
+        self.audio_source = "raw"  # Default to raw microphone
+
+        # Wav2Vec2 configuration
+        self.wav2vec2_model_path = "facebook/wav2vec2-lv-60-espeak-cv-ft"  # Default phoneme model
+
         # Provider performance controls
         self.enable_reasoning = False
         self.temperature = 0.2  # Optimal for focused output (2025 best practices)
@@ -153,6 +159,19 @@ class ConfigManager:
             help="Path to VOSK L-graph file for grammar-constrained recognition."
         )
         parser.add_argument(
+            "--audio-source", "-a",
+            type=str,
+            choices=['vosk', 'phoneme', 'wav2vec', 'raw'],
+            default='raw',
+            help="Audio source type: 'vosk' (VOSK speech recognition), 'phoneme'/'wav2vec' (Wav2Vec2 phoneme recognition), 'raw' (direct microphone)."
+        )
+        parser.add_argument(
+            "--wav2vec2-model",
+            type=str,
+            default="facebook/wav2vec2-lv-60-espeak-cv-ft",
+            help="Path or model ID for Wav2Vec2 phoneme recognition model. Default: facebook/wav2vec2-lv-60-espeak-cv-ft (automatically downloaded from Hugging Face)."
+        )
+        parser.add_argument(
             "--enable-reasoning",
             action="store_true",
             help="Enable reasoning/chain-of-thought in AI models (increases latency)."
@@ -228,9 +247,14 @@ class ConfigManager:
         self.debug_enabled = args.debug
         self.xdotool_rate = args.xdotool_rate
 
+        # Audio source selection
+        self.audio_source = getattr(args, 'audio_source', 'raw')
+
         # VOSK configuration
         self.vosk_model_path = getattr(args, 'vosk_model', None)
         self.vosk_lgraph_path = getattr(args, 'vosk_lgraph', None)
+        # Wav2Vec2 configuration
+        self.wav2vec2_model_path = getattr(args, 'wav2vec2_model', self.wav2vec2_model_path)
 
         # Provider performance controls
         self.enable_reasoning = getattr(args, 'enable_reasoning', False)

@@ -228,6 +228,8 @@ class GeminiProvider(BaseProvider):
                 if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
                     chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
                     if chunk_text:
+                        # Mark first response timing
+                        self.mark_first_response()
                         if streaming_callback:
                             streaming_callback(chunk_text)
                         accumulated_text += chunk_text
@@ -320,6 +322,8 @@ class GeminiProvider(BaseProvider):
                 if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
                     chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
                     if chunk_text:
+                        # Mark first response timing
+                        self.mark_first_response()
                         if streaming_callback:
                             streaming_callback(chunk_text)
                         accumulated_text += chunk_text
