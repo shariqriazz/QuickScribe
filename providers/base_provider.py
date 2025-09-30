@@ -14,9 +14,10 @@ from .conversation_context import ConversationContext
 class BaseProvider:
     """Unified provider using LiteLLM abstraction."""
 
-    def __init__(self, model_id: str, language: Optional[str] = None):
+    def __init__(self, model_id: str, language: Optional[str] = None, api_key: Optional[str] = None):
         self.model_id = model_id  # Format: "provider/model" (e.g., "groq/whisper-large-v3")
         self.language = language
+        self.api_key = api_key
         self._initialized = False
         self.litellm = None
 
@@ -46,17 +47,24 @@ class BaseProvider:
             self.litellm = litellm
             self.litellm_exceptions = exceptions
 
+            if self.api_key:
+                print(f"Using provided API key for {self.model_id.split('/')[0]}")
+
             print(f"LiteLLM initialized with model: {self.model_id}")
 
             # Validate model with minimal API call
             print("Validating model access...", end=' ', flush=True)
             try:
-                test_response = self.litellm.completion(
-                    model=self.model_id,
-                    messages=[{"role": "user", "content": "test"}],
-                    max_tokens=1,
-                    stream=False
-                )
+                completion_params = {
+                    "model": self.model_id,
+                    "messages": [{"role": "user", "content": "test"}],
+                    "max_tokens": 1,
+                    "stream": False
+                }
+                if self.api_key:
+                    completion_params["api_key"] = self.api_key
+
+                test_response = self.litellm.completion(**completion_params)
                 print("✓")
                 self._initialized = True
                 return True
@@ -156,6 +164,9 @@ class BaseProvider:
             if self.max_tokens is not None:
                 completion_params["max_tokens"] = self.max_tokens
 
+            if self.api_key:
+                completion_params["api_key"] = self.api_key
+
             response = self.litellm.completion(**completion_params)
 
             print("\nRECEIVED FROM MODEL (streaming):")
@@ -222,6 +233,9 @@ class BaseProvider:
 
             if self.max_tokens is not None:
                 completion_params["max_tokens"] = self.max_tokens
+
+            if self.api_key:
+                completion_params["api_key"] = self.api_key
 
             response = self.litellm.completion(**completion_params)
 

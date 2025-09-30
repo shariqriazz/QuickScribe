@@ -19,6 +19,9 @@ class ConfigManager:
         self.xdotool_rate = None
         self.reset_state_each_response = False
 
+        # API key configuration
+        self.api_key = None
+
         # VOSK configuration
         self.vosk_model_path = None
         self.vosk_lgraph_path = None
@@ -193,30 +196,23 @@ class ConfigManager:
             default=0.9,
             help="Nucleus sampling parameter (0.0-1.0)."
         )
+        parser.add_argument(
+            "--key",
+            type=str,
+            default=None,
+            help="API key for the provider (overrides environment variables)."
+        )
         return parser
     
     def handle_interactive_mode(self):
         """Handle interactive provider and model selection."""
         print("Running in interactive mode...")
-        groq_key_present = bool(os.getenv("GROQ_API_KEY"))
-        gemini_key_present = bool(os.getenv("GOOGLE_API_KEY"))
-
-        if groq_key_present:
-            print("Found GROQ_API_KEY in .env, selecting Groq as provider.")
-            self.provider = 'groq'
-        elif gemini_key_present:
-            print("Found GOOGLE_API_KEY in .env (but no Groq key), selecting Gemini as provider.")
-            self.provider = 'gemini'
-        else:
-            print("No API keys found in .env.")
-            self.provider = self.select_from_list(['groq', 'gemini'], "Select a provider:")
-            if not self.provider:
-                print("No provider selected. Exiting.")
-                return False
 
         # Get model ID (require provider/model format)
-        print("\nEnter model in format 'provider/model'")
+        print("Enter model in format 'provider/model'")
         print("Examples:")
+        print("  openai/gpt-4")
+        print("  anthropic/claude-3-5-sonnet-20241022")
         print("  gemini/gemini-2.5-flash")
         print("  groq/llama-3.2-90b-vision-preview")
         self.model_id = input("Model: ").strip()
@@ -257,6 +253,9 @@ class ConfigManager:
         self.temperature = getattr(args, 'temperature', 0.2)
         self.max_tokens = getattr(args, 'max_tokens', None)
         self.top_p = getattr(args, 'top_p', 0.9)
+
+        # API key
+        self.api_key = getattr(args, 'key', None)
 
     def parse_configuration(self):
         """Parse configuration from command line arguments or interactive mode."""

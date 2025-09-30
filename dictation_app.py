@@ -268,7 +268,11 @@ class DictationApp:
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
         try:
-            self.provider = BaseProvider(self.config.model_id, self.config.language)
+            self.provider = BaseProvider(
+                self.config.model_id,
+                self.config.language,
+                self.config.api_key
+            )
 
             # Provider should never be None now
             if self.provider is None:
