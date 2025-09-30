@@ -26,8 +26,8 @@ from transcription_service import TranscriptionService
 
 # Input handling - consolidated into DictationApp
 
-# Provider factory
-from providers.provider_factory import ProviderFactory
+# Provider
+from providers.base_provider import BaseProvider
 from providers.conversation_context import ConversationContext
 
 # --- Constants ---
@@ -268,7 +268,7 @@ class DictationApp:
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
         try:
-            self.provider = ProviderFactory.create_provider(self.config.provider, self.config.model_id, self.config.language)
+            self.provider = BaseProvider(self.config.model_id, self.config.language)
 
             # Provider should never be None now
             if self.provider is None:

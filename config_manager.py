@@ -214,22 +214,19 @@ class ConfigManager:
                 print("No provider selected. Exiting.")
                 return False
 
-        # Select Model based on Provider
-        if self.provider == 'groq':
-            available_models = self.load_models_from_file("groq_models.txt")
-            if not available_models:
-                print("Could not load Groq models. Please ensure 'groq_models.txt' exists.", file=sys.stderr)
-                return False
-            self.model_id = self.select_from_list(available_models, f"Select a Groq model:")
-        elif self.provider == 'gemini':
-            available_models = self.load_models_from_file("gemini_models.txt")
-            if not available_models:
-                print("Could not load Gemini models. Please ensure 'gemini_models.txt' exists.", file=sys.stderr)
-                return False
-            self.model_id = self.select_from_list(available_models, f"Select a Gemini model:")
+        # Get model ID (require provider/model format)
+        print("\nEnter model in format 'provider/model'")
+        print("Examples:")
+        print("  gemini/gemini-2.5-flash")
+        print("  groq/llama-3.2-90b-vision-preview")
+        self.model_id = input("Model: ").strip()
 
         if not self.model_id:
-            print("No model selected. Exiting.")
+            print("No model specified. Exiting.")
+            return False
+
+        if '/' not in self.model_id:
+            print(f"Error: Model '{self.model_id}' is malformed. Required format: provider/model", file=sys.stderr)
             return False
         
         return True
@@ -273,16 +270,29 @@ class ConfigManager:
             # Apply all other args in interactive mode
             self._apply_parsed_args(args)
         else:
-            # Non-interactive mode: get provider/model from args
-            self.provider = args.provider
+            # Non-interactive mode: get model from args
             self.model_id = args.model
+
+            # Extract provider from model_id (format: "provider/model")
+            if self.model_id and '/' in self.model_id:
+                self.provider = self.model_id.split('/', 1)[0]
+            else:
+                # Fallback to explicit --provider if model doesn't have prefix
+                self.provider = args.provider
+
             # Apply all other args
             self._apply_parsed_args(args)
 
-            # Validate required args if not interactive
-            if not self.provider or not self.model_id:
+            # Validate required model
+            if not self.model_id:
                 parser.print_help()
-                print("\nError: --provider and --model are required when running with arguments.", file=sys.stderr)
+                print("\nError: --model is required. Format: provider/model (e.g., gemini/gemini-2.5-flash)", file=sys.stderr)
+                return False
+
+            # Validate model format
+            if '/' not in self.model_id:
+                parser.print_help()
+                print(f"\nError: Model '{self.model_id}' is malformed. Required format: provider/model (e.g., gemini/gemini-2.5-flash)", file=sys.stderr)
                 return False
 
         return True
