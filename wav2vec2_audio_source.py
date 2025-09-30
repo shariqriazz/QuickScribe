@@ -4,6 +4,8 @@ import os
 import sys
 import numpy as np
 from typing import Optional
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     import torch
@@ -19,6 +21,11 @@ except ImportError:
     Wav2Vec2PhonemeCTCTokenizer = None
     is_offline_mode = None
     HfApi = None
+
+try:
+    import pyrubberband as pyrb
+except ImportError:
+    pyrb = None
 
 from audio_source import AudioChunkHandler, AudioResult, AudioTextResult, AudioDataResult
 from microphone_audio_source import MicrophoneAudioSource
@@ -175,6 +182,13 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
         self.model_path = model_path
         self.sample_rate = config.sample_rate
 
+        # Speed factors for multi-speed processing
+        self.speed_factors = [0.7, 0.8, 0.9, 1.0]
+
+        # Check for pyrubberband
+        if pyrb is None:
+            raise ImportError("pyrubberband library not installed. Install with: pip install pyrubberband")
+
         # Load Wav2Vec2 model components
         self._load_model(model_path)
 
@@ -257,8 +271,36 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
 
         return result
 
+    def _process_audio_at_speed(self, audio_data: np.ndarray, speed_factor: float) -> tuple:
+        """Process audio at a specific speed and return raw phonemes and alphanumeric."""
+        try:
+            # Apply time stretching if not 1.0
+            if speed_factor != 1.0:
+                stretched_audio = pyrb.time_stretch(audio_data, self.sample_rate, speed_factor)
+            else:
+                stretched_audio = audio_data
+
+            # Process with Wav2Vec2
+            with torch.no_grad():
+                input_values = self.feature_extractor(
+                    stretched_audio,
+                    sampling_rate=self.sample_rate,
+                    return_tensors="pt"
+                ).input_values
+
+                logits = self.model(input_values).logits
+                predicted_ids = torch.argmax(logits, dim=-1)
+                raw_phonemes = self._decode_phonemes(predicted_ids)
+                alpha_phonemes = process_wav2vec2_output(raw_phonemes)
+
+                return (raw_phonemes, alpha_phonemes)
+
+        except Exception as e:
+            print(f"Error processing audio at speed {speed_factor}: {e}", file=sys.stderr)
+            return ("", "")
+
     def _process_audio(self, audio_data: np.ndarray) -> str:
-        """Process complete audio data with Wav2Vec2."""
+        """Process complete audio data with Wav2Vec2 at multiple speeds."""
         try:
             if len(audio_data) == 0:
                 return ""
@@ -272,30 +314,51 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
                 audio_data = np.squeeze(audio_data)
 
             # Check minimum length
-            min_samples = max(320, self.sample_rate // 50)  # At least 20ms of audio
+            min_samples = max(320, self.sample_rate // 50)
             if len(audio_data) < min_samples:
                 print(f"Audio too short for Wav2Vec2: {len(audio_data)} samples (need {min_samples})", file=sys.stderr)
                 return ""
 
-            # Process with Wav2Vec2
-            with torch.no_grad():
-                input_values = self.feature_extractor(
-                    audio_data,
-                    sampling_rate=self.sample_rate,
-                    return_tensors="pt"
-                ).input_values
+            # Process at multiple speeds in parallel threads
+            results = []
+            seen_phonemes = set()
+            speed_results = {}
 
-                logits = self.model(input_values).logits
-                predicted_ids = torch.argmax(logits, dim=-1)
-                raw_phonemes = self._decode_phonemes(predicted_ids)
+            with ThreadPoolExecutor(max_workers=len(self.speed_factors)) as executor:
+                future_to_speed = {
+                    executor.submit(self._process_audio_at_speed, audio_data, speed): speed
+                    for speed in self.speed_factors
+                }
 
-                # Show before and after mapping
-                alpha_phonemes = process_wav2vec2_output(raw_phonemes)
-                print(f"Raw IPA phonemes: {raw_phonemes}")
-                print(f"Mapped alphanumeric: {alpha_phonemes}")
+                for future in as_completed(future_to_speed):
+                    speed_factor = future_to_speed[future]
+                    try:
+                        raw_phonemes, alpha_phonemes = future.result()
+                        speed_results[speed_factor] = (raw_phonemes, alpha_phonemes)
+                    except Exception as e:
+                        print(f"Error processing speed {speed_factor}: {e}", file=sys.stderr)
+                        speed_results[speed_factor] = ("", "")
 
-                # Return formatted output with both IPA and alphanumeric
-                return format_phoneme_output(raw_phonemes)
+            for speed_factor in self.speed_factors:
+                raw_phonemes, alpha_phonemes = speed_results.get(speed_factor, ("", ""))
+                if raw_phonemes or alpha_phonemes:
+                    phoneme_key = (raw_phonemes, alpha_phonemes)
+
+                    if phoneme_key not in seen_phonemes:
+                        seen_phonemes.add(phoneme_key)
+                        speed_pct = int(speed_factor * 100)
+                        results.append(f"  {speed_pct}% speed:\n    IPA: {raw_phonemes}\n  ALPHA: {alpha_phonemes}")
+                        print(f"{speed_pct}% speed - Raw IPA: {raw_phonemes}")
+                        #print(f"{speed_pct}% speed - Alphanumeric: {alpha_phonemes}")
+                    else:
+                        speed_pct = int(speed_factor * 100)
+                        print(f"{speed_pct}% speed - Skipped (duplicate of previous speed)")
+
+            # Combine all results
+            if results:
+                return "\n\n".join(results)
+            else:
+                return ""
 
         except Exception as e:
             print(f"Error processing audio with Wav2Vec2: {e}", file=sys.stderr)

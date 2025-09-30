@@ -217,22 +217,55 @@ class GeminiProvider(BaseProvider):
                 'candidate_count': 1  # Single response for maximum speed
             }
 
-            response = self.model.generate_content(
-                contents=contents,
-                generation_config=generation_config,
-                stream=True
-            )
+            try:
+                response = self.model.generate_content(
+                    contents=contents,
+                    generation_config=generation_config,
+                    stream=True
+                )
+            except StopIteration:
+                print("\n⚠️  Gemini API returned empty stream immediately (StopIteration on first access)", file=sys.stderr)
+                print("This indicates the API rejected the request before generating any response", file=sys.stderr)
+                if final_callback:
+                    final_callback("")
+                return
+            except Exception as gen_error:
+                print(f"\n❌ Error calling generate_content: {gen_error}", file=sys.stderr)
+                raise
 
             accumulated_text = ""
+            chunk_count = 0
             for chunk in response:
-                if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                    chunk_text = "".join(part.text for part in chunk.candidates[0].content.parts if hasattr(part, 'text'))
-                    if chunk_text:
-                        # Mark first response timing
-                        self.mark_first_response()
-                        if streaming_callback:
-                            streaming_callback(chunk_text)
-                        accumulated_text += chunk_text
+                chunk_count += 1
+
+                if chunk.prompt_feedback:
+                    print(f"\n⚠️  Gemini prompt feedback: {chunk.prompt_feedback}", file=sys.stderr)
+                    if hasattr(chunk.prompt_feedback, 'block_reason'):
+                        print(f"Block reason: {chunk.prompt_feedback.block_reason}", file=sys.stderr)
+
+                if chunk.candidates:
+                    candidate = chunk.candidates[0]
+
+                    if hasattr(candidate, 'finish_reason') and candidate.finish_reason:
+                        finish_reason_value = candidate.finish_reason
+                        if finish_reason_value not in [1, 'STOP']:
+                            print(f"\n⚠️  Gemini finish reason: {finish_reason_value}", file=sys.stderr)
+
+                    if hasattr(candidate, 'safety_ratings') and candidate.safety_ratings:
+                        for rating in candidate.safety_ratings:
+                            if hasattr(rating, 'blocked') and rating.blocked:
+                                print(f"\n🚫 Content blocked by safety filter: {rating.category} - {rating.probability}", file=sys.stderr)
+
+                    if candidate.content and candidate.content.parts:
+                        chunk_text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
+                        if chunk_text:
+                            self.mark_first_response()
+                            if streaming_callback:
+                                streaming_callback(chunk_text)
+                            accumulated_text += chunk_text
+
+            if chunk_count == 0:
+                print("\nWarning: Gemini returned empty response (StopIteration) - audio may be too short or invalid", file=sys.stderr)
 
             if final_callback:
                 final_callback(accumulated_text)

@@ -20,6 +20,7 @@ torch
 transformers
 huggingface_hub
 phonemizer
+pyrubberband
 
 # macOS dependencies for keyboard injection
 pyobjc-core>=11.1; sys_platform == "darwin"
