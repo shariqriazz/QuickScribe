@@ -16,9 +16,8 @@ class TestPlatformDetection(unittest.TestCase):
     def setUp(self):
         """Set up mock config."""
         self.config = Mock()
-        self.config.use_xdotool = True
         self.config.debug_enabled = False
-        self.config.xdotool_rate = 20  # Add numeric value for xdotool_rate
+        self.config.xdotool_rate = 20
 
     @patch('sys.platform', 'darwin')
     @patch('transcription_service.MacOSKeyboardInjector')
@@ -28,53 +27,46 @@ class TestPlatformDetection(unittest.TestCase):
 
         service = TranscriptionService(self.config)
 
-        # Should instantiate MacOSKeyboardInjector regardless of use_xdotool setting
         mock_macos_injector.assert_called_once_with(self.config)
 
     @patch('sys.platform', 'linux')
     @patch('transcription_service.XdotoolKeyboardInjector')
-    def test_linux_with_xdotool(self, mock_xdotool_injector):
-        """Test that Linux with xdotool enabled selects XdotoolKeyboardInjector."""
+    def test_linux_platform_detection(self, mock_xdotool_injector):
+        """Test that Linux platform selects XdotoolKeyboardInjector."""
         from transcription_service import TranscriptionService
 
         service = TranscriptionService(self.config)
 
         mock_xdotool_injector.assert_called_once_with(self.config)
 
-    @patch('sys.platform', 'linux')
-    @patch('transcription_service.MockKeyboardInjector')
-    def test_linux_without_xdotool(self, mock_keyboard_injector):
-        """Test that Linux without xdotool selects MockKeyboardInjector."""
-        self.config.use_xdotool = False
-
-        from transcription_service import TranscriptionService
-
-        service = TranscriptionService(self.config)
-
-        mock_keyboard_injector.assert_called_once()
-
-    @patch('sys.platform', 'win32')
+    @patch('sys.platform', 'freebsd13')
     @patch('transcription_service.XdotoolKeyboardInjector')
-    def test_windows_platform_with_xdotool(self, mock_xdotool_injector):
-        """Test that Windows platform with xdotool enabled selects XdotoolKeyboardInjector."""
+    def test_freebsd_platform_detection(self, mock_xdotool_injector):
+        """Test that FreeBSD platform selects XdotoolKeyboardInjector."""
         from transcription_service import TranscriptionService
 
         service = TranscriptionService(self.config)
 
-        # Windows with use_xdotool=True should use XdotoolKeyboardInjector
         mock_xdotool_injector.assert_called_once_with(self.config)
 
     @patch('sys.platform', 'win32')
-    @patch('transcription_service.MockKeyboardInjector')
-    def test_windows_platform_without_xdotool(self, mock_keyboard_injector):
-        """Test that Windows platform without xdotool selects MockKeyboardInjector."""
-        self.config.use_xdotool = False
-
+    @patch('transcription_service.WindowsKeyboardInjector')
+    def test_windows_platform_detection(self, mock_windows_injector):
+        """Test that Windows platform selects WindowsKeyboardInjector."""
         from transcription_service import TranscriptionService
 
         service = TranscriptionService(self.config)
 
-        # Windows with use_xdotool=False should use MockKeyboardInjector
+        mock_windows_injector.assert_called_once_with(self.config)
+
+    @patch('sys.platform', 'unknown_os')
+    @patch('transcription_service.MockKeyboardInjector')
+    def test_unknown_platform_fallback(self, mock_keyboard_injector):
+        """Test that unknown platform falls back to MockKeyboardInjector."""
+        from transcription_service import TranscriptionService
+
+        service = TranscriptionService(self.config)
+
         mock_keyboard_injector.assert_called_once()
 
 

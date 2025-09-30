@@ -18,10 +18,12 @@ class TestStreamClosure:
     def setup_method(self):
         """Set up test fixtures."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         self.service = TranscriptionService(MockConfig())
-        self.keyboard = self.service.keyboard
+        # Replace with MockKeyboardInjector for testing
+        self.keyboard = MockKeyboardInjector()
+        self.service.keyboard = self.keyboard
+        self.service.processor.keyboard = self.keyboard
 
     def test_premature_stream_closure_loses_chunks(self):
         """Test that simulates API stream closing before all content is delivered."""
@@ -88,7 +90,10 @@ class TestStreamClosure:
         """Compare complete stream (working) vs premature closure (broken)."""
 
         # Test 1: Complete stream (should work)
-        service1 = TranscriptionService(type('MockConfig', (), {'use_xdotool': False, 'debug_enabled': False})())
+        service1 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        keyboard1 = MockKeyboardInjector()
+        service1.keyboard = keyboard1
+        service1.processor.keyboard = keyboard1
         service1.reset_all_state()
 
         # Complete XML with all tags properly closed
@@ -97,11 +102,14 @@ class TestStreamClosure:
         service1.process_streaming_chunk(complete_xml)
 
         # This should work fine - all content processed
-        complete_output = service1.keyboard.output
+        complete_output = keyboard1.output
         assert complete_output == "Sounds great. I will give it a shot."
 
         # Test 2: Premature closure (broken)
-        service2 = TranscriptionService(type('MockConfig', (), {'use_xdotool': False, 'debug_enabled': False})())
+        service2 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        keyboard2 = MockKeyboardInjector()
+        service2.keyboard = keyboard2
+        service2.processor.keyboard = keyboard2
         service2.reset_all_state()
 
         # Simulate chunks arriving separately, with stream closing mid-tag
@@ -113,14 +121,17 @@ class TestStreamClosure:
         service2.complete_stream()
 
         # This should work properly after fix - expect complete text
-        fixed_output = service2.keyboard.output
+        fixed_output = keyboard2.output
 
         # This assertion should now PASS with the fix
         assert fixed_output == "Sounds great. I will give it a shot.", f"Expected complete text but got: '{fixed_output}'"
 
     def test_incomplete_tag_handling(self):
         """Test handling of truly incomplete tags that can't be recovered."""
-        service = TranscriptionService(type('MockConfig', (), {'use_xdotool': False, 'debug_enabled': False})())
+        service = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        keyboard = MockKeyboardInjector()
+        service.keyboard = keyboard
+        service.processor.keyboard = keyboard
         service.reset_all_state()
 
         # Stream complete tags and then a truly incomplete one
@@ -132,7 +143,7 @@ class TestStreamClosure:
         service.complete_stream()
 
         # Should have the complete tags, but incomplete tag 110 should be ignored
-        output = service.keyboard.output
+        output = keyboard.output
         assert output == "Sounds great. I will give "
 
         # Verify processor state

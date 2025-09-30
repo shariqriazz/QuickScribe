@@ -20,14 +20,18 @@ torch
 transformers
 huggingface_hub
 phonemizer
+pyrubberband
 
 # macOS dependencies for keyboard injection
 pyobjc-core>=11.1; sys_platform == "darwin"
 pyobjc-framework-Quartz>=11.1; sys_platform == "darwin"
 pyobjc-framework-ApplicationServices>=11.1; sys_platform == "darwin"
 
+# Windows dependencies for keyboard injection
+pywin32; sys_platform == "win32"
+
 # System dependencies (not installable via pip):
-# xdotool - For Linux users when using --use-xdotool option
+# xdotool - For Linux/FreeBSD keyboard injection
 #   Install via: sudo apt-get install xdotool (Debian/Ubuntu)
 #   Install via: sudo dnf install xdotool (Fedora/RHEL)
 

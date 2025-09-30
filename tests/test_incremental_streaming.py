@@ -24,11 +24,13 @@ class TestIncrementalStreaming(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         self.service = TranscriptionService(MockConfig())
-        # Access the mock keyboard directly
-        self.keyboard = self.service.keyboard
+        # Replace with MockKeyboardInjector for testing
+        from keyboard_injector import MockKeyboardInjector
+        self.keyboard = MockKeyboardInjector()
+        self.service.keyboard = self.keyboard
+        self.service.processor.keyboard = self.keyboard
         
     def test_incremental_streaming_after_update(self):
         """Test that content streams incrementally after <update> tag."""

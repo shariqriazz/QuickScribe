@@ -349,7 +349,15 @@ class DictationApp:
         print(f"Model:         {self.config.model_id}")
         print(f"Trigger Key:   {'disabled' if not self.is_trigger_enabled() else self.config.trigger_key_name}")
         print(f"Audio:         {self.config.sample_rate}Hz, {self.config.channels} channel(s)")
-        print(f"Output Method: {'xdotool' if self.config.use_xdotool else 'none (test mode)'}")
+        if sys.platform == 'darwin':
+            output_method = 'macOS Core Graphics'
+        elif sys.platform.startswith('linux') or sys.platform.startswith('freebsd'):
+            output_method = 'xdotool'
+        elif sys.platform == 'win32':
+            output_method = 'Windows SendInput'
+        else:
+            output_method = 'none (test mode)'
+        print(f"Output Method: {output_method}")
         if self.config.provider == 'groq' and self.config.language:
             print(f"Language:      {self.config.language}")
         elif self.config.provider == 'gemini' and self.config.language:

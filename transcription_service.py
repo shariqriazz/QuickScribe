@@ -9,23 +9,31 @@ from xml_stream_processor import XMLStreamProcessor
 from keyboard_injector import MockKeyboardInjector
 from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
 from lib.keyboard_injector_macos import MacOSKeyboardInjector
+from lib.keyboard_injector_windows import WindowsKeyboardInjector
 
 
 class TranscriptionService:
     """Handles XML transcription processing and streaming."""
-    
+
     def __init__(self, config):
         self.config = config
 
-        # Select keyboard injector based on platform and configuration
-        if sys.platform == 'darwin':
-            self.keyboard = MacOSKeyboardInjector(config)
-        elif config.use_xdotool:
-            self.keyboard = XdotoolKeyboardInjector(config)
-        else:
+        # Select keyboard injector based on platform
+        try:
+            if sys.platform == 'darwin':
+                self.keyboard = MacOSKeyboardInjector(config)
+            elif sys.platform.startswith('linux') or sys.platform.startswith('freebsd'):
+                self.keyboard = XdotoolKeyboardInjector(config)
+            elif sys.platform == 'win32':
+                self.keyboard = WindowsKeyboardInjector(config)
+            else:
+                print(f"Warning: No supported keyboard injector for platform '{sys.platform}'. Using mock mode (no keyboard output).", file=sys.stderr)
+                self.keyboard = MockKeyboardInjector()
+        except ImportError as e:
+            print(f"Warning: Could not initialize keyboard injector: {e}. Using mock mode (no keyboard output).", file=sys.stderr)
             self.keyboard = MockKeyboardInjector()
 
-        self.processor = XMLStreamProcessor(self.keyboard, debug_enabled=config.debug_enabled)
+        self.processor = XMLStreamProcessor(self.keyboard, debug_enabled=getattr(config, 'debug_enabled', False))
         
         # State management
         self.streaming_buffer = ""
@@ -60,7 +68,9 @@ class TranscriptionService:
         self.streaming_buffer = ""
         self.last_update_position = 0
         self.update_seen = False
-        # DO NOT reset self.processor - maintains state across transcriptions
+        # Reset processor state if --once flag is enabled
+        if getattr(self.config, 'reset_state_each_response', False):
+            self.processor.reset({})
     
     def reset_all_state(self):
         """Reset all stored state for a fresh conversation/update baseline."""

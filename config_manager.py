@@ -14,10 +14,10 @@ class ConfigManager:
         self.sample_rate = 16000
         self.channels = 1
         self.trigger_key_name = 'alt_r'
-        self.use_xdotool = False
         self.debug_enabled = False
         self.no_trigger_key = False
         self.xdotool_rate = None
+        self.reset_state_each_response = False
 
         # VOSK configuration
         self.vosk_model_path = None
@@ -78,8 +78,7 @@ class ConfigManager:
     
     def is_interactive_mode(self, args_without_script):
         """Determine if running in interactive mode."""
-        return (len(args_without_script) == 0 or 
-                (len(args_without_script) == 1 and args_without_script[0] == '--use-xdotool'))
+        return len(args_without_script) == 0
     
     def setup_argument_parser(self):
         """Setup and return the argument parser."""
@@ -125,11 +124,6 @@ class ConfigManager:
             help="Number of audio channels (e.g., 1 for mono)."
         )
         parser.add_argument(
-            "--use-xdotool",
-            action="store_true",
-            help="Use xdotool for typing text instead of clipboard paste. Linux only."
-        )
-        parser.add_argument(
             "--no-trigger-key",
             action="store_true",
             help="Disable keyboard trigger; use POSIX signals (SIGUSR1/SIGUSR2) instead."
@@ -138,6 +132,11 @@ class ConfigManager:
             "-D", "--debug",
             action="store_true",
             help="Enable debug output (shows XML processing details after streaming completes)."
+        )
+        parser.add_argument(
+            "--once",
+            action="store_true",
+            help="Reset XML state after each response (disables persistent state across transcriptions)."
         )
         parser.add_argument(
             "--xdotool-hz", "--xdotool-cps",
@@ -243,9 +242,9 @@ class ConfigManager:
         self.trigger_key_name = args.trigger_key
         if getattr(args, "no_trigger_key", False):
             self.trigger_key_name = "none"
-        self.use_xdotool = args.use_xdotool
         self.debug_enabled = args.debug
         self.xdotool_rate = args.xdotool_rate
+        self.reset_state_each_response = getattr(args, 'once', False)
 
         # Audio source selection
         self.audio_source = getattr(args, 'audio_source', 'raw')

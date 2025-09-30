@@ -22,9 +22,12 @@ class TestPersistentState(unittest.TestCase):
     def test_persistent_state_across_transcriptions(self):
         """Test that XMLStreamProcessor maintains state across multiple transcriptions."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         service = TranscriptionService(MockConfig())
+        from keyboard_injector import MockKeyboardInjector
+        keyboard = MockKeyboardInjector()
+        service.keyboard = keyboard
+        service.processor.keyboard = keyboard
         keyboard = service.keyboard
         
         # First transcription
@@ -65,9 +68,12 @@ class TestPersistentState(unittest.TestCase):
     def test_explicit_reset_clears_state(self):
         """Test that explicit reset clears state."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         service = TranscriptionService(MockConfig())
+        from keyboard_injector import MockKeyboardInjector
+        keyboard = MockKeyboardInjector()
+        service.keyboard = keyboard
+        service.processor.keyboard = keyboard
         
         # Set up initial state
         service.process_xml_transcription('<10>Initial </10><20>content</20>')
@@ -85,9 +91,12 @@ class TestPersistentState(unittest.TestCase):
     def test_streaming_state_reset_preserves_processor(self):
         """Test that streaming state reset doesn't affect processor state."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         service = TranscriptionService(MockConfig())
+        from keyboard_injector import MockKeyboardInjector
+        keyboard = MockKeyboardInjector()
+        service.keyboard = keyboard
+        service.processor.keyboard = keyboard
         
         # Set up state
         service.process_xml_transcription('<10>Preserved </10><20>state</20>')
@@ -104,9 +113,12 @@ class TestPersistentState(unittest.TestCase):
     def test_context_building_with_special_characters(self):
         """Test XML context building with characters that need escaping."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         service = TranscriptionService(MockConfig())
+        from keyboard_injector import MockKeyboardInjector
+        keyboard = MockKeyboardInjector()
+        service.keyboard = keyboard
+        service.processor.keyboard = keyboard
         
         # Process text with special XML characters
         service.process_xml_transcription('<10>AT&T </10><20>uses <brackets> </20><30>&amp; symbols</30>')
@@ -120,9 +132,12 @@ class TestPersistentState(unittest.TestCase):
     def test_sequential_id_continuation(self):
         """Test that word IDs continue sequentially across transcriptions."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         service = TranscriptionService(MockConfig())
+        from keyboard_injector import MockKeyboardInjector
+        keyboard = MockKeyboardInjector()
+        service.keyboard = keyboard
+        service.processor.keyboard = keyboard
         
         # First transcription
         service.process_xml_transcription('<10>First </10><20>batch</20>')
@@ -149,9 +164,12 @@ class TestPersistentState(unittest.TestCase):
     def test_reset_command_detection_in_conversation(self):
         """Test that reset commands in conversation tags trigger state reset."""
         class MockConfig:
-            use_xdotool = False
             debug_enabled = False
         service = TranscriptionService(MockConfig())
+        from keyboard_injector import MockKeyboardInjector
+        keyboard = MockKeyboardInjector()
+        service.keyboard = keyboard
+        service.processor.keyboard = keyboard
         
         # Set up initial state
         service.process_xml_transcription('<10>Initial </10><20>content</20>')
