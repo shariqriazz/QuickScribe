@@ -23,7 +23,8 @@ class BaseProvider:
         self.debug_enabled = False  # Set via configuration after instantiation
 
         # Provider performance controls
-        self.enable_reasoning = False  # Reasoning disabled by default for speed
+        self.enable_reasoning = 'none'  # Reasoning disabled by default for speed
+        self.thinking_budget = 0  # No thinking budget by default
         self.temperature = 0.2  # Optimal temperature for focused output (2025 best practices)
         self.max_tokens = None  # No output limit by default - let provider use its maximum
         # self.top_p = 1.0  # Default (disabled) - best practice: alter temperature OR top_p, not both
@@ -191,6 +192,15 @@ class BaseProvider:
             if self.api_key:
                 completion_params["api_key"] = self.api_key
 
+            # Reasoning control
+            if self.enable_reasoning == 'none':
+                completion_params["thinking"] = {"type": "disabled"}
+            elif self.enable_reasoning in ['low', 'medium', 'high']:
+                completion_params["reasoning_effort"] = self.enable_reasoning
+
+            if self.thinking_budget > 0:
+                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.thinking_budget}
+
             response = self.litellm.completion(**completion_params)
 
             print("\nRECEIVED FROM MODEL (streaming):")
@@ -293,6 +303,15 @@ class BaseProvider:
 
             if self.api_key:
                 completion_params["api_key"] = self.api_key
+
+            # Reasoning control
+            if self.enable_reasoning == 'none':
+                completion_params["thinking"] = {"type": "disabled"}
+            elif self.enable_reasoning in ['low', 'medium', 'high']:
+                completion_params["reasoning_effort"] = self.enable_reasoning
+
+            if self.thinking_budget > 0:
+                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.thinking_budget}
 
             response = self.litellm.completion(**completion_params)
 
