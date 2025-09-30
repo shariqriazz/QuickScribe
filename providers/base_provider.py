@@ -1,21 +1,25 @@
 """
 Base provider class with common XML instructions.
 """
-from abc import ABC, abstractmethod
 from typing import Optional
 import numpy as np
 import time
 import sys
+import base64
+import io
+import soundfile as sf
 from .conversation_context import ConversationContext
 
 
-class BaseProvider(ABC):
-    """Abstract base class for transcription providers."""
-    
-    def __init__(self, model_id: str, language: Optional[str] = None):
-        self.model_id = model_id
+class BaseProvider:
+    """Unified provider using LiteLLM abstraction."""
+
+    def __init__(self, model_id: str, language: Optional[str] = None, api_key: Optional[str] = None):
+        self.model_id = model_id  # Format: "provider/model" (e.g., "groq/whisper-large-v3")
         self.language = language
+        self.api_key = api_key
         self._initialized = False
+        self.litellm = None
 
         # Provider performance controls
         self.enable_reasoning = False  # Reasoning disabled by default for speed
@@ -35,17 +39,84 @@ class BaseProvider(ABC):
         self.model_start_time = None
         self.first_response_time = None
     
-    @abstractmethod
     def initialize(self) -> bool:
-        """Initialize the provider."""
-        pass
-    
-    @abstractmethod
+        """Initialize LiteLLM and validate model."""
+        try:
+            import litellm
+            from litellm import exceptions
+            self.litellm = litellm
+            self.litellm_exceptions = exceptions
+
+            if self.api_key:
+                print(f"Using provided API key for {self.model_id.split('/')[0]}")
+
+            print(f"LiteLLM initialized with model: {self.model_id}")
+
+            # Validate model with minimal API call
+            print("Validating model access...", end=' ', flush=True)
+            try:
+                completion_params = {
+                    "model": self.model_id,
+                    "messages": [{"role": "user", "content": "test"}],
+                    "max_tokens": 1,
+                    "stream": False
+                }
+                if self.api_key:
+                    completion_params["api_key"] = self.api_key
+
+                test_response = self.litellm.completion(**completion_params)
+                print("✓")
+                self._initialized = True
+                return True
+            except self.litellm_exceptions.AuthenticationError as e:
+                print("✗")
+                print(f"Error: Authentication failed for model '{self.model_id}'", file=sys.stderr)
+                print(f"Check your API key environment variable for this provider", file=sys.stderr)
+                return False
+            except self.litellm_exceptions.NotFoundError as e:
+                print("✗")
+                print(f"Error: Model '{self.model_id}' not found", file=sys.stderr)
+                print(f"Verify the model name and provider prefix are correct", file=sys.stderr)
+                return False
+            except self.litellm_exceptions.RateLimitError as e:
+                print("✗")
+                print(f"Error: Rate limit exceeded for model '{self.model_id}'", file=sys.stderr)
+                return False
+            except Exception as e:
+                print("✗")
+                print(f"Error validating model '{self.model_id}': {e}", file=sys.stderr)
+                return False
+
+        except ImportError:
+            print("Error: litellm library not found. Please install it: pip install litellm", file=sys.stderr)
+            return False
+        except Exception as e:
+            print(f"Error initializing LiteLLM: {e}", file=sys.stderr)
+            return False
+
     def is_initialized(self) -> bool:
         """Check if provider is initialized."""
-        pass
-    
-    @abstractmethod
+        return self._initialized and self.litellm is not None
+
+    def _encode_audio_to_base64(self, audio_np: np.ndarray, sample_rate: int) -> str:
+        """Encode audio numpy array to base64 WAV string."""
+        wav_bytes_io = io.BytesIO()
+        sf.write(wav_bytes_io, audio_np, sample_rate, format='WAV', subtype='PCM_16')
+        wav_bytes = wav_bytes_io.getvalue()
+        wav_bytes_io.close()
+        return base64.b64encode(wav_bytes).decode('utf-8')
+
+    def _build_prompt(self, context: ConversationContext) -> str:
+        """Build prompt from XML instructions and conversation context."""
+        xml_instructions = self.get_xml_instructions()
+        prompt = xml_instructions
+
+        if context.xml_markup:
+            prompt += f"\n\nCurrent conversation XML: {context.xml_markup}"
+            prompt += f"\nCurrent conversation text: {context.compiled_text}"
+
+        return prompt
+
     def transcribe_audio(self, audio_np: np.ndarray, context: ConversationContext,
                         streaming_callback=None, final_callback=None) -> None:
         """
@@ -57,9 +128,63 @@ class BaseProvider(ABC):
             streaming_callback: Optional callback for streaming text chunks
             final_callback: Optional callback for final result
         """
-        pass
+        if not self.is_initialized():
+            print("\nError: Provider not initialized.", file=sys.stderr)
+            return
 
-    @abstractmethod
+        try:
+            # Display context
+            self._display_conversation_context(context, "audio_data.wav (base64)")
+            self.start_model_timer()
+
+            # Encode audio to base64
+            audio_b64 = self._encode_audio_to_base64(audio_np, context.sample_rate)
+
+            # Build prompt
+            prompt = self._build_prompt(context)
+
+            # Create multimodal message
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}}
+                ]
+            }]
+
+            # Call LiteLLM
+            completion_params = {
+                "model": self.model_id,
+                "messages": messages,
+                "stream": True,
+                "temperature": self.temperature,
+                "top_p": self.top_p
+            }
+
+            if self.max_tokens is not None:
+                completion_params["max_tokens"] = self.max_tokens
+
+            if self.api_key:
+                completion_params["api_key"] = self.api_key
+
+            response = self.litellm.completion(**completion_params)
+
+            print("\nRECEIVED FROM MODEL (streaming):")
+            accumulated_text = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content is not None:
+                    chunk_text = chunk.choices[0].delta.content
+                    self.mark_first_response()
+                    if streaming_callback:
+                        streaming_callback(chunk_text)
+                    accumulated_text += chunk_text
+
+            if final_callback:
+                final_callback(accumulated_text)
+
+        except Exception as e:
+            self._handle_provider_error(e, "audio transcription")
+
     def transcribe_text(self, text: str, context: ConversationContext,
                        streaming_callback=None, final_callback=None) -> None:
         """
@@ -71,7 +196,64 @@ class BaseProvider(ABC):
             streaming_callback: Optional callback for streaming text chunks
             final_callback: Optional callback for final result
         """
-        pass
+        if not self.is_initialized():
+            print("\nError: Provider not initialized.", file=sys.stderr)
+            return
+
+        try:
+            # Display context
+            self._display_text_context(context, text)
+            self.start_model_timer()
+
+            # Build prompt
+            prompt = self._build_prompt(context)
+
+            prompt += f"\n\nNEW INPUT (requires processing):"
+            prompt += f"\nMechanical transcription: {text}"
+
+            prompt += "\n\nCRITICAL: The 'mechanical transcription' above is raw output from automatic speech recognition. It requires the SAME analysis as audio input:"
+            prompt += "\n- Treat as if you just heard the audio yourself"
+            prompt += "\n- Identify sound-alike errors: \"there/their\", \"to/too\", \"no/know\", etc."
+            prompt += "\n- Fix misrecognized words based on context"
+            prompt += "\n- Apply ALL copy editing and formatting rules"
+            prompt += "\n- Handle false starts, fillers, and speech patterns"
+            prompt += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
+
+            # Create text message
+            messages = [{"role": "user", "content": prompt}]
+
+            # Call LiteLLM
+            completion_params = {
+                "model": self.model_id,
+                "messages": messages,
+                "stream": True,
+                "temperature": self.temperature,
+                "top_p": self.top_p
+            }
+
+            if self.max_tokens is not None:
+                completion_params["max_tokens"] = self.max_tokens
+
+            if self.api_key:
+                completion_params["api_key"] = self.api_key
+
+            response = self.litellm.completion(**completion_params)
+
+            print("\nRECEIVED FROM MODEL (streaming):")
+            accumulated_text = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content is not None:
+                    chunk_text = chunk.choices[0].delta.content
+                    self.mark_first_response()
+                    if streaming_callback:
+                        streaming_callback(chunk_text)
+                    accumulated_text += chunk_text
+
+            if final_callback:
+                final_callback(accumulated_text)
+
+        except Exception as e:
+            self._handle_provider_error(e, "text processing")
     
     def get_xml_instructions(self, provider_specific: str = "") -> str:
         """Get the common XML instructions with optional provider-specific additions."""

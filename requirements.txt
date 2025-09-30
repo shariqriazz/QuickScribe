@@ -5,8 +5,7 @@ numpy
 pynput
 python-dotenv
 pyperclip
-groq
-google-generativeai
+litellm
 
 # Development and testing
 pytest

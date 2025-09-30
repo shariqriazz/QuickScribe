@@ -108,15 +108,15 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             patcher.stop()
 
     @patch('dictation_app.signal', Mock())
-    @patch('dictation_app.ProviderFactory')
+    @patch('dictation_app.BaseProvider')
     @patch('dictation_app.TranscriptionService')
-    def test_dictation_app_uses_wav2vec2_audio_source(self, mock_transcription_service, mock_provider_factory):
+    def test_dictation_app_uses_wav2vec2_audio_source(self, mock_transcription_service, mock_base_provider):
         """Test that DictationApp correctly initializes Wav2Vec2AudioSource."""
         from dictation_app import DictationApp
 
         # Setup mocks
         mock_provider = MockProvider()
-        mock_provider_factory.create_provider.return_value = mock_provider
+        mock_base_provider.return_value = mock_provider
         mock_transcription = Mock()
         mock_transcription_service.return_value = mock_transcription
 
@@ -208,7 +208,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
         config.wav2vec2_model_path = "facebook/wav2vec2-lv-60-espeak-cv-ft"
         config.vosk_model_path = "/path/to/vosk/model"
 
-        with patch('dictation_app.ProviderFactory') as mock_provider_factory, \
+        with patch('dictation_app.BaseProvider') as mock_base_provider, \
              patch('dictation_app.TranscriptionService') as mock_transcription_service, \
              patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor') as mock_processor, \
              patch('wav2vec2_audio_source.Wav2Vec2ForCTC') as mock_model, \
@@ -217,7 +217,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
 
             # Setup mocks
             mock_provider = MockProvider()
-            mock_provider_factory.create_provider.return_value = mock_provider
+            mock_base_provider.return_value = mock_provider
             mock_transcription = Mock()
             mock_transcription_service.return_value = mock_transcription
 
@@ -248,16 +248,16 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             self.assertIsInstance(app.audio_source, Wav2Vec2AudioSource)
 
     @patch('dictation_app.signal', Mock())
-    @patch('dictation_app.ProviderFactory')
+    @patch('dictation_app.BaseProvider')
     @patch('dictation_app.TranscriptionService')
-    def test_wav2vec2_phoneme_processing_workflow(self, mock_transcription_service, mock_provider_factory):
+    def test_wav2vec2_phoneme_processing_workflow(self, mock_transcription_service, mock_base_provider):
         """Test complete workflow from audio to phonemes to processed text."""
         from dictation_app import DictationApp
         from providers.conversation_context import ConversationContext
 
         # Setup mocks
         mock_provider = MockProvider()
-        mock_provider_factory.create_provider.return_value = mock_provider
+        mock_base_provider.return_value = mock_provider
         mock_transcription = Mock()
         mock_transcription_service.return_value = mock_transcription
 
