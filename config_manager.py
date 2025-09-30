@@ -18,6 +18,7 @@ class ConfigManager:
         self.debug_enabled = False
         self.no_trigger_key = False
         self.xdotool_rate = None
+        self.reset_state_each_response = False
 
         # VOSK configuration
         self.vosk_model_path = None
@@ -140,6 +141,11 @@ class ConfigManager:
             help="Enable debug output (shows XML processing details after streaming completes)."
         )
         parser.add_argument(
+            "--once",
+            action="store_true",
+            help="Reset XML state after each response (disables persistent state across transcriptions)."
+        )
+        parser.add_argument(
             "--xdotool-hz", "--xdotool-cps",
             type=float,
             default=None,
@@ -246,6 +252,7 @@ class ConfigManager:
         self.use_xdotool = args.use_xdotool
         self.debug_enabled = args.debug
         self.xdotool_rate = args.xdotool_rate
+        self.reset_state_each_response = getattr(args, 'once', False)
 
         # Audio source selection
         self.audio_source = getattr(args, 'audio_source', 'raw')

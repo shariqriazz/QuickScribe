@@ -60,7 +60,9 @@ class TranscriptionService:
         self.streaming_buffer = ""
         self.last_update_position = 0
         self.update_seen = False
-        # DO NOT reset self.processor - maintains state across transcriptions
+        # Reset processor state if --once flag is enabled
+        if self.config.reset_state_each_response:
+            self.processor.reset({})
     
     def reset_all_state(self):
         """Reset all stored state for a fresh conversation/update baseline."""
