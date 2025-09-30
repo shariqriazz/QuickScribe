@@ -33,7 +33,8 @@ class ConfigManager:
         self.wav2vec2_model_path = "facebook/wav2vec2-lv-60-espeak-cv-ft"  # Default phoneme model
 
         # Provider performance controls
-        self.enable_reasoning = False
+        self.enable_reasoning = 'none'
+        self.thinking_budget = 0
         self.temperature = 0.2  # Optimal for focused output (2025 best practices)
         self.max_tokens = None  # No output limit by default
         self.top_p = 0.9
@@ -175,8 +176,16 @@ class ConfigManager:
         )
         parser.add_argument(
             "--enable-reasoning",
-            action="store_true",
-            help="Enable reasoning/chain-of-thought in AI models (increases latency)."
+            type=str,
+            choices=['none', 'low', 'medium', 'high'],
+            default='none',
+            help="Reasoning effort level: 'none' (disabled, default for low latency), 'low', 'medium', 'high' (increases latency)."
+        )
+        parser.add_argument(
+            "--thinking-budget",
+            type=int,
+            default=0,
+            help="Token budget for extended thinking (0 = disabled, must be < max-tokens if specified)."
         )
         parser.add_argument(
             "--temperature",
@@ -249,7 +258,8 @@ class ConfigManager:
         self.wav2vec2_model_path = getattr(args, 'wav2vec2_model', self.wav2vec2_model_path)
 
         # Provider performance controls
-        self.enable_reasoning = getattr(args, 'enable_reasoning', False)
+        self.enable_reasoning = getattr(args, 'enable_reasoning', 'none')
+        self.thinking_budget = getattr(args, 'thinking_budget', 0)
         self.temperature = getattr(args, 'temperature', 0.2)
         self.max_tokens = getattr(args, 'max_tokens', None)
         self.top_p = getattr(args, 'top_p', 0.9)
