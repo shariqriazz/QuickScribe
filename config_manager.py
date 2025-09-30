@@ -15,6 +15,7 @@ class ConfigManager:
         self.channels = 1
         self.trigger_key_name = 'alt_r'
         self.debug_enabled = False
+        self.litellm_debug = False
         self.no_trigger_key = False
         self.xdotool_rate = None
         self.reset_state_each_response = False
@@ -33,8 +34,8 @@ class ConfigManager:
         self.wav2vec2_model_path = "facebook/wav2vec2-lv-60-espeak-cv-ft"  # Default phoneme model
 
         # Provider performance controls
-        self.enable_reasoning = 'none'
-        self.thinking_budget = 0
+        self.enable_reasoning = 'low'
+        self.thinking_budget = 128
         self.temperature = 0.2  # Optimal for focused output (2025 best practices)
         self.max_tokens = None  # No output limit by default
         self.top_p = 0.9
@@ -134,8 +135,9 @@ class ConfigManager:
         )
         parser.add_argument(
             "-D", "--debug",
-            action="store_true",
-            help="Enable debug output (shows XML processing details after streaming completes)."
+            action="count",
+            default=0,
+            help="Enable debug output: -D (app debug), -DD (app + LiteLLM debug)."
         )
         parser.add_argument(
             "--once",
@@ -178,14 +180,14 @@ class ConfigManager:
             "--enable-reasoning",
             type=str,
             choices=['none', 'low', 'medium', 'high'],
-            default='none',
-            help="Reasoning effort level: 'none' (disabled, default for low latency), 'low', 'medium', 'high' (increases latency)."
+            default='low',
+            help="Reasoning effort level: 'none' (disabled), 'low' (default), 'medium', 'high' (increases latency)."
         )
         parser.add_argument(
             "--thinking-budget",
             type=int,
-            default=0,
-            help="Token budget for extended thinking (0 = disabled, must be < max-tokens if specified)."
+            default=128,
+            help="Token budget for extended thinking (default: 128, 0 = disabled, must be < max-tokens if specified)."
         )
         parser.add_argument(
             "--temperature",
@@ -244,7 +246,8 @@ class ConfigManager:
         self.trigger_key_name = args.trigger_key
         if getattr(args, "no_trigger_key", False):
             self.trigger_key_name = "none"
-        self.debug_enabled = args.debug
+        self.debug_enabled = args.debug >= 1
+        self.litellm_debug = args.debug >= 2
         self.xdotool_rate = args.xdotool_rate
         self.reset_state_each_response = getattr(args, 'once', False)
 
@@ -258,8 +261,8 @@ class ConfigManager:
         self.wav2vec2_model_path = getattr(args, 'wav2vec2_model', self.wav2vec2_model_path)
 
         # Provider performance controls
-        self.enable_reasoning = getattr(args, 'enable_reasoning', 'none')
-        self.thinking_budget = getattr(args, 'thinking_budget', 0)
+        self.enable_reasoning = getattr(args, 'enable_reasoning', 'low')
+        self.thinking_budget = getattr(args, 'thinking_budget', 128)
         self.temperature = getattr(args, 'temperature', 0.2)
         self.max_tokens = getattr(args, 'max_tokens', None)
         self.top_p = getattr(args, 'top_p', 0.9)
