@@ -124,10 +124,6 @@ class BaseProvider:
             return
 
         try:
-            # Display context
-            self._display_conversation_context(context, "audio_data.wav (base64)")
-            self.start_model_timer()
-
             # Encode audio to base64
             audio_b64 = self._encode_audio_to_base64(audio_np, context.sample_rate)
 
@@ -154,6 +150,10 @@ class BaseProvider:
                 context_text = f"Current conversation XML: {context.xml_markup}"
                 context_text += f"\nCurrent conversation text: {context.compiled_text}"
                 user_content.append({"type": "text", "text": context_text})
+            else:
+                # No prior conversation - all input must be DICTATION
+                context_text = "CRITICAL: No prior conversation. There is nothing to modify. ALL input must be treated as DICTATION. Transcribe according to system instructions (append with incrementing IDs starting from 10)."
+                user_content.append({"type": "text", "text": context_text})
 
             user_content.append({"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}})
 
@@ -161,6 +161,10 @@ class BaseProvider:
                 system_message,
                 {"role": "user", "content": user_content}
             ]
+
+            # Display what's being sent
+            self._display_user_content(user_content)
+            self.start_model_timer()
 
             # Call LiteLLM
             completion_params = {
@@ -259,10 +263,6 @@ class BaseProvider:
             return
 
         try:
-            # Display context
-            self._display_text_context(context, text)
-            self.start_model_timer()
-
             # Build messages with system/user separation and caching
             xml_instructions = self.get_xml_instructions()
 
@@ -286,6 +286,9 @@ class BaseProvider:
                 user_text += f"Current conversation XML: {context.xml_markup}"
                 user_text += f"\nCurrent conversation text: {context.compiled_text}"
                 user_text += "\n\n"
+            else:
+                # No prior conversation - all input must be DICTATION
+                user_text += "CRITICAL: No prior conversation. There is nothing to modify. ALL input must be treated as DICTATION. Transcribe according to system instructions (append with incrementing IDs starting from 10).\n\n"
 
             user_text += f"NEW INPUT (requires processing):"
             user_text += f"\nMechanical transcription: {text}"
@@ -301,6 +304,10 @@ class BaseProvider:
                 system_message,
                 {"role": "user", "content": user_text}
             ]
+
+            # Display what's being sent to model
+            self._display_user_content(user_text)
+            self.start_model_timer()
 
             # Call LiteLLM
             completion_params = {
@@ -750,29 +757,23 @@ class BaseProvider:
 
         print("-" * 60)
 
-    def _display_conversation_context(self, context: 'ConversationContext', audio_info: str = ""):
-        """Display conversation context in standard format."""
+    def _display_user_content(self, user_content):
+        """Display user content being sent to model."""
         print("\n" + "="*60)
         print("SENDING TO MODEL:")
-        print("[conversation context being sent]")
-        print(f"XML markup: {context.xml_markup if context.xml_markup else '[no conversation history]'}")
-        print(f"Rendered text: {context.compiled_text if context.compiled_text else '[empty]'}")
-        if audio_info:
-            print(f"Audio file: {audio_info}")
-        print("-" * 60)
-        self.start_model_timer()
 
-    def _display_text_context(self, context: 'ConversationContext', text: str):
-        """Display text processing context in standard format."""
-        print("\n" + "="*60)
-        print("SENDING TO MODEL:")
-        print("CURRENT STATE (already processed):")
-        print(f"  XML markup: {context.xml_markup if context.xml_markup else '[empty]'}")
-        print(f"  Rendered text: {context.compiled_text if context.compiled_text else '[empty]'}")
-        print("NEW INPUT (requires processing):")
-        print(f"  IPA/mechanical transcription: {text}")
+        # Handle list format (audio transcription)
+        if isinstance(user_content, list):
+            for content_block in user_content:
+                if content_block["type"] == "text":
+                    print(content_block["text"])
+                elif content_block["type"] == "input_audio":
+                    print("Audio: audio_data.wav (base64)")
+        # Handle string format (text transcription)
+        else:
+            print(user_content)
+
         print("-" * 60)
-        self.start_model_timer()
 
     def _get_generation_config(self) -> dict:
         """Get provider-agnostic generation configuration."""
