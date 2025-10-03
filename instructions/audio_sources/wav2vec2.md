@@ -8,6 +8,14 @@ When mechanical transcription contains phoneme sequences, convert to natural wor
 - Maintain same XML structure and processing as regular transcription
 - Treat phoneme input as mechanical transcription requiring the same analysis as audio input
 
+MULTI-SPEED PHONEME DISAMBIGUATION:
+- When provided with phoneme data at multiple speeds (70%, 80%, 90%, 100%)
+- Compare phoneme sequences across speeds to identify word options
+- Different speeds may reveal distinct phonetic patterns
+- Use variations to generate {option1|option2|option3} in TX
+- Example: 70% speed shows "K AE T", 90% shows "K AH T" → TX: "{cat|cut}"
+- INT section resolves to most contextually appropriate option
+
 PHONEME MAPPING REFERENCE:
 Original IPA phonemes are converted to alphanumeric codes in mechanical transcription:
 IPA → ALPHA mapping:

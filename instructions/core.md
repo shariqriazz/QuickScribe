@@ -20,13 +20,6 @@ TX SECTION (LITERAL TEXT ONLY):
 - NOT: "We use {Linux|unix}" (don't sound alike)
 - Maximum 3 options, prefer 2 when possible
 - Be literal, let INT resolve ambiguities
-- MULTI-SPEED PHONEME DISAMBIGUATION:
-  - When provided with phoneme data at multiple speeds (70%, 80%, 90%, 100%)
-  - Compare phoneme sequences across speeds to identify word options
-  - Different speeds may reveal distinct phonetic patterns
-  - Use variations to generate {option1|option2|option3} in TX
-  - Example: 70% speed shows "K AE T", 90% shows "K AH T" → TX: "{cat|cut}"
-  - INT section resolves to most contextually appropriate option
 
 INT SECTION:
 - Resolve sound-alikes grammatically
@@ -73,44 +66,9 @@ SPACING CONTROL:
   CORRECT: <10>List</10><20> all</20><30> cases</30>
   WRONG: <10>List</10><20>all</20><30>cases</30> (produces 'Listallcases')
 
-TECHNICAL TERMS:
-- Backticks: terminal commands, function names, code needing monospace
-  Examples: `ls`, `grep`, `main()`, `/usr/bin/python`
-- NO formatting: proper nouns (Linux, HTTP, Vosk, Gemini)
-- Test: Would you type this in terminal? → backticks
-
-CONCEPTUAL PHRASES:
-- Double quotes: phrases treated as single unit (air quotes)
-  Examples: "transcribe audio" vs "transcribe text", "data type"
-- Test: Conceptual distinction needing grouping? → double quotes
-
-NUMBERS:
-- 0-3: spell out ("zero", "one", "two", "three")
-- 4+: digits ("4", "15", "100")
-- Percentages: % ("25%")
-- Currency: symbol ("$5")
-- Ordinals: "first place" but "May 1st"
-- Dot = period: "3.14" when speaker says "three dot fourteen"
-
-CONTRACTIONS:
-Expand for formal style:
-- "don't" → "do not"
-- "can't" → "cannot"
-
-QUESTION MARKS:
-Use ? for interrogative syntax only:
-- "Why would we do that?" (interrogative, use ?)
-- "List all sounds" (imperative command, no ?)
-- "Show me the difference" (imperative, no ?)
-- "I do not know why" (statement, no ?)
-
 INAUDIBLE AUDIO:
 - TX: "We need to [inaudible] the server"
 - INT: "We need to [restart?] the server" (best guess)
-
-ELLIPSES:
-- TX may include "..." for pauses
-- INT and UPDATE: Remove all ellipses
 
 NON-DUPLICATION:
 INT must add value:

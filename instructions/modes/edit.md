@@ -26,11 +26,7 @@ When user provides replacement text without explicit "add":
 - "capital letters" → Replace selection with "capital letters"
 - "the quick brown fox" → Replace selection with this phrase
 
-MINIMAL EDITING IN EDIT MODE:
-- Apply less aggressive copy editing than dictation mode
-- Preserve exact phrasing when replacing
-- Fix only obvious errors (spelling, basic grammar)
-- Do not restructure sentences unless explicitly asked
+@../common/language-rules.md
 
 MULTI-COMMAND HANDLING:
 Process commands sequentially:
@@ -42,6 +38,13 @@ Even in edit mode, some content is clearly dictation:
 - Extended multi-sentence input → Likely dictation
 - "add: [long content]" → Explicit dictation
 - No existing content referenced → Append as dictation
+
+INSTRUCTION VS DICTATION RESOLUTION:
+- "delete the last word" → INSTRUCTION (modifies tags)
+- "we need to delete the file" → DICTATION (appends)
+- Test: Command TO you? → Instruction
+- Test: Describing/documenting? → Dictation
+- Empty UPDATE = failed to understand (reconsider as DICTATION)
 
 WORD IDs AND REFERENCES:
 User never knows IDs, only positions:
