@@ -176,9 +176,9 @@ class ConfigManager:
         parser.add_argument(
             "--mode", "-m",
             type=str,
-            choices=['dictate', 'edit'],
+            choices=['dictate', 'edit', 'shell'],
             default='dictate',
-            help="Operation mode: 'dictate' (default, append new content), 'edit' (modify existing content)."
+            help="Operation mode: 'dictate' (default, append new content), 'edit' (modify existing content), 'shell' (verbalized shell commands)."
         )
         parser.add_argument(
             "--wav2vec2-model",
