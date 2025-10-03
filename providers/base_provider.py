@@ -14,7 +14,10 @@ from .conversation_context import ConversationContext
 class BaseProvider:
     """Unified provider using LiteLLM abstraction."""
 
-    def __init__(self, config):
+    def __init__(self, config, audio_processor):
+        if audio_processor is None:
+            raise ValueError("audio_processor is required and cannot be None")
+
         self.config = config
         self._initialized = False
         self.litellm = None
@@ -25,6 +28,9 @@ class BaseProvider:
 
         # Cost tracking
         self.total_cost = 0.0
+
+        # Audio processor for instruction injection
+        self.audio_processor = audio_processor
     
     def initialize(self) -> bool:
         """Initialize LiteLLM and validate model."""
@@ -107,15 +113,72 @@ class BaseProvider:
 
         return prompt
 
+    def _process_streaming_response(self, response, streaming_callback=None, final_callback=None):
+        """Process streaming response chunks from LiteLLM completion."""
+        print("\nRECEIVED FROM MODEL (streaming):")
+        accumulated_text = ""
+        usage_data = None
+        last_chunk = None
+        reasoning_header_shown = False
+        thinking_header_shown = False
+        output_header_shown = False
 
-    def transcribe_audio(self, audio_np: np.ndarray, context: ConversationContext,
-                        streaming_callback=None, final_callback=None) -> None:
+        for chunk in response:
+            last_chunk = chunk
+            delta = chunk.choices[0].delta
+
+            # Display reasoning content (extended thinking)
+            if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                if not reasoning_header_shown:
+                    print("\n[REASONING]")
+                    reasoning_header_shown = True
+                print(delta.reasoning_content, end='', flush=True)
+
+            # Display thinking blocks (Anthropic-specific)
+            if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
+                if not thinking_header_shown:
+                    print("\n[THINKING]")
+                    thinking_header_shown = True
+                for block in delta.thinking_blocks:
+                    if 'thinking' in block:
+                        print(block['thinking'], end='', flush=True)
+
+            if delta.content is not None:
+                if not output_header_shown:
+                    print("\n[OUTPUT]")
+                    output_header_shown = True
+                chunk_text = delta.content
+                self.mark_first_response()
+                if streaming_callback:
+                    streaming_callback(chunk_text)
+                accumulated_text += chunk_text
+
+            # Capture usage data from final chunk
+            if hasattr(chunk, 'usage') and chunk.usage is not None:
+                usage_data = chunk.usage
+
+        # Print timing after streaming completes
+        self._print_timing_stats()
+
+        # Display cache statistics and cost
+        if usage_data:
+            self._display_cache_stats(usage_data, completion_response=last_chunk)
+
+        if final_callback:
+            final_callback(accumulated_text)
+
+    def transcribe(self, context: ConversationContext,
+                   audio_data: Optional[np.ndarray] = None,
+                   text_data: Optional[str] = None,
+                   streaming_callback=None,
+                   final_callback=None) -> None:
         """
-        Unified transcription interface for all providers.
+        Unified transcription interface for both audio and text inputs.
 
         Args:
-            audio_np: Audio data as numpy array
             context: Conversation context with XML markup and compiled text
+            audio_data: Optional audio data as numpy array
+            text_data: Optional pre-transcribed text
             streaming_callback: Optional callback for streaming text chunks
             final_callback: Optional callback for final result
         """
@@ -124,14 +187,10 @@ class BaseProvider:
             return
 
         try:
-            # Encode audio to base64
-            audio_b64 = self._encode_audio_to_base64(audio_np, context.sample_rate)
-
-            # Build messages with system/user separation and caching
+            # Get instructions (includes audio processor if set)
             xml_instructions = self.get_xml_instructions()
 
             # System message: Static instructions (cached)
-            # Anthropic requires explicit cache_control, others use automatic caching
             system_content = {"type": "text", "text": xml_instructions}
 
             provider = self.config.model_id.split('/')[0].lower() if '/' in self.config.model_id else ''
@@ -143,19 +202,43 @@ class BaseProvider:
                 "content": [system_content]
             }
 
-            # User message: Conversation context + audio
-            user_content = []
+            # Build user content based on input type
+            if audio_data is not None:
+                # Audio input
+                audio_b64 = self._encode_audio_to_base64(audio_data, context.sample_rate)
+                user_content = []
 
-            if context.xml_markup:
-                context_text = f"Current conversation XML: {context.xml_markup}"
-                context_text += f"\nCurrent conversation text: {context.compiled_text}"
-                user_content.append({"type": "text", "text": context_text})
+                if context.xml_markup:
+                    context_text = f"Current conversation XML: {context.xml_markup}"
+                    context_text += f"\nCurrent conversation text: {context.compiled_text}"
+                    user_content.append({"type": "text", "text": context_text})
+                else:
+                    context_text = "CRITICAL: No prior conversation. There is nothing to modify. ALL input must be treated as DICTATION. Transcribe according to system instructions (append with incrementing IDs starting from 10)."
+                    user_content.append({"type": "text", "text": context_text})
+
+                user_content.append({"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}})
             else:
-                # No prior conversation - all input must be DICTATION
-                context_text = "CRITICAL: No prior conversation. There is nothing to modify. ALL input must be treated as DICTATION. Transcribe according to system instructions (append with incrementing IDs starting from 10)."
-                user_content.append({"type": "text", "text": context_text})
+                # Text input
+                user_text = ""
 
-            user_content.append({"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}})
+                if context.xml_markup:
+                    user_text += f"Current conversation XML: {context.xml_markup}"
+                    user_text += f"\nCurrent conversation text: {context.compiled_text}"
+                    user_text += "\n\n"
+                else:
+                    user_text += "CRITICAL: No prior conversation. There is nothing to modify. ALL input must be treated as DICTATION. Transcribe according to system instructions (append with incrementing IDs starting from 10).\n\n"
+
+                user_text += f"NEW INPUT (requires processing):"
+                user_text += f"\nMechanical transcription: {text_data}"
+                user_text += "\n\nCRITICAL: The 'mechanical transcription' above is raw output from automatic speech recognition. It requires the SAME analysis as audio input:"
+                user_text += "\n- Treat as if you just heard the audio yourself"
+                user_text += "\n- Identify sound-alike errors: \"there/their\", \"to/too\", \"no/know\", etc."
+                user_text += "\n- Fix misrecognized words based on context"
+                user_text += "\n- Apply ALL copy editing and formatting rules"
+                user_text += "\n- Handle false starts, fillers, and speech patterns"
+                user_text += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
+
+                user_content = user_text
 
             messages = [
                 system_message,
@@ -192,206 +275,14 @@ class BaseProvider:
 
             response = self.litellm.completion(**completion_params)
 
-            print("\nRECEIVED FROM MODEL (streaming):")
-            accumulated_text = ""
-            usage_data = None
-            last_chunk = None
-            reasoning_header_shown = False
-            thinking_header_shown = False
-            output_header_shown = False
-
-            for chunk in response:
-                last_chunk = chunk
-                delta = chunk.choices[0].delta
-
-                # Display reasoning content (extended thinking)
-                if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
-                    if not reasoning_header_shown:
-                        print("\n[REASONING]")
-                        reasoning_header_shown = True
-                    print(delta.reasoning_content, end='', flush=True)
-
-                # Display thinking blocks (Anthropic-specific)
-                if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
-                    if not thinking_header_shown:
-                        print("\n[THINKING]")
-                        thinking_header_shown = True
-                    for block in delta.thinking_blocks:
-                        if 'thinking' in block:
-                            print(block['thinking'], end='', flush=True)
-
-                if delta.content is not None:
-                    if not output_header_shown:
-                        print("\n[OUTPUT]")
-                        output_header_shown = True
-                    chunk_text = delta.content
-                    self.mark_first_response()
-                    if streaming_callback:
-                        streaming_callback(chunk_text)
-                    accumulated_text += chunk_text
-
-                # Capture usage data from final chunk
-                if hasattr(chunk, 'usage') and chunk.usage is not None:
-                    usage_data = chunk.usage
-
-            # Print timing after streaming completes
-            self._print_timing_stats()
-
-            # Display cache statistics and cost
-            if usage_data:
-                self._display_cache_stats(usage_data, completion_response=last_chunk)
-
-            if final_callback:
-                final_callback(accumulated_text)
+            self._process_streaming_response(response, streaming_callback, final_callback)
 
         except Exception as e:
-            self._handle_provider_error(e, "audio transcription")
-
-    def transcribe_text(self, text: str, context: ConversationContext,
-                       streaming_callback=None, final_callback=None) -> None:
-        """
-        Process pre-transcribed text through AI model.
-
-        Args:
-            text: Pre-transcribed text from VOSK or other source
-            context: Conversation context with XML markup and compiled text
-            streaming_callback: Optional callback for streaming text chunks
-            final_callback: Optional callback for final result
-        """
-        if not self.is_initialized():
-            print("\nError: Provider not initialized.", file=sys.stderr)
-            return
-
-        try:
-            # Build messages with system/user separation and caching
-            xml_instructions = self.get_xml_instructions()
-
-            # System message: Static instructions (cached)
-            # Anthropic requires explicit cache_control, others use automatic caching
-            system_content = {"type": "text", "text": xml_instructions}
-
-            provider = self.config.model_id.split('/')[0].lower() if '/' in self.config.model_id else ''
-            if provider == 'anthropic':
-                system_content["cache_control"] = {"type": "ephemeral"}
-
-            system_message = {
-                "role": "system",
-                "content": [system_content]
-            }
-
-            # User message: Conversation context + new input
-            user_text = ""
-
-            if context.xml_markup:
-                user_text += f"Current conversation XML: {context.xml_markup}"
-                user_text += f"\nCurrent conversation text: {context.compiled_text}"
-                user_text += "\n\n"
-            else:
-                # No prior conversation - all input must be DICTATION
-                user_text += "CRITICAL: No prior conversation. There is nothing to modify. ALL input must be treated as DICTATION. Transcribe according to system instructions (append with incrementing IDs starting from 10).\n\n"
-
-            user_text += f"NEW INPUT (requires processing):"
-            user_text += f"\nMechanical transcription: {text}"
-            user_text += "\n\nCRITICAL: The 'mechanical transcription' above is raw output from automatic speech recognition. It requires the SAME analysis as audio input:"
-            user_text += "\n- Treat as if you just heard the audio yourself"
-            user_text += "\n- Identify sound-alike errors: \"there/their\", \"to/too\", \"no/know\", etc."
-            user_text += "\n- Fix misrecognized words based on context"
-            user_text += "\n- Apply ALL copy editing and formatting rules"
-            user_text += "\n- Handle false starts, fillers, and speech patterns"
-            user_text += "\n- Generate TX (literal with sound-alike options), INT (clean edited), UPDATE (XML tags)"
-
-            messages = [
-                system_message,
-                {"role": "user", "content": user_text}
-            ]
-
-            # Display what's being sent to model
-            self._display_user_content(user_text)
-            self.start_model_timer()
-
-            # Call LiteLLM
-            completion_params = {
-                "model": self.config.model_id,
-                "messages": messages,
-                "stream": True,
-                "stream_options": {"include_usage": True},
-                "temperature": self.config.temperature
-            }
-
-            if self.config.max_tokens is not None:
-                completion_params["max_tokens"] = self.config.max_tokens
-
-            if self.config.api_key:
-                completion_params["api_key"] = self.config.api_key
-
-            # Reasoning control
-            if self.config.enable_reasoning == 'none':
-                completion_params["thinking"] = {"type": "disabled"}
-            elif self.config.enable_reasoning in ['low', 'medium', 'high']:
-                completion_params["reasoning_effort"] = self.config.enable_reasoning
-
-            if self.config.thinking_budget > 0:
-                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.config.thinking_budget}
-
-            response = self.litellm.completion(**completion_params)
-
-            print("\nRECEIVED FROM MODEL (streaming):")
-            accumulated_text = ""
-            usage_data = None
-            last_chunk = None
-            reasoning_header_shown = False
-            thinking_header_shown = False
-            output_header_shown = False
-
-            for chunk in response:
-                last_chunk = chunk
-                delta = chunk.choices[0].delta
-
-                # Display reasoning content (extended thinking)
-                if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
-                    if not reasoning_header_shown:
-                        print("\n[REASONING]")
-                        reasoning_header_shown = True
-                    print(delta.reasoning_content, end='', flush=True)
-
-                # Display thinking blocks (Anthropic-specific)
-                if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
-                    if not thinking_header_shown:
-                        print("\n[THINKING]")
-                        thinking_header_shown = True
-                    for block in delta.thinking_blocks:
-                        if 'thinking' in block:
-                            print(block['thinking'], end='', flush=True)
-
-                if delta.content is not None:
-                    if not output_header_shown:
-                        print("\n[OUTPUT]")
-                        output_header_shown = True
-                    chunk_text = delta.content
-                    self.mark_first_response()
-                    if streaming_callback:
-                        streaming_callback(chunk_text)
-                    accumulated_text += chunk_text
-
-                # Capture usage data from final chunk
-                if hasattr(chunk, 'usage') and chunk.usage is not None:
-                    usage_data = chunk.usage
-
-            # Print timing after streaming completes
-            self._print_timing_stats()
-
-            # Display cache statistics and cost
-            if usage_data:
-                self._display_cache_stats(usage_data, completion_response=last_chunk)
-
-            if final_callback:
-                final_callback(accumulated_text)
-
-        except Exception as e:
-            self._handle_provider_error(e, "text processing")
+            operation = "audio transcription" if audio_data is not None else "text processing"
+            self._handle_provider_error(e, operation)
     
     def get_xml_instructions(self, provider_specific: str = "") -> str:
-        """Get the common XML instructions with optional provider-specific additions."""
+        """Get the common XML instructions with optional provider-specific and audio processor additions."""
         common_instructions = (
             "You are an intelligent transcription assistant acting as a copy editor. Use COMMON SENSE to determine if the user is dictating content or giving editing instructions.\n\n"
             "RESPONSE FORMAT (REQUIRED):\n"
@@ -594,38 +485,18 @@ class BaseProvider:
             #" - Content does NOT exist in context → DICTATION (talking about it)\n"
             #" - TX: Literal instruction, INT: Description, UPDATE: Generated content itself\n"
             #" - Example: \"Elaborate about error handling\" (exists) → UPDATE contains elaborated content\n\n"
-            "Remember: Polish, don't rewrite. Preserve speaker's voice.\n\n"
-            "PHONETIC TRANSCRIPTION ASSISTANCE:\n"
-            "When mechanical transcription contains phoneme sequences, convert to natural words:\n"
-            "- Mechanical transcription: Pre-processed phonetic data provided to model for word conversion\n"
-            "- Input format: Alphanumeric phoneme codes (e.g., \"HH EH L OW W ER L D\")\n"
-            "- Task: Convert phonemes to natural words based on phonetic pronunciation and context\n"
-            "- Example: \"HH EH L OW\" → \"hello\", \"T UW\" → \"to/too/two\" (choose based on context)\n"
-            "- Handle homophone disambiguation using surrounding context\n"
-            "- Maintain same XML structure and processing as regular transcription\n"
-            "- Treat phoneme input as mechanical transcription requiring the same analysis as audio input\n\n"
-            "PHONEME MAPPING REFERENCE:\n"
-            "Original IPA phonemes are converted to alphanumeric codes in mechanical transcription:\n"
-            "IPA → ALPHA mapping:\n"
-            "Vowels: i→IY, ɪ→IH, e→EY, ɛ→EH, æ→AE, ə→AH, ɜ→ER, ɚ→ERR, ʌ→UH, ɐ→AA, a→AX, ᵻ→IX\n"
-            "Back vowels: ɑ→AO, ɔ→OR, o→OW, ʊ→UU, u→UW, ɑː→AAR\n"
-            "Consonants: p→P, b→B, t→T, d→D, k→K, g→G, f→F, v→V, s→S, z→Z, h→H\n"
-            "Fricatives: θ→TH, ð→DH, ʃ→SH, ʒ→ZH, x→KH\n"
-            "Affricates: tʃ→CH, dʒ→JH\n"
-            "Nasals: m→M, n→N, ŋ→NG, ɲ→NY\n"
-            "Liquids: l→L, r→R, ɹ→RR, ɾ→T\n"
-            "Glides: j→Y, w→W, ɥ→WY\n"
-            "Diphthongs: aɪ→AY, aʊ→AW, ɔɪ→OY, eɪ→EY, oʊ→OW, ɪə→IHR, ɛə→EHR, ʊə→UHR\n"
-            "Markers: ː→LONG, ˈ→STRESS1, ˌ→STRESS2, .→SYLDIV, |→WORDSEP\n\n"
-            "ALPHA → IPA reverse mapping:\n"
-            "IY→i, IH→ɪ, EY→e, EH→ɛ, AE→æ, AH→ə, ER→ɜ, ERR→ɚ, UH→ʌ, AA→ɐ, AX→a, IX→ᵻ\n"
-            "AO→ɑ, OR→ɔ, OW→o, UU→ʊ, UW→u, AAR→ɑː, P→p, B→b, T→t, D→d, K→k, G→g\n"
-            "F→f, V→v, S→s, Z→z, H→h, TH→θ, DH→ð, SH→ʃ, ZH→ʒ, KH→x, CH→tʃ, JH→dʒ\n"
-            "M→m, N→n, NG→ŋ, NY→ɲ, L→l, R→r, RR→ɹ, Y→j, W→w, WY→ɥ"
+            "Remember: Polish, don't rewrite. Preserve speaker's voice."
         )
-        
+
+        # Add provider-specific instructions if provided
         if provider_specific.strip():
-            return common_instructions + "\n\n" + provider_specific
+            common_instructions = common_instructions + "\n\n" + provider_specific
+
+        # Add audio processor instructions if available
+        if self.audio_processor and hasattr(self.audio_processor, 'get_transcription_instructions'):
+            processor_instructions = self.audio_processor.get_transcription_instructions()
+            common_instructions = common_instructions + "\n\n" + processor_instructions
+
         return common_instructions
     
     def get_provider_specific_instructions(self) -> str:

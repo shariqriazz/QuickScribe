@@ -107,7 +107,8 @@ class DictationApp:
             self.transcription_service.process_streaming_chunk(chunk_text)
 
         # Use unified provider interface - streaming only, no final callback
-        self.provider.transcribe_audio(audio_np, context, streaming_callback, None)
+        self.provider.transcribe(context, audio_data=audio_np,
+                                streaming_callback=streaming_callback, final_callback=None)
 
         # CRITICAL: Complete the stream to handle any remaining content
         self.transcription_service.complete_stream()
@@ -135,8 +136,9 @@ class DictationApp:
             print(chunk_text, end='', flush=True)
             self.transcription_service.process_streaming_chunk(chunk_text)
 
-        # Send VOSK text to AI provider for processing
-        self.provider.transcribe_text(text, context, streaming_callback, None)
+        # Send text to AI provider for processing
+        self.provider.transcribe(context, text_data=text,
+                                streaming_callback=streaming_callback, final_callback=None)
 
         # CRITICAL: Complete the stream to handle any remaining content
         self.transcription_service.complete_stream()
@@ -268,7 +270,8 @@ class DictationApp:
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
         try:
-            self.provider = BaseProvider(self.config)
+            # Pass audio_source to provider for instruction injection
+            self.provider = BaseProvider(self.config, self.audio_source)
 
             # Provider should never be None now
             if self.provider is None:
@@ -297,12 +300,8 @@ class DictationApp:
         # Initialize services
         if not self._initialize_services():
             return False
-        
-        # Initialize provider
-        if not self._initialize_provider_client():
-            return False
 
-        # Initialize audio source based on --audio-source selection
+        # Initialize audio source based on --audio-source selection (BEFORE provider)
         if self.config.audio_source in ['phoneme', 'wav2vec']:
             from wav2vec2_audio_source import Wav2Vec2AudioSource
             self.audio_source = Wav2Vec2AudioSource(
@@ -326,6 +325,10 @@ class DictationApp:
 
         # Initialize and test audio source
         if not self.audio_source.initialize():
+            return False
+
+        # Initialize provider (AFTER audio_source, passing it as parameter)
+        if not self._initialize_provider_client():
             return False
 
         # Setup input handling

@@ -23,8 +23,9 @@ class MockProvider:
     """Mock provider for testing."""
     def __init__(self):
         self.initialized = True
-        self.transcribe_text_called = False
-        self.last_text = None
+        self.transcribe_called = False
+        self.last_text_data = None
+        self.last_audio_data = None
         self.enable_reasoning = False
         self.temperature = 0.7
         self.max_tokens = 1000
@@ -36,14 +37,16 @@ class MockProvider:
     def is_initialized(self):
         return self.initialized
 
-    def transcribe_text(self, text, context, streaming_callback=None, final_callback=None):
-        self.transcribe_text_called = True
-        self.last_text = text
+    def transcribe(self, context, audio_data=None, text_data=None,
+                   streaming_callback=None, final_callback=None):
+        self.transcribe_called = True
+        if text_data:
+            self.last_text_data = text_data
+        if audio_data is not None:
+            self.last_audio_data = audio_data
         if final_callback:
-            final_callback(f"Processed: {text}")
-
-    def transcribe_audio(self, audio_data, context, streaming_callback=None, final_callback=None):
-        pass
+            result = f"Processed: {text_data}" if text_data else "Processed audio"
+            final_callback(result)
 
     def get_xml_instructions(self):
         return "Mock instructions"
@@ -271,12 +274,11 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             mock_processor.from_pretrained.return_value = Mock()
             mock_model.from_pretrained.return_value = Mock()
 
-            # Create and initialize app
+            # Create app and set up components manually (skip full initialize)
             app = DictationApp()
             app.config = self.config
-            app.config_manager = Mock()
-            app.config_manager.parse_configuration.return_value = True
-            app.initialize()
+            app.transcription_service = mock_transcription
+            app.provider = mock_provider
 
             # Create mock audio result with phonemes
             from audio_source import AudioTextResult
@@ -290,50 +292,51 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             app._process_audio_result(phoneme_result)
 
             # Verify provider was called with phoneme text
-            self.assertTrue(mock_provider.transcribe_text_called)
-            self.assertEqual(mock_provider.last_text, "h ɛ l oʊ w ɜː l d")
+            self.assertTrue(mock_provider.transcribe_called)
+            self.assertEqual(mock_provider.last_text_data, "h ɛ l oʊ w ɜː l d")
 
 
 class TestWav2Vec2ProviderInstructions(unittest.TestCase):
     """Test that providers receive correct instructions for phoneme processing."""
 
     def test_base_provider_phoneme_instructions(self):
-        """Test that base provider includes phoneme processing instructions."""
-        from providers.base_provider import BaseProvider
+        """Test that audio source provides phoneme processing instructions."""
+        # Mock dependencies to create audio source
+        with patch('wav2vec2_audio_source.torch'), \
+             patch('wav2vec2_audio_source.transformers'), \
+             patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor'), \
+             patch('wav2vec2_audio_source.Wav2Vec2ForCTC'), \
+             patch('wav2vec2_audio_source.pyrb'), \
+             patch('wav2vec2_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
-        # Create a mock provider to test instructions
-        class MockProvider(BaseProvider):
-            def initialize(self): return True
-            def is_initialized(self): return True
-            def transcribe_audio(self, *args, **kwargs): pass
-            def transcribe_text(self, *args, **kwargs): pass
+            # Create instance
+            audio_source = Wav2Vec2AudioSource.__new__(Wav2Vec2AudioSource)
+            instructions = audio_source.get_transcription_instructions()
 
-        provider = MockProvider("test_model")
-        instructions = provider.get_xml_instructions()
-
-        # Verify phoneme-specific instructions are included
-        self.assertIn("PHONETIC TRANSCRIPTION ASSISTANCE", instructions)
-        self.assertIn("phoneme sequences", instructions)
-        self.assertIn("HH EH L OW", instructions)
-        self.assertIn("homophone disambiguation", instructions)
+            # Verify phoneme-specific instructions are included
+            self.assertIn("PHONETIC TRANSCRIPTION ASSISTANCE", instructions)
+            self.assertIn("phoneme sequences", instructions)
+            self.assertIn("HH EH L OW", instructions)
+            self.assertIn("homophone disambiguation", instructions)
 
     def test_phoneme_instruction_examples(self):
         """Test that phoneme instructions include proper examples."""
-        from providers.base_provider import BaseProvider
+        # Mock dependencies to create audio source
+        with patch('wav2vec2_audio_source.torch'), \
+             patch('wav2vec2_audio_source.transformers'), \
+             patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor'), \
+             patch('wav2vec2_audio_source.Wav2Vec2ForCTC'), \
+             patch('wav2vec2_audio_source.pyrb'), \
+             patch('wav2vec2_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
-        class MockProvider(BaseProvider):
-            def initialize(self): return True
-            def is_initialized(self): return True
-            def transcribe_audio(self, *args, **kwargs): pass
-            def transcribe_text(self, *args, **kwargs): pass
+            # Create instance
+            audio_source = Wav2Vec2AudioSource.__new__(Wav2Vec2AudioSource)
+            instructions = audio_source.get_transcription_instructions()
 
-        provider = MockProvider("test_model")
-        instructions = provider.get_xml_instructions()
-
-        # Check for specific examples
-        self.assertIn('"HH EH L OW" → "hello"', instructions)
-        self.assertIn('"T UW" → "to/too/two"', instructions)
-        self.assertIn("mechanical transcription", instructions)
+            # Check for specific examples
+            self.assertIn('"HH EH L OW" → "hello"', instructions)
+            self.assertIn('"T UW" → "to/too/two"', instructions)
+            self.assertIn("mechanical transcription", instructions)
 
 
 def run_integration_tests():

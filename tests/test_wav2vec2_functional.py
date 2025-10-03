@@ -35,27 +35,29 @@ def test_config_integration():
 
 
 def test_model_instructions():
-    """Test that model instructions include phoneme processing."""
-    print("Testing BaseProvider phoneme instructions...")
+    """Test that audio processor provides phoneme instructions."""
+    print("Testing Wav2Vec2AudioSource phoneme instructions...")
 
-    from providers.base_provider import BaseProvider
+    # Mock the dependencies
+    with mock.patch('wav2vec2_audio_source.torch'), \
+         mock.patch('wav2vec2_audio_source.transformers'), \
+         mock.patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor'), \
+         mock.patch('wav2vec2_audio_source.Wav2Vec2ForCTC'), \
+         mock.patch('wav2vec2_audio_source.pyrb'), \
+         mock.patch('wav2vec2_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
-    # Create mock provider to test instructions
-    class TestProvider(BaseProvider):
-        def initialize(self): return True
-        def is_initialized(self): return True
-        def transcribe_audio(self, *args, **kwargs): pass
-        def transcribe_text(self, *args, **kwargs): pass
+        from wav2vec2_audio_source import Wav2Vec2AudioSource
 
-    provider = TestProvider("test_model")
-    instructions = provider.get_xml_instructions()
+        # Create instance
+        audio_source = Wav2Vec2AudioSource.__new__(Wav2Vec2AudioSource)
+        instructions = audio_source.get_transcription_instructions()
 
-    # Check for phoneme-specific content
-    assert "PHONETIC TRANSCRIPTION ASSISTANCE" in instructions
-    assert "phoneme sequences" in instructions
-    assert "HH EH L OW" in instructions
-    assert "homophone disambiguation" in instructions
-    print("✓ Model instructions include phoneme processing guidance")
+        # Check for phoneme-specific content
+        assert "PHONETIC TRANSCRIPTION ASSISTANCE" in instructions
+        assert "phoneme sequences" in instructions
+        assert "HH EH L OW" in instructions
+        assert "homophone disambiguation" in instructions
+        print("✓ Audio source provides phoneme processing guidance")
 
 
 def test_audio_source_creation():

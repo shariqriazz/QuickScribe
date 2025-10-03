@@ -35,13 +35,15 @@ class TestConfigAccessorPattern(unittest.TestCase):
 
     def test_base_provider_accepts_config(self):
         """Test BaseProvider constructor accepts config object."""
-        provider = BaseProvider(self.config)
+        mock_audio_source = MagicMock()
+        provider = BaseProvider(self.config, mock_audio_source)
         self.assertIsNotNone(provider)
         self.assertEqual(provider.config, self.config)
 
     def test_base_provider_no_field_copying(self):
         """Test BaseProvider does not copy config fields."""
-        provider = BaseProvider(self.config)
+        mock_audio_source = MagicMock()
+        provider = BaseProvider(self.config, mock_audio_source)
 
         # Provider should NOT have these as direct attributes
         self.assertFalse(hasattr(provider, 'model_id'))
@@ -56,7 +58,8 @@ class TestConfigAccessorPattern(unittest.TestCase):
 
     def test_base_provider_has_instance_state(self):
         """Test BaseProvider has its own instance state."""
-        provider = BaseProvider(self.config)
+        mock_audio_source = MagicMock()
+        provider = BaseProvider(self.config, mock_audio_source)
 
         # Provider should have these instance state fields
         self.assertTrue(hasattr(provider, '_initialized'))
@@ -67,7 +70,8 @@ class TestConfigAccessorPattern(unittest.TestCase):
 
     def test_base_provider_accessor_pattern(self):
         """Test BaseProvider accesses config via self.config."""
-        provider = BaseProvider(self.config)
+        mock_audio_source = MagicMock()
+        provider = BaseProvider(self.config, mock_audio_source)
 
         # Access config fields via accessor
         self.assertEqual(provider.config.model_id, 'gemini/gemini-2.5-flash')
@@ -92,7 +96,8 @@ class TestConfigAccessorPattern(unittest.TestCase):
 
     def test_base_provider_builds_completion_params(self):
         """Test BaseProvider builds completion params from config."""
-        provider = BaseProvider(self.config)
+        mock_audio_source = MagicMock()
+        provider = BaseProvider(self.config, mock_audio_source)
 
         # Build messages
         messages = [{"role": "user", "content": "test"}]
@@ -125,7 +130,7 @@ class TestDictationAppIntegration(unittest.TestCase):
 
     @patch('dictation_app.BaseProvider')
     def test_dictation_app_single_injection(self, mock_provider_class):
-        """Test DictationApp passes config once to BaseProvider."""
+        """Test DictationApp passes config and audio_source to BaseProvider."""
         from dictation_app import DictationApp
 
         app = DictationApp()
@@ -133,11 +138,14 @@ class TestDictationAppIntegration(unittest.TestCase):
         app.config_manager.parse_configuration()
         app.config = app.config_manager
 
+        # Mock audio_source (required by BaseProvider)
+        app.audio_source = MagicMock()
+
         # Call provider initialization
         result = app._initialize_provider_client()
 
-        # Verify BaseProvider was called with config only
-        mock_provider_class.assert_called_once_with(app.config)
+        # Verify BaseProvider was called with config and audio_source
+        mock_provider_class.assert_called_once_with(app.config, app.audio_source)
 
 
 class TestWav2Vec2Integration(unittest.TestCase):
