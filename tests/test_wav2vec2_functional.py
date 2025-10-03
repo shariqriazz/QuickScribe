@@ -46,11 +46,11 @@ def test_model_instructions():
          mock.patch('wav2vec2_audio_source.pyrb'), \
          mock.patch('wav2vec2_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from instruction_composer import InstructionComposer
 
-        # Create instance
-        audio_source = Wav2Vec2AudioSource.__new__(Wav2Vec2AudioSource)
-        instructions = audio_source.get_transcription_instructions()
+        # Load wav2vec2 audio source instructions
+        composer = InstructionComposer()
+        instructions = composer.compose('dictate', 'wav2vec2')
 
         # Check for phoneme-specific content
         assert "PHONETIC TRANSCRIPTION ASSISTANCE" in instructions

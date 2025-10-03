@@ -33,6 +33,9 @@ class ConfigManager:
         # Wav2Vec2 configuration
         self.wav2vec2_model_path = "facebook/wav2vec2-lv-60-espeak-cv-ft"  # Default phoneme model
 
+        # Operation mode
+        self.mode = "dictate"  # Default to dictation mode
+
         # Provider performance controls
         self.enable_reasoning = 'low'
         self.thinking_budget = 128
@@ -171,6 +174,13 @@ class ConfigManager:
             help="Audio source type: 'vosk' (VOSK speech recognition), 'phoneme'/'wav2vec' (Wav2Vec2 phoneme recognition), 'raw' (direct microphone)."
         )
         parser.add_argument(
+            "--mode", "-m",
+            type=str,
+            choices=['dictate', 'edit'],
+            default='dictate',
+            help="Operation mode: 'dictate' (default, append new content), 'edit' (modify existing content)."
+        )
+        parser.add_argument(
             "--wav2vec2-model",
             type=str,
             default="facebook/wav2vec2-lv-60-espeak-cv-ft",
@@ -253,6 +263,9 @@ class ConfigManager:
 
         # Audio source selection
         self.audio_source = getattr(args, 'audio_source', 'raw')
+
+        # Operation mode
+        self.mode = getattr(args, 'mode', 'dictate')
 
         # VOSK configuration
         self.vosk_model_path = getattr(args, 'vosk_model', None)

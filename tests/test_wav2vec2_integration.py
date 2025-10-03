@@ -309,9 +309,10 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
              patch('wav2vec2_audio_source.pyrb'), \
              patch('wav2vec2_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
-            # Create instance
-            audio_source = Wav2Vec2AudioSource.__new__(Wav2Vec2AudioSource)
-            instructions = audio_source.get_transcription_instructions()
+            # Load wav2vec2 audio source instructions
+            from instruction_composer import InstructionComposer
+            composer = InstructionComposer()
+            instructions = composer.compose('dictate', 'wav2vec2')
 
             # Verify phoneme-specific instructions are included
             self.assertIn("PHONETIC TRANSCRIPTION ASSISTANCE", instructions)
@@ -329,9 +330,10 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
              patch('wav2vec2_audio_source.pyrb'), \
              patch('wav2vec2_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
-            # Create instance
-            audio_source = Wav2Vec2AudioSource.__new__(Wav2Vec2AudioSource)
-            instructions = audio_source.get_transcription_instructions()
+            # Load wav2vec2 audio source instructions
+            from instruction_composer import InstructionComposer
+            composer = InstructionComposer()
+            instructions = composer.compose('dictate', 'wav2vec2')
 
             # Check for specific examples
             self.assertIn('"HH EH L OW" → "hello"', instructions)
