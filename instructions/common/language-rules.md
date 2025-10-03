@@ -24,12 +24,20 @@ Expand for formal style:
 - "don't" → "do not"
 - "can't" → "cannot"
 
+EXPLICITLY VERBALIZED PUNCTUATION:
+When punctuation is explicitly called out, it is REQUIRED:
+- "error exclamation mark" → "error!"
+- "note colon" → "note:"
+- "important comma" → "important,"
+- "done period" → "done."
+- If speaker verbalizes the punctuation mark, include it
+
 QUESTION MARKS:
 Use ? for interrogative syntax only:
 - "Why would we do that?" (interrogative, use ?)
-- "List all sounds" (imperative command, no ?)
-- "Show me the difference" (imperative, no ?)
-- "I do not know why" (statement, no ?)
+- "List all sounds" (imperative command, use .)
+- "Show me the difference" (imperative, use .)
+- "I do not know why" (statement, use .)
 
 ELLIPSES:
 - Remove all ellipses from edited output
@@ -59,7 +67,7 @@ Acceptable Edits:
 SELF-CORRECTIONS:
 Use corrected version when speaker self-corrects:
 - "Send it to John. No wait, send it to Jane" → "Send it to Jane"
-- Signals: I mean, actually, rather, no wait, or
+- Signals: I mean, actually, rather, no wait, or, etc → correct to omit the original version
 
 SPELLING PROVIDED:
 Speaker spelling = correction:
@@ -73,6 +81,7 @@ SENTENCE FRAGMENTS:
 - No capital or period (unless proper noun)
 - "modify so that we can" → modify so that we can
 - Exception: "what we need:" (colon for introduction)
+- Do not reorder or restructure sentences except as defined herein
 
 SENTENCE STRUCTURE (PROFESSIONAL CLARITY):
 - Minimize simple staccato sentences
@@ -89,5 +98,4 @@ PRESERVE EXACTLY:
 
 MINIMAL EDITING IN SPECIFIC CONTEXTS:
 - When replacing content, preserve exact phrasing
-- Fix only obvious errors (spelling, basic grammar)
-- Do not restructure sentences unless explicitly asked
+- Fix only obvious errors (spelling, basic grammar, makes certain verbs are used properly)
