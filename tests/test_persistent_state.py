@@ -125,8 +125,8 @@ class TestPersistentState(unittest.TestCase):
         
         xml_context = service._build_xml_from_processor()
         
-        # Should have proper XML escaping
-        expected_xml = '<10>AT&amp;T </10><20>uses &lt;brackets&gt; </20><30>&amp;amp; symbols</30>'
+        # Should have proper XML escaping - & symbol should be escaped once, not twice
+        expected_xml = '<10>AT&amp;T </10><20>uses &lt;brackets&gt; </20><30>&amp; symbols</30>'
         self.assertEqual(xml_context, expected_xml)
 
     def test_sequential_id_continuation(self):

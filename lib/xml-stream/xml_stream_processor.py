@@ -77,21 +77,30 @@ class XMLStreamProcessor:
         self.streaming_active = True
         self.debug_buffer.clear()
     
+    def _unescape_xml_entities(self, text: str) -> str:
+        """Unescape XML entities in tag content."""
+        text = text.replace('&amp;', '&')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        return text
+
     def _extract_complete_tags(self, buffer: str) -> Tuple[List[Tuple[int, str]], str]:
         """Extract complete <N>word</N> tags, return remaining buffer."""
         pattern = r'<(\d+)>(.*?)</\1>'
         updates = []
         last_end = 0
-        
+
         self._debug(f"      _extract_complete_tags(buffer='{buffer}')")
-        
+
         for match in re.finditer(pattern, buffer):
             seq = int(match.group(1))
             word = match.group(2)
+            # Unescape XML entities in tag content
+            word = self._unescape_xml_entities(word)
             updates.append((seq, word))
             last_end = match.end()
             self._debug(f"        Found complete tag: seq={seq}, word='{word}')")
-        
+
         # Return remaining buffer after last complete match
         remaining_buffer = buffer[last_end:]
         self._debug(f"        Remaining buffer: '{remaining_buffer}')")

@@ -35,7 +35,7 @@ class TranscriptionService:
             print(f"Warning: Could not initialize keyboard injector: {e}. Using mock mode (no keyboard output).", file=sys.stderr)
             self.keyboard = MockKeyboardInjector()
 
-        self.processor = XMLStreamProcessor(self.keyboard, debug_enabled=getattr(config, 'debug_enabled', False))
+        self.processor = XMLStreamProcessor(self.keyboard, config)
         
         # State management
         self.streaming_buffer = ""
@@ -84,34 +84,30 @@ class TranscriptionService:
     def complete_stream(self):
         """Complete streaming by processing any remaining content and calling end_stream."""
         try:
-            # Process any remaining complete tags in the streaming buffer (if any)
-            if self.streaming_buffer:
-                import re
-                matches = re.finditer(r'<(\d+)>(.*?)</\1>', self.streaming_buffer, re.DOTALL)
-                remaining_tags = []
+            # Process any remaining content within update boundaries
+            if self.streaming_buffer and self.update_seen:
+                # Find update end boundary
+                update_end_pos = self.streaming_buffer.find('</update>')
 
-                for match in matches:
-                    seq_num = int(match.group(1))
-                    word_content = match.group(2)
-                    # Only process if not already in processor
-                    if seq_num not in self.processor.current_words:
-                        remaining_tags.append(f'<{seq_num}>{word_content}</{seq_num}>')
+                if update_end_pos == -1:
+                    # No closing tag found, process remaining content
+                    if self.last_update_position < len(self.streaming_buffer):
+                        remaining_content = self.streaming_buffer[self.last_update_position:]
+                        if remaining_content.strip():
+                            if self.config.debug_enabled:
+                                print(f"[DEBUG] complete_stream: processing remaining content: '{remaining_content}'", file=sys.stderr)
+                            self.processor.process_chunk(remaining_content)
+                else:
+                    # Process content up to closing tag
+                    if self.last_update_position < update_end_pos:
+                        remaining_content = self.streaming_buffer[self.last_update_position:update_end_pos]
+                        if remaining_content.strip():
+                            if self.config.debug_enabled:
+                                print(f"[DEBUG] complete_stream: processing remaining content to </update>: '{remaining_content}'", file=sys.stderr)
+                            self.processor.process_chunk(remaining_content)
 
-                # Process any remaining complete tags
-                if remaining_tags:
-                    remaining_xml = ''.join(remaining_tags)
-                    if self.config.debug_enabled:
-                        print(f"[DEBUG] complete_stream: processing remaining tags: {remaining_xml}", file=sys.stderr)
-                    self.processor.process_chunk(remaining_xml)
-
-            # Always call end_stream if there are words that haven't been emitted yet
-            # This ensures all words get flushed regardless of streaming state
-            if self.processor.current_words:
-                max_seq = max(self.processor.current_words.keys())
-                if self.processor.last_emitted_seq < max_seq:
-                    if self.config.debug_enabled:
-                        print(f"[DEBUG] complete_stream: calling end_stream to flush remaining words (last_emitted: {self.processor.last_emitted_seq}, max_seq: {max_seq})", file=sys.stderr)
-                    self.processor.end_stream()
+            # Always call end_stream to flush XMLStreamProcessor state
+            self.processor.end_stream()
 
             if self.config.debug_enabled:
                 print(f"[DEBUG] complete_stream: stream completed", file=sys.stderr)
@@ -178,6 +174,25 @@ class TranscriptionService:
 
             # Handle incremental streaming after <update> tag
             if '<update>' in self.streaming_buffer:
+                # Check if this is a new update section (complete <update>...</update> in current chunk)
+                if '</update>' in chunk_text and '<update>' in chunk_text:
+                    # This chunk contains a complete update section - reset and process it
+                    last_update_start = self.streaming_buffer.rfind('<update>')
+                    if last_update_start != -1:
+                        last_update_end = self.streaming_buffer.find('</update>', last_update_start)
+                        if last_update_end != -1:
+                            # Extract the complete update section
+                            update_content = self.streaming_buffer[last_update_start + 8:last_update_end]  # +8 for '<update>'
+                            if update_content.strip():
+                                # Reset streaming state and process the new update
+                                self.processor.start_stream()
+                                self.processor.process_chunk(update_content)
+
+                            # Update position tracking
+                            self.last_update_position = last_update_end
+                            self.update_seen = True
+                            return
+
                 if not self.update_seen:
                     # First time seeing update tag
                     self.update_seen = True
@@ -185,11 +200,21 @@ class TranscriptionService:
                     self.last_update_position = update_idx + 8  # len('<update>')
 
                 # Stream new content only (content after last processed position)
-                if self.last_update_position < len(self.streaming_buffer):
-                    new_content = self.streaming_buffer[self.last_update_position:]
+                # Respect update boundaries - don't send content past </update>
+                update_end_pos = self.streaming_buffer.find('</update>')
+
+                if update_end_pos == -1:
+                    # No closing tag yet, process up to current buffer end
+                    process_until = len(self.streaming_buffer)
+                else:
+                    # Found closing tag, stop there
+                    process_until = update_end_pos
+
+                if self.last_update_position < process_until:
+                    new_content = self.streaming_buffer[self.last_update_position:process_until]
                     if new_content:
                         self.processor.process_chunk(new_content)
-                        self.last_update_position = len(self.streaming_buffer)
+                        self.last_update_position = process_until
 
         except Exception as e:
             print(f"\n❌ STREAMING ERROR: {type(e).__name__}: {e}", file=sys.stderr)
