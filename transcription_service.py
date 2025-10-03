@@ -10,6 +10,7 @@ from keyboard_injector import MockKeyboardInjector
 from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
 from lib.keyboard_injector_macos import MacOSKeyboardInjector
 from lib.keyboard_injector_windows import WindowsKeyboardInjector
+from instruction_composer import InstructionComposer
 
 
 class TranscriptionService:
@@ -17,6 +18,7 @@ class TranscriptionService:
 
     def __init__(self, config):
         self.config = config
+        self.composer = InstructionComposer()
 
         # Select keyboard injector based on platform
         try:
@@ -117,9 +119,42 @@ class TranscriptionService:
         except Exception as e:
             print(f"Error in complete_stream: {e}", file=sys.stderr)
     
+    def _handle_mode_change(self, new_mode: str):
+        """Reset state for new mode."""
+        if not self.composer:
+            print(f"Warning: Cannot change mode - composer not available", file=sys.stderr)
+            return False
+
+        available_modes = self.composer.get_available_modes()
+        if new_mode not in available_modes:
+            print(f"Warning: Invalid mode '{new_mode}' - available: {available_modes}", file=sys.stderr)
+            return False
+
+        # Reset state
+        self.reset_all_state()
+
+        # Update configuration (single source of truth)
+        self.config.mode = new_mode
+
+        print(f"\n[Mode switched to: {new_mode}]", file=sys.stderr)
+        return True
+
     def process_streaming_chunk(self, chunk_text):
         """Process streaming text chunks and apply real-time updates."""
         try:
+            # Detect mode changes in the stream
+            if '<mode>' in self.streaming_buffer or '<mode>' in chunk_text:
+                combined = self.streaming_buffer + chunk_text
+                mode_match = re.search(r'<mode>(\w+)</mode>', combined)
+                if mode_match:
+                    new_mode = mode_match.group(1)
+                    if self._handle_mode_change(new_mode):
+                        # Clear buffer and skip content processing
+                        self.streaming_buffer = ""
+                        self.last_update_position = 0
+                        self.update_seen = False
+                        return
+
             # Start streaming mode on first chunk with <update>
             if not self.processor.streaming_active and '<update>' in chunk_text:
                 self.processor.start_stream()
@@ -168,6 +203,13 @@ class TranscriptionService:
     def process_xml_transcription(self, text):
         """Process XML transcription text using the word processing pipeline."""
         try:
+            # Detect and handle mode changes
+            mode_match = re.search(r'<mode>(\w+)</mode>', text)
+            if mode_match:
+                new_mode = mode_match.group(1)
+                if self._handle_mode_change(new_mode):
+                    return  # Skip content processing for mode changes
+
             # Check for conversation tags first
             conversation_pattern = re.compile(r'<conversation>(.*?)</conversation>', re.DOTALL)
             conversation_matches = conversation_pattern.findall(text)

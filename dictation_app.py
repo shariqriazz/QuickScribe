@@ -262,11 +262,6 @@ class DictationApp:
         else:
             print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
 
-    def _initialize_services(self):
-        """Initialize all service components."""
-        self.transcription_service = TranscriptionService(self.config)
-        return True
-    
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
         try:
@@ -288,6 +283,11 @@ class DictationApp:
         except Exception as e:
             print(f"Error initializing provider: {e}", file=sys.stderr)
             return False
+
+    def _initialize_services(self):
+        """Initialize all service components."""
+        self.transcription_service = TranscriptionService(self.config)
+        return True
     
     
     def initialize(self):
@@ -296,10 +296,6 @@ class DictationApp:
         if not self.config_manager.parse_configuration():
             return False
         self.config = self.config_manager
-        
-        # Initialize services
-        if not self._initialize_services():
-            return False
 
         # Initialize audio source based on --audio-source selection (BEFORE provider)
         if self.config.audio_source in ['phoneme', 'wav2vec']:
@@ -329,6 +325,10 @@ class DictationApp:
 
         # Initialize provider (AFTER audio_source, passing it as parameter)
         if not self._initialize_provider_client():
+            return False
+
+        # Initialize services (AFTER provider to access composer)
+        if not self._initialize_services():
             return False
 
         # Setup input handling

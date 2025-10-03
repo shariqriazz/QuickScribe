@@ -34,9 +34,6 @@ class BaseProvider:
         self.audio_processor = audio_processor
 
         # Instruction composition
-        self.mode = config.mode
-        self.audio_source = config.audio_source
-        self.provider = config.model_id.split('/')[0].lower() if '/' in config.model_id else ''
         self.instruction_composer = InstructionComposer()
     
     def initialize(self) -> bool:
@@ -292,14 +289,17 @@ class BaseProvider:
         """Get the composed XML instructions from files."""
         # Determine audio source name for instruction loading
         audio_source_name = None
-        if self.audio_source in ['phoneme', 'wav2vec']:
+        if self.config.audio_source in ['phoneme', 'wav2vec']:
             audio_source_name = 'wav2vec2'
 
-        # Compose instructions from files
+        # Extract provider from model_id
+        provider_name = self.config.model_id.split('/')[0].lower() if '/' in self.config.model_id else ''
+
+        # Compose instructions from files (reads current mode from config)
         instructions = self.instruction_composer.compose(
-            self.mode,
+            self.config.mode,
             audio_source_name,
-            self.provider
+            provider_name
         )
 
         return instructions

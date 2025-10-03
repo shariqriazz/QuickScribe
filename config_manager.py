@@ -88,12 +88,15 @@ class ConfigManager:
         """Determine if running in interactive mode."""
         return len(args_without_script) == 0
     
-    def setup_argument_parser(self):
+    def setup_argument_parser(self, composer=None):
         """Setup and return the argument parser."""
         parser = argparse.ArgumentParser(
             description="Real-time dictation using Groq or Gemini.",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
+
+        # Get available modes dynamically
+        available_modes = composer.get_available_modes() if composer else ['dictate']
         parser.add_argument(
             "--provider",
             type=str,
@@ -176,9 +179,9 @@ class ConfigManager:
         parser.add_argument(
             "--mode", "-m",
             type=str,
-            choices=['dictate', 'edit', 'shell'],
+            choices=available_modes,
             default='dictate',
-            help="Operation mode: 'dictate' (default, append new content), 'edit' (modify existing content), 'shell' (verbalized shell commands)."
+            help=f"Operation mode: {', '.join(available_modes)}."
         )
         parser.add_argument(
             "--wav2vec2-model",
@@ -285,7 +288,11 @@ class ConfigManager:
 
     def parse_configuration(self):
         """Parse configuration from command line arguments or interactive mode."""
-        parser = self.setup_argument_parser()
+        # Import here to avoid circular dependency
+        from instruction_composer import InstructionComposer
+
+        composer = InstructionComposer()
+        parser = self.setup_argument_parser(composer)
         args_without_script = sys.argv[1:]
         args = parser.parse_args()
 

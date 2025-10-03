@@ -10,8 +10,50 @@ from typing import Optional
 class InstructionComposer:
     """Composes system instructions from modular files."""
 
+    # Static cache shared across all instances
+    _cache = {}
+    _cache_mtimes = {}
+    _modes_cache = None
+    _modes_dir_mtime = None
+
     def __init__(self):
-        self._cache = {}
+        pass
+
+    def get_available_modes(self) -> list[str]:
+        """Discover available modes from modes/ directory with caching."""
+        instruction_files = files('instructions')
+        modes_path = instruction_files / 'modes'
+
+        # Get actual filesystem path for mtime checking
+        if hasattr(instruction_files, '_path'):
+            base_path = Path(instruction_files._path) / 'modes'
+        else:
+            base_path = Path('instructions/modes')
+
+        # Check directory mtime
+        current_dir_mtime = base_path.stat().st_mtime
+
+        # Return cached if directory unchanged
+        if (self._modes_cache is not None and
+            self._modes_dir_mtime is not None and
+            self._modes_dir_mtime == current_dir_mtime):
+            return self._modes_cache
+
+        # Directory changed or first load - scan files
+        if self._modes_dir_mtime is not None and self._modes_dir_mtime != current_dir_mtime:
+            print(f"Modes directory updated (mtime changed), refreshing available modes")
+
+        modes = sorted([
+            Path(f.name).stem
+            for f in modes_path.iterdir()
+            if f.name.endswith('.md')
+        ])
+
+        # Update cache
+        self._modes_cache = modes
+        self._modes_dir_mtime = current_dir_mtime
+
+        return modes
 
     def _load_file(self, file_path: Path) -> Optional[str]:
         """Load a file from filesystem."""
@@ -51,10 +93,7 @@ class InstructionComposer:
         return re.sub(r'^@(.+)$', replace_import, content, flags=re.MULTILINE)
 
     def _load(self, path: str) -> Optional[str]:
-        """Load instruction file with caching and import resolution."""
-        if path in self._cache:
-            return self._cache[path]
-
+        """Load instruction file with caching and mtime-based invalidation."""
         try:
             instruction_files = files('instructions')
             # Get the actual filesystem path if possible
@@ -65,11 +104,29 @@ class InstructionComposer:
                 base_path = Path('instructions')
 
             file_path = base_path / path
+
+            # Get current mtime
+            current_mtime = file_path.stat().st_mtime
+
+            # Check cache and validate mtime
+            if path in self._cache:
+                cached_mtime = self._cache_mtimes.get(path)
+                if cached_mtime == current_mtime:
+                    return self._cache[path]
+                else:
+                    # File was modified, reload
+                    print(f"Instruction file '{path}' updated (mtime changed), refreshing cache")
+
+            # Load and cache
             content = (instruction_files / path).read_text()
 
             # Resolve imports with standard filesystem semantics
             content = self._resolve_imports(content, file_path)
+
+            # Update cache and mtime
             self._cache[path] = content
+            self._cache_mtimes[path] = current_mtime
+
             return content
         except FileNotFoundError:
             return None
@@ -95,6 +152,14 @@ class InstructionComposer:
         core = self._load('core.md')
         if core is None:
             raise RuntimeError("Core instructions not found")
+
+        # Inject current mode and available modes (excluding current)
+        all_modes = self.get_available_modes()
+        other_modes = [m for m in all_modes if m != mode]
+
+        core = core.replace('{{CURRENT_MODE}}', mode)
+        core = core.replace('{{AVAILABLE_MODES}}', '|'.join(other_modes))
+
         parts.append(core)
 
         # Load mode instructions (required)

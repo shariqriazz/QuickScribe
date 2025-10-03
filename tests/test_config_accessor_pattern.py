@@ -56,6 +56,11 @@ class TestConfigAccessorPattern(unittest.TestCase):
         self.assertFalse(hasattr(provider, 'debug_enabled'))
         self.assertFalse(hasattr(provider, 'litellm_debug'))
 
+        # Provider should NOT have mode, audio_source, or provider name fields
+        self.assertFalse(hasattr(provider, 'mode'))
+        self.assertFalse(hasattr(provider, 'audio_source'))
+        self.assertFalse(hasattr(provider, 'provider'))
+
     def test_base_provider_has_instance_state(self):
         """Test BaseProvider has its own instance state."""
         mock_audio_source = MagicMock()
@@ -79,6 +84,10 @@ class TestConfigAccessorPattern(unittest.TestCase):
         self.assertEqual(provider.config.enable_reasoning, 'low')
         self.assertEqual(provider.config.thinking_budget, 128)
         self.assertEqual(provider.config.sample_rate, 16000)
+
+        # Mode and audio_source accessed via config
+        self.assertEqual(provider.config.mode, 'dictate')
+        self.assertEqual(provider.config.audio_source, 'raw')
 
     def test_config_defaults_from_argparse_only(self):
         """Test config defaults come only from argparse."""
