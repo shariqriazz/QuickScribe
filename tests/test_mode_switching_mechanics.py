@@ -85,7 +85,7 @@ class TestModeChangeHandler(unittest.TestCase):
         # Switch to same mode
         result = self.service._handle_mode_change('dictate')
 
-        self.assertTrue(result)
+        self.assertIsNone(result)
         # State should NOT be cleared
         self.assertEqual(self.service.streaming_buffer, "test")
         self.assertEqual(self.service.last_update_position, 5)

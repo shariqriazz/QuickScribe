@@ -129,7 +129,7 @@ class TranscriptionService:
         # Check if already in this mode
         if self.config.mode == new_mode:
             print(f"\n[Already in mode: {new_mode}]", file=sys.stderr)
-            return True
+            return None
 
         # Mode change to different mode = reset (same as <reset> tag)
         self.reset_all_state()
@@ -149,11 +149,9 @@ class TranscriptionService:
                 mode_match = re.search(r'<mode>(\w+)</mode>', combined)
                 if mode_match:
                     new_mode = mode_match.group(1)
-                    if self._handle_mode_change(new_mode):
-                        # Clear buffer and skip content processing
-                        self.streaming_buffer = ""
-                        self.last_update_position = 0
-                        self.update_seen = False
+                    result = self._handle_mode_change(new_mode)
+                    if result is True:
+                        # Actual mode change - buffer cleared, skip this chunk
                         return
 
             # Start streaming mode on first chunk with <update>

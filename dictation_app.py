@@ -202,18 +202,29 @@ class DictationApp:
             print(f"\nError in on_release: {e}", file=sys.stderr)
 
     def handle_sigusr1(self, signum, frame):
-        """Handle SIGUSR1 signal to start recording."""
+        """Handle SIGUSR1 signal to switch mode and start recording."""
         try:
+            if self.transcription_service:
+                self.transcription_service._handle_mode_change(self.config.sigusr1_mode)
             self.start_recording()
         except Exception as e:
             print(f"\nError in SIGUSR1 handler: {e}", file=sys.stderr)
 
     def handle_sigusr2(self, signum, frame):
-        """Handle SIGUSR2 signal to stop recording."""
+        """Handle SIGUSR2 signal to switch mode and start recording."""
+        try:
+            if self.transcription_service:
+                self.transcription_service._handle_mode_change(self.config.sigusr2_mode)
+            self.start_recording()
+        except Exception as e:
+            print(f"\nError in SIGUSR2 handler: {e}", file=sys.stderr)
+
+    def handle_sighup(self, signum, frame):
+        """Handle SIGHUP signal to stop recording."""
         try:
             self.stop_recording()
         except Exception as e:
-            print(f"\nError in SIGUSR2 handler: {e}", file=sys.stderr)
+            print(f"\nError in SIGHUP handler: {e}", file=sys.stderr)
 
     def setup_trigger_key(self):
         """Sets up the trigger key based on configuration."""
@@ -233,10 +244,11 @@ class DictationApp:
         return True
 
     def setup_signal_handlers(self):
-        """Setup POSIX signal handlers for SIGUSR1/SIGUSR2."""
+        """Setup POSIX signal handlers for SIGUSR1/SIGUSR2/SIGHUP."""
         try:
             signal.signal(signal.SIGUSR1, self.handle_sigusr1)
             signal.signal(signal.SIGUSR2, self.handle_sigusr2)
+            signal.signal(signal.SIGHUP, self.handle_sighup)
         except Exception:
             pass  # Signal handling may not be available on all platforms
 
@@ -389,7 +401,10 @@ class DictationApp:
         if self.is_trigger_enabled():
             print(f"\nHold '{self.config.trigger_key_name}' to record...")
         else:
-            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
+            print(f"\nKeyboard trigger disabled. Signal controls:")
+            print(f"  SIGUSR1 → {self.config.sigusr1_mode} mode + start recording")
+            print(f"  SIGUSR2 → {self.config.sigusr2_mode} mode + start recording")
+            print(f"  SIGHUP  → stop recording")
 
         listener = None
         try:

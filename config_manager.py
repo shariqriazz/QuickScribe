@@ -36,6 +36,8 @@ class ConfigManager:
 
         # Operation mode
         self.mode = "dictate"  # Default to dictation mode
+        self.sigusr1_mode = "dictate"  # Default mode for SIGUSR1 signal
+        self.sigusr2_mode = "shell"    # Default mode for SIGUSR2 signal
 
         # Provider performance controls
         self.enable_reasoning = 'low'
@@ -138,7 +140,21 @@ class ConfigManager:
         parser.add_argument(
             "--no-trigger-key",
             action="store_true",
-            help="Disable keyboard trigger; use POSIX signals (SIGUSR1/SIGUSR2) instead."
+            help="Disable keyboard trigger; use POSIX signals (SIGUSR1/SIGUSR2/SIGHUP) instead."
+        )
+        parser.add_argument(
+            "--sigusr1",
+            type=str,
+            default="dictate",
+            dest="sigusr1_mode",
+            help="Mode to switch to when SIGUSR1 signal is received (default: dictate)."
+        )
+        parser.add_argument(
+            "--sigusr2",
+            type=str,
+            default="shell",
+            dest="sigusr2_mode",
+            help="Mode to switch to when SIGUSR2 signal is received (default: shell)."
         )
         parser.add_argument(
             "-D", "--debug",
@@ -271,6 +287,8 @@ class ConfigManager:
 
         # Operation mode
         self.mode = getattr(args, 'mode', 'dictate')
+        self.sigusr1_mode = getattr(args, 'sigusr1_mode', 'dictate')
+        self.sigusr2_mode = getattr(args, 'sigusr2_mode', 'shell')
 
         # VOSK configuration
         self.vosk_model_path = getattr(args, 'vosk_model', None)
