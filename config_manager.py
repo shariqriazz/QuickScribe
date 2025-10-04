@@ -16,6 +16,7 @@ class ConfigManager:
         self.trigger_key_name = 'alt_r'
         self.debug_enabled = False
         self.litellm_debug = False
+        self.xml_stream_debug = False
         self.no_trigger_key = False
         self.xdotool_rate = None
         self.reset_state_each_response = False
@@ -143,7 +144,7 @@ class ConfigManager:
             "-D", "--debug",
             action="count",
             default=0,
-            help="Enable debug output: -D (app debug), -DD (app + LiteLLM debug)."
+            help="Enable debug output: -D (app debug), -DD (app + LiteLLM debug), -DDD (app + LiteLLM + XML stream debug)."
         )
         parser.add_argument(
             "--once",
@@ -261,6 +262,7 @@ class ConfigManager:
             self.trigger_key_name = "none"
         self.debug_enabled = args.debug >= 1
         self.litellm_debug = args.debug >= 2
+        self.xml_stream_debug = args.debug >= 3
         self.xdotool_rate = args.xdotool_rate
         self.reset_state_each_response = getattr(args, 'once', False)
 

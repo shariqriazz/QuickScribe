@@ -35,7 +35,7 @@ class TranscriptionService:
             print(f"Warning: Could not initialize keyboard injector: {e}. Using mock mode (no keyboard output).", file=sys.stderr)
             self.keyboard = MockKeyboardInjector()
 
-        self.processor = XMLStreamProcessor(self.keyboard, config)
+        self.processor = XMLStreamProcessor(self.keyboard, config.xml_stream_debug)
         
         # State management
         self.streaming_buffer = ""
