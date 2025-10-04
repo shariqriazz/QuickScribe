@@ -23,6 +23,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that XMLStreamProcessor maintains state across multiple transcriptions."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -69,6 +70,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that explicit reset clears state."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -92,6 +94,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that streaming state reset doesn't affect processor state."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -114,6 +117,7 @@ class TestPersistentState(unittest.TestCase):
         """Test XML context building with characters that need escaping."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -133,6 +137,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that word IDs continue sequentially across transcriptions."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -165,6 +170,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that reset commands in conversation tags trigger state reset."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()

@@ -24,6 +24,7 @@ class TestResetWithWordMarkup(unittest.TestCase):
         class MockConfig:
             debug_enabled = True
             reset_state_each_response = False
+            xml_stream_debug = False
 
         self.config = MockConfig()
         self.service = TranscriptionService(self.config)

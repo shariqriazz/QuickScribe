@@ -25,6 +25,7 @@ class TestIncrementalStreaming(unittest.TestCase):
         """Set up test environment."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         self.service = TranscriptionService(MockConfig())
         # Replace with MockKeyboardInjector for testing
         from keyboard_injector import MockKeyboardInjector

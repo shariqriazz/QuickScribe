@@ -19,6 +19,7 @@ class TestXMLStateTransition:
         """Set up test fixtures."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         self.service = TranscriptionService(MockConfig())
         # Replace with MockKeyboardInjector for testing
         self.keyboard = MockKeyboardInjector()

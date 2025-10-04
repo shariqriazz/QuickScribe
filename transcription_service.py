@@ -126,7 +126,12 @@ class TranscriptionService:
             print(f"Warning: Invalid mode '{new_mode}' - available: {available_modes}", file=sys.stderr)
             return False
 
-        # Reset state
+        # Check if already in this mode
+        if self.config.mode == new_mode:
+            print(f"\n[Already in mode: {new_mode}]", file=sys.stderr)
+            return True
+
+        # Mode change to different mode = reset (same as <reset> tag)
         self.reset_all_state()
 
         # Update configuration (single source of truth)

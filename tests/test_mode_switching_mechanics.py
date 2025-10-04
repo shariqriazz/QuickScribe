@@ -13,6 +13,7 @@ class MockConfig:
         self.mode = 'dictate'
         self.debug_enabled = False
         self.reset_state_each_response = False
+        self.xml_stream_debug = False
 
 
 class TestModeChangeHandler(unittest.TestCase):
@@ -36,15 +37,22 @@ class TestModeChangeHandler(unittest.TestCase):
         self.assertEqual(self.config.mode, 'edit')
 
     def test_handle_mode_change_resets_state(self):
-        """Verify reset_all_state is called on mode change."""
+        """Verify all state is cleared on mode change to different mode."""
         self.service.composer.get_available_modes = Mock(return_value=['dictate', 'edit', 'shell'])
 
-        # Mock reset method
-        self.service.reset_all_state = Mock()
+        # Set up streaming state and processor state
+        self.service.streaming_buffer = "test"
+        self.service.last_update_position = 5
+        self.service.update_seen = True
+        self.service.processor.current_words = {10: "old ", 20: "content"}
 
         self.service._handle_mode_change('shell')
 
-        self.service.reset_all_state.assert_called_once()
+        # All state should be cleared (same as <reset>)
+        self.assertEqual(self.service.streaming_buffer, "")
+        self.assertEqual(self.service.last_update_position, 0)
+        self.assertFalse(self.service.update_seen)
+        self.assertEqual(self.service.processor.current_words, {})
 
     def test_handle_mode_change_invalid_mode(self):
         """Verify rejection of modes not in available_modes."""
@@ -64,6 +72,24 @@ class TestModeChangeHandler(unittest.TestCase):
 
         self.assertFalse(result)
         self.assertEqual(self.config.mode, 'dictate')
+
+    def test_handle_mode_change_same_mode_no_reset(self):
+        """Verify switching to same mode doesn't clear state."""
+        self.service.composer.get_available_modes = Mock(return_value=['dictate', 'edit', 'shell'])
+
+        # Set up streaming state
+        self.service.streaming_buffer = "test"
+        self.service.last_update_position = 5
+        self.service.update_seen = True
+
+        # Switch to same mode
+        result = self.service._handle_mode_change('dictate')
+
+        self.assertTrue(result)
+        # State should NOT be cleared
+        self.assertEqual(self.service.streaming_buffer, "test")
+        self.assertEqual(self.service.last_update_position, 5)
+        self.assertTrue(self.service.update_seen)
 
 
 class TestModeExtractionFromXML(unittest.TestCase):
@@ -182,17 +208,16 @@ class TestStateResetMechanics(unittest.TestCase):
             self.service = TranscriptionService(self.config)
         self.service.composer.get_available_modes = Mock(return_value=['dictate', 'edit', 'shell'])
 
-    def test_reset_clears_compiled_text(self):
-        """Verify compiled_text is cleared on mode change."""
+    def test_mode_change_clears_processor_state(self):
+        """Verify processor state is cleared on mode change to different mode."""
         # Set up state
         self.service.processor.current_words = {10: "test ", 20: "content"}
 
-        # Mode change should trigger reset
+        # Mode change to different mode should clear processor state (same as <reset>)
         self.service._handle_mode_change('edit')
 
-        # State should be reset (processor.reset clears current_words)
-        # This is tested indirectly by verifying reset was called
-        # Direct state check depends on XMLStreamProcessor implementation
+        # Processor state should be cleared
+        self.assertEqual(self.service.processor.current_words, {})
 
 
 if __name__ == '__main__':

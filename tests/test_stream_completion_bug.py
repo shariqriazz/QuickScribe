@@ -25,6 +25,7 @@ class TestStreamCompletionBug(unittest.TestCase):
         """Set up test environment."""
         class MockConfig:
             debug_enabled = True
+            xml_stream_debug = False
 
         self.config = MockConfig()
         self.service = TranscriptionService(self.config)

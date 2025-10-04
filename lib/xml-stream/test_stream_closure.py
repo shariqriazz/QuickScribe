@@ -19,6 +19,7 @@ class TestStreamClosure:
         """Set up test fixtures."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         self.service = TranscriptionService(MockConfig())
         # Replace with MockKeyboardInjector for testing
         self.keyboard = MockKeyboardInjector()
@@ -90,7 +91,7 @@ class TestStreamClosure:
         """Compare complete stream (working) vs premature closure (broken)."""
 
         # Test 1: Complete stream (should work)
-        service1 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        service1 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False, 'xml_stream_debug': False})())
         keyboard1 = MockKeyboardInjector()
         service1.keyboard = keyboard1
         service1.processor.keyboard = keyboard1
@@ -106,7 +107,7 @@ class TestStreamClosure:
         assert complete_output == "Sounds great. I will give it a shot."
 
         # Test 2: Premature closure (broken)
-        service2 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        service2 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False, 'xml_stream_debug': False})())
         keyboard2 = MockKeyboardInjector()
         service2.keyboard = keyboard2
         service2.processor.keyboard = keyboard2
@@ -128,7 +129,7 @@ class TestStreamClosure:
 
     def test_incomplete_tag_handling(self):
         """Test handling of truly incomplete tags that can't be recovered."""
-        service = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        service = TranscriptionService(type('MockConfig', (), {'debug_enabled': False, 'xml_stream_debug': False})())
         keyboard = MockKeyboardInjector()
         service.keyboard = keyboard
         service.processor.keyboard = keyboard
