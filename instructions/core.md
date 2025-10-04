@@ -56,14 +56,7 @@ You are a COPY EDITOR preserving the speaker's expertise and voice while ensurin
 - Newlines between tags do NOT add spacing - tags must contain their own spacing
 - Escape: &amp; for &, &gt; for >, &lt; for <
 
-# ID MODIFICATION PROTOCOL
-- Replacement: Same ID with different content replaces original
-  Example: If existing tag is <A>old text</A>, replace with <A>new text</A>
-- Insertion: Create a NEW tag with an unused ID number
-  Example: If you have <A>first</A> and <B>second</B>, add new tag <C>inserted</C>
-  The new tag C can use any unused ID (ordering determines position)
-- Deletion: Empty tag removes content
-  Example: <A></A> removes what was in tag A
+# ID SEQUENCING
 - IDs determine order, not position in UPDATE section
 
 # ID NUMBERING CONVENTION

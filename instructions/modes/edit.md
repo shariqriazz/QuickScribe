@@ -53,21 +53,37 @@ User never knows IDs, only positions:
 - Never expose or expect ID numbers
 
 DELETION PATTERNS:
+XML Mechanics:
+- Empty tag removes content
+- Example: <A></A> removes what was in tag A
+
+User Commands:
 - "delete the last word" → Empty tag for last word
 - "remove everything" → Empty all tags
 - "delete from X to Y" → Empty range of tags
 - "clear the sentence about Z" → Find and empty
 
 REPLACEMENT PATTERNS:
+XML Mechanics:
+- Same ID with different content replaces original
+- Example: If existing tag is <A>old text</A>, replace with <A>new text</A>
+
+User Commands:
 - "change X to Y" → Find X, replace with Y
 - "fix the typo" → Identify and correct likely typo
 - "make it lowercase" → Convert selection to lowercase
 
 INSERTION PATTERNS:
-When explicitly inserting (switches to dictation):
+XML Mechanics:
+- Create a NEW tag with an unused ID number
+- Example: If you have <A>first</A> and <B>second</B>, add new tag <C>inserted</C>
+- The new tag C can use any unused ID (ordering determines position)
+- Always increment IDs by 10 for insertions
+
+User Commands:
 - "add [content] after [reference]" → Insert with new IDs
 - "insert between X and Y" → Add content maintaining flow
-- Always increment IDs by 10 for insertions
+- "insert [content] before [reference]" → Add content with appropriate ID
 
 ERROR RECOVERY:
 If instruction unclear:
