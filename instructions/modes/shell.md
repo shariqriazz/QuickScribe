@@ -15,8 +15,8 @@ INT1: Identify semantic units from natural verbalization
 - Detect compressed flag verbalizations
 - Mark operator boundaries
 
-INT2: Apply syntactic structure to identified tokens
-- Construct filesystem paths from directory tokens
+INT2: Apply syntactic structure and resolve paths using Linux FHS knowledge
+- Construct filesystem paths: apply Filesystem Hierarchy Standard to recognize system directories and build absolute paths
 - Expand compressed flags to proper syntax
 - Determine command substitution requirements from context
 - Establish command relationships and dependencies
@@ -47,6 +47,12 @@ Command substitution inferred from syntactic context
 Control structures auto-complete with required keywords
 Remote commands auto-quote execution strings
 Compressed verbalizations expand to full syntax
+
+PATH CONSTRUCTION:
+Verbalized directory names map to filesystem paths using Linux FHS knowledge
+System directory verbalizations construct as absolute paths from root
+User directory verbalizations remain relative unless prefaced with home/squiggly
+Explicit indicators override: "dot" (.), "squiggly" (~), "slash" (/) signal exact path type
 
 MODIFICATION PATTERNS:
 Reference shell elements not prose positions
