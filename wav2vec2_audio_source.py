@@ -33,9 +33,8 @@ from phoneme_mapper import process_wav2vec2_output
 
 
 def format_phoneme_output(raw_phonemes: str) -> str:
-    """Format phoneme output showing both IPA and alphanumeric versions."""
-    alpha_phonemes = process_wav2vec2_output(raw_phonemes)
-    return f"\n    IPA: {raw_phonemes.strip()}\n  ALPHA: {alpha_phonemes.strip()}"
+    """Format phoneme output showing IPA."""
+    return f"\n    IPA: {raw_phonemes.strip()}"
 
 
 class Wav2Vec2ChunkHandler(AudioChunkHandler):
@@ -182,7 +181,7 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
         self.model_path = model_path
 
         # Speed factors for multi-speed processing
-        self.speed_factors = [0.7, 0.8, 0.9, 1.0]
+        self.speed_factors = [0.80, 0.85, 0.90, 0.95]
 
         # Check for pyrubberband
         if pyrb is None:
@@ -245,19 +244,52 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
             self.id_to_phoneme = {}
 
     def _decode_phonemes(self, predicted_ids):
-        """Decode predicted IDs to phoneme string."""
+        """Decode predicted IDs to phoneme string with timing-based spacing."""
         if not self.id_to_phoneme:
             return ""
 
         phonemes = []
-        for token_id in predicted_ids[0].tolist():  # Take first batch
+        frame_gaps = []
+
+        prev_id = None
+        prev_frame = 0
+
+        for frame_idx, token_id in enumerate(predicted_ids[0].tolist()):
             if token_id in self.id_to_phoneme:
                 phoneme = self.id_to_phoneme[token_id]
-                # Skip special tokens
-                if phoneme not in ['<pad>', '<s>', '</s>', '<unk>']:
-                    phonemes.append(phoneme)
 
-        return ' '.join(phonemes)
+                if phoneme not in ['<pad>', '<s>', '</s>', '<unk>']:
+                    if token_id != prev_id and prev_id is not None:
+                        gap = frame_idx - prev_frame
+                        frame_gaps.append(gap)
+                        phonemes.append(phoneme)
+                        prev_frame = frame_idx
+                    elif prev_id is None:
+                        phonemes.append(phoneme)
+                        prev_frame = frame_idx
+
+                    prev_id = token_id
+
+        if not phonemes or len(frame_gaps) == 0:
+            return ''.join(phonemes) if phonemes else ""
+
+        # Calculate word-boundary percentile thresholds
+        gaps_sorted = sorted(frame_gaps)
+        percentiles = [0.60, 0.75, 0.90]
+        thresholds = []
+
+        for p in percentiles:
+            idx = min(int(len(gaps_sorted) * p), len(gaps_sorted) - 1)
+            thresholds.append(gaps_sorted[idx])
+
+        # Build output with graduated spacing
+        result = [phonemes[0]]
+        for i, gap in enumerate(frame_gaps):
+            spaces = sum(1 for threshold in thresholds if gap > threshold)
+            result.append(' ' * spaces)
+            result.append(phonemes[i + 1])
+
+        return ''.join(result)
 
     def get_result(self) -> AudioResult:
         """Override to process complete audio with Wav2Vec2."""
@@ -270,8 +302,8 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
 
         return result
 
-    def _process_audio_at_speed(self, audio_data: np.ndarray, speed_factor: float) -> tuple:
-        """Process audio at a specific speed and return raw phonemes and alphanumeric."""
+    def _process_audio_at_speed(self, audio_data: np.ndarray, speed_factor: float) -> str:
+        """Process audio at a specific speed and return raw phonemes."""
         try:
             # Apply time stretching if not 1.0
             if speed_factor != 1.0:
@@ -290,13 +322,12 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
                 logits = self.model(input_values).logits
                 predicted_ids = torch.argmax(logits, dim=-1)
                 raw_phonemes = self._decode_phonemes(predicted_ids)
-                alpha_phonemes = process_wav2vec2_output(raw_phonemes)
 
-                return (raw_phonemes, alpha_phonemes)
+                return raw_phonemes
 
         except Exception as e:
             print(f"Error processing audio at speed {speed_factor}: {e}", file=sys.stderr)
-            return ("", "")
+            return ""
 
     def _process_audio(self, audio_data: np.ndarray) -> str:
         """Process complete audio data with Wav2Vec2 at multiple speeds."""
@@ -332,23 +363,20 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
                 for future in as_completed(future_to_speed):
                     speed_factor = future_to_speed[future]
                     try:
-                        raw_phonemes, alpha_phonemes = future.result()
-                        speed_results[speed_factor] = (raw_phonemes, alpha_phonemes)
+                        raw_phonemes = future.result()
+                        speed_results[speed_factor] = raw_phonemes
                     except Exception as e:
                         print(f"Error processing speed {speed_factor}: {e}", file=sys.stderr)
-                        speed_results[speed_factor] = ("", "")
+                        speed_results[speed_factor] = ""
 
             for speed_factor in self.speed_factors:
-                raw_phonemes, alpha_phonemes = speed_results.get(speed_factor, ("", ""))
-                if raw_phonemes or alpha_phonemes:
-                    phoneme_key = (raw_phonemes, alpha_phonemes)
-
-                    if phoneme_key not in seen_phonemes:
-                        seen_phonemes.add(phoneme_key)
+                raw_phonemes = speed_results.get(speed_factor, "")
+                if raw_phonemes:
+                    if raw_phonemes not in seen_phonemes:
+                        seen_phonemes.add(raw_phonemes)
                         speed_pct = int(speed_factor * 100)
-                        results.append(f"  {speed_pct}% speed:\n    IPA: {raw_phonemes}\n  ALPHA: {alpha_phonemes}")
-                        print(f"{speed_pct}% speed - Raw IPA: {raw_phonemes}")
-                        #print(f"{speed_pct}% speed - Alphanumeric: {alpha_phonemes}")
+                        results.append(f"  {speed_pct}% speed:\n    IPA: {raw_phonemes}")
+                        print(f"{speed_pct}% speed - IPA: {raw_phonemes}")
                     else:
                         speed_pct = int(speed_factor * 100)
                         print(f"{speed_pct}% speed - Skipped (duplicate of previous speed)")

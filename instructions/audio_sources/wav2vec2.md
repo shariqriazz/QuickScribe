@@ -1,37 +1,45 @@
-PHONETIC TRANSCRIPTION ASSISTANCE:
-When mechanical transcription contains phoneme sequences, convert to natural words:
-- Mechanical transcription: Pre-processed phonetic data provided to model for word conversion
-- Input format: Alphanumeric phoneme codes (e.g., "HH EH L OW W ER L D")
-- Task: Convert phonemes to natural words based on phonetic pronunciation and context
-- Example: "HH EH L OW" → "hello", "T UW" → "to/too/two" (choose based on context)
-- Handle homophone disambiguation using surrounding context
-- Maintain same XML structure and processing as regular transcription
-- Treat phoneme input as mechanical transcription requiring the same analysis as audio input
+IPA PHONEME INPUT:
+Convert IPA phoneme sequences to natural words using context.
+Maintain XML structure identical to audio transcription.
 
-MULTI-SPEED PHONEME DISAMBIGUATION:
-- When provided with phoneme data at multiple speeds (70%, 80%, 90%, 100%)
-- Compare phoneme sequences across speeds to identify word options
-- Different speeds may reveal distinct phonetic patterns
-- Use variations to generate {option1|option2|option3} in TX
-- Example: 70% speed shows "K AE T", 90% shows "K AH T" → TX: "{cat|cut}"
-- INT section resolves to most contextually appropriate option
+MULTI-SPEED ENSEMBLE (4 speeds):
 
-PHONEME MAPPING REFERENCE:
-Original IPA phonemes are converted to alphanumeric codes in mechanical transcription:
-IPA → ALPHA mapping:
-Vowels: i→IY, ɪ→IH, e→EY, ɛ→EH, æ→AE, ə→AH, ɜ→ER, ɚ→ERR, ʌ→UH, ɐ→AA, a→AX, ᵻ→IX
-Back vowels: ɑ→AO, ɔ→OR, o→OW, ʊ→UU, u→UW, ɑː→AAR
-Consonants: p→P, b→B, t→T, d→D, k→K, g→G, f→F, v→V, s→S, z→Z, h→H
-Fricatives: θ→TH, ð→DH, ʃ→SH, ʒ→ZH, x→KH
-Affricates: tʃ→CH, dʒ→JH
-Nasals: m→M, n→N, ŋ→NG, ɲ→NY
-Liquids: l→L, r→R, ɹ→RR, ɾ→T
-Glides: j→Y, w→W, ɥ→WY
-Diphthongs: aɪ→AY, aʊ→AW, ɔɪ→OY, eɪ→EY, oʊ→OW, ɪə→IHR, ɛə→EHR, ʊə→UHR
-Markers: ː→LONG, ˈ→STRESS1, ˌ→STRESS2, .→SYLDIV, |→WORDSEP
+80% - Completeness (30% weight):
+- Preserves syllable onsets/endings other speeds drop
+- Use for: Missing word beginnings, final syllables, basic vocabulary
 
-ALPHA → IPA reverse mapping:
-IY→i, IH→ɪ, EY→e, EH→ɛ, AE→æ, AH→ə, ER→ɜ, ERR→ɚ, UH→ʌ, AA→ɐ, AX→a, IX→ᵻ
-AO→ɑ, OR→ɔ, OW→o, UU→ʊ, UW→u, AAR→ɑː, P→p, B→b, T→t, D→d, K→k, G→g
-F→f, V→v, S→s, Z→z, H→h, TH→θ, DH→ð, SH→ʃ, ZH→ʒ, KH→x, CH→tʃ, JH→dʒ
-M→m, N→n, NG→ŋ, NY→ɲ, L→l, R→r, RR→ɹ, Y→j, W→w, WY→ɥ
+85% - Moderate Complexity (15% weight):
+- Reliable on 3-4 syllable words
+- Degrades on 5+ syllables (drops consonants)
+
+90% - Primary Baseline (45% weight):
+- Best complex polysyllabic preservation
+- Optimal cluster handling (/stɹ/, /kw/, /ntɹ/)
+- Fewest errors across vocabulary types
+
+95% - Unique Phonemes (10% weight):
+- Complete vowel sequences (/juː/, diphthongs)
+- High error rate (spurious insertions, missing onsets)
+
+ENSEMBLE RULES:
+
+1. 3+ speeds agree → Use consensus
+2. 2 speeds agree → Use majority, reject outliers
+3. Speed-specific override on disagreement:
+   - 80%: Onsets/endings missing in others
+   - 90%: Complex words (5+ syllables)
+   - 95%: Unique vowel sequences absent elsewhere
+4. Reject phonemes appearing in only 1 speed
+5. Spacing: Single=word, double=phrase, triple=sentence boundary
+6. Use 90% spacing when speeds conflict
+
+WORKFLOW:
+1. Check consensus across speeds
+2. Apply speed-specific overrides for conflicts
+3. Start from 90% baseline
+4. Validate with 80% completeness
+5. Cross-check 85% on moderate words
+6. Extract unique phonemes from 95%
+7. Reject single-speed outliers
+8. Generate {option1|option2} in TX for valid alternatives
+9. Resolve in INT via context
