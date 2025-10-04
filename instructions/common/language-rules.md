@@ -1,101 +1,195 @@
-LANGUAGE FORMATTING RULES:
+# LANGUAGE PROCESSING RULES
 
-TECHNICAL TERMS:
-- Backticks: terminal commands, function names, code needing monospace
-  Examples: `ls`, `grep`, `main()`, `/usr/bin/python`
-- NO formatting: proper nouns (Linux, HTTP, Vosk, Gemini)
-- Test: Would you type this in terminal? → backticks
+## FUNDAMENTAL PRINCIPLE: MORPHOSYNTACTIC CORRECTION WITH LEXICAL PRESERVATION
+Grammatical well-formedness via morphosyntactic operations while maintaining speaker's lexical choices and idiolectal features
 
-CONCEPTUAL PHRASES:
-- Double quotes: phrases treated as single unit (air quotes)
-  Examples: "transcribe audio" vs "transcribe text", "data type"
-- Test: Conceptual distinction needing grouping? → double quotes
+## PROGRESSIVE REFINEMENT STAGES
 
-NUMBERS:
-- 0-3: spell out ("zero", "one", "two", "three")
-- 4+: digits ("4", "15", "100")
-- Percentages: % ("25%")
-- Currency: symbol ("$5")
-- Ordinals: "first place" but "May 1st"
-- Dot = period: "3.14" when speaker says "three dot fourteen"
+### Stage Definitions
+- INT: Primary interpretation - resolve ambiguities, remove disfluencies
+- INT1: Morphological correction - agreement, allomorphy, tense/aspect
+- INT2: Syntactic integration - clause combining, conjunction integration, comma splices
+- INT3: Final polish - punctuation, capitalization, prosodic boundaries
 
-CONTRACTIONS:
-Expand for formal style:
-- "don't" → "do not"
-- "can't" → "cannot"
+### Stage Principles
+- Cumulative: each includes all prior corrections
+- Progressive: no backtracking or reversal
+- Optional: omit unused stages; modes may override purposes
 
-EXPLICITLY VERBALIZED PUNCTUATION:
-When punctuation is explicitly called out, it is REQUIRED:
-- "error exclamation mark" → "error!"
-- "note colon" → "note:"
-- "important comma" → "important,"
-- "done period" → "done."
-- If speaker verbalizes the punctuation mark, include it
+## ORTHOGRAPHIC CONVENTIONS
 
-QUESTION MARKS:
-Use ? for interrogative syntax only:
-- "Why would we do that?" (interrogative, use ?)
-- "List all sounds" (imperative command, use .)
-- "Show me the difference" (imperative, use .)
-- "I do not know why" (statement, use .)
+### Code Delimitation
+- Executable syntax: backticks (`command`, `function()`, `/path/to/file`)
+- Proper nouns: standard typography (Linux, HTTP, Vosk, Gemini)
 
-ELLIPSES:
-- Remove all ellipses from edited output
-- Pauses and hesitations are removed, not marked
+### Phrasal Marking
+- Metalinguistic reference: quotation marks for conceptual units ("data type")
 
-COPY EDITING RULES:
+## NUMERICAL REPRESENTATION
 
-MINIMAL EDITING DEFINITION:
-Copy editing = fix grammar + remove fillers + add punctuation
-Copy editing ≠ restructure, reorder, substitute
-- Good: "well it seems" → "it seems" (filler removal)
-- Bad: "it seems" → "that seems" (word substitution)
+### Cardinal Numbers
+- Orthographic: zero, one, two, three
+- Arabic: 4, 15, 100
 
-WORD SUBSTITUTION - NEVER:
-❌ "who use" → "that use"
-❌ "providing" → "including"
-❌ "inner" → "in their"
+### Special Cases
+- Percentages: 25%
+- Currency: $5
+- Decimals: Preserve verbalized "dot" as period (3.14)
+- Ordinals: Context-dependent ("first place", "May 1st")
 
-Acceptable Edits:
-- Fix grammar for readability
-- Remove fillers: uh, ah, excessive "like"
-- Reduce emphasis repetition: "very very" → "very"
-- Add punctuation for clarity
-- Clean stutters: "the the" → "the"
-- Combine simple sentences into compound/complex structures
+## PROSODIC PUNCTUATION
 
-SELF-CORRECTIONS:
-Use corrected version when speaker self-corrects:
-- "Send it to John. No wait, send it to Jane" → "Send it to Jane"
-- Signals: I mean, actually, rather, no wait, or, etc → correct to omit the original version
+### Verbalized Punctuation
+- Explicit metalinguistic punctuation commands → orthographic realization
+- Phonological representation → graphemic conversion
+- "comma" → "," | "period" → "." | "exclamation" → "!"
 
-SPELLING PROVIDED:
-Speaker spelling = correction:
-- "Linux, L-I-N-U-X" → Use "Linux"
+### Interrogative Marking
+- Syntactic interrogatives: obligatory question mark
+- Imperatives: terminal period despite rising intonation
+- Declaratives: period regardless of prosodic contour
 
-FALSE STARTS:
-- Omit incomplete attempts
-- "We need to... the system requires" → "The system requires"
+### Exclamative Restraint
+- Default to terminal period for declarative utterances
+- Reserve exclamation marks for genuine exclamatives with lexical markers
+- Emphasis via lexical intensification, not punctuation proliferation
 
-SENTENCE FRAGMENTS:
-- No capital or period (unless proper noun)
-- "modify so that we can" → modify so that we can
-- Exception: "what we need:" (colon for introduction)
-- Do not reorder or restructure sentences except as defined herein
+## CONTRACTION RESOLUTION
+- Negation: "don't" → "do not", "can't" → "cannot"
+- Auxiliary: "I'll" → "I will", "we've" → "we have"
 
-SENTENCE STRUCTURE (PROFESSIONAL CLARITY):
-- Minimize simple staccato sentences
-- Combine into compound/complex structures
-- Bad: "I went to store. There was bread. I bought some."
-- Good: "I went to the store and bought some bread."
-- Use conjunctions, commas, semicolons appropriately
-- Professional business tone, not first-grade style
+## DISCOURSE DISFLUENCY ELIMINATION
 
-PRESERVE EXACTLY:
-- Technical terminology
-- Speaker's word choices
-- Requirements language (must/should/can)
+### Obligatory Deletions
+- Filled pauses: paralinguistic hesitation markers (uh, um, ah, er)
+- False starts: syntactically incomplete utterance fragments
+- Performance errors: unintentional lexical reduplication
+- Repetition disfluencies: adjacent identical lexemes without rhetorical function
+- Discourse markers without propositional content: excessive "like", "you know"
 
-MINIMAL EDITING IN SPECIFIC CONTEXTS:
-- When replacing content, preserve exact phrasing
-- Fix only obvious errors (spelling, basic grammar, makes certain verbs are used properly)
+### Self-Repair Processing
+- Retain reparandum, delete original utterance
+- Repair markers trigger deletion: "I mean", "actually", "rather", "no wait"
+- "Send to John. No wait, to Jane" → "Send to Jane"
+
+### Spelling Corrections
+- Accept speaker-provided spelling: "Linux, L-I-N-U-X" → "Linux"
+
+## GRAMMATICAL CORRECTION TAXONOMY
+
+### OBLIGATORY CORRECTIONS
+
+#### Morphological Agreement
+- Subject-verb concord: singular/plural inflection alignment
+- Pronoun-antecedent concordance: φ-features (person, number, gender)
+- Determiner-noun agreement: demonstrative/quantifier concord
+
+#### Syntactic Well-formedness
+- Tense/aspect consistency: maintain temporal reference across discourse units
+- Case assignment: nominative/accusative/genitive distribution
+- Parallel structure: coordinate constituents require identical phrasal categories
+- Article allomorphy: phonologically conditioned a/an alternation
+- Modifier attachment: resolve ambiguous adjectival/adverbial scope
+- Negative polarity: eliminate negative concord in standard varieties
+
+#### Clause Integration
+- Coordinating conjunction prohibition at sentence boundaries (FANBOYS: for, and, nor, but, or, yet, so)
+- Obligatory syntactic integration via comma or semicolon
+- "I tried. And succeeded." → "I tried, and succeeded."
+- Comma splice repair: independent clauses require proper coordination or subordination
+
+### PROHIBITED MODIFICATIONS
+
+#### Lexical Level
+- Root morpheme substitution: preserve speaker's vocabulary choices
+- Register shifting: maintain formality level of original utterance
+- Semantic alteration: no paraphrasing or meaning changes
+
+#### Syntactic Level
+- Voice alternation: preserve active/passive as spoken
+- Constituent reordering: maintain information structure (except conjunction integration)
+- Cleft/pseudocleft transformation: preserve focus marking
+
+#### Stylistic Level
+- Pleonasm reduction when grammatically correct: "a thing that is" remains
+- Verbosity adjustment: preserve speaker's elaboration patterns
+- Idiomatic substitution: maintain speaker's phraseological choices
+
+## SYNTACTIC COMPLEXITY ENHANCEMENT
+
+### Paratactic to Hypotactic Transformation
+- Obligatory coordination of semantically related independent clauses
+- Subordination where logical dependency exists
+- Professional register achieved through syntactic sophistication
+
+### Clause Combining Criteria
+- Topical continuity: shared referents across clauses
+- Temporal adjacency: sequential events in discourse
+- Causal relationship: result or consequence marking
+
+### Transformation Examples
+- Paratactic: "I went to store. There was bread. I bought some."
+- Hypotactic: "I went to the store where there was bread, and I bought some."
+- Principle: Maintain propositional content while increasing structural complexity
+
+## PRESERVATION PRINCIPLES
+
+### Invariant Lexical Elements
+- Technical terminology: domain-specific vocabulary
+- Modal force: deontic/epistemic distinctions (must/should/may)
+- Lexical selection: speaker's vocabulary choices including informal markers
+- Phraseological units: collocations and fixed expressions
+
+### Invariant Stylistic Features
+- Idiolectal patterns: individual speech characteristics
+- Register markers: formality level indicators
+- Discourse style: elaborative vs. concise patterns
+- Information packaging: speaker's chosen focus structure
+
+## EDITORIAL BOUNDARIES
+
+### Permitted Operations
+- Morphosyntactic correction: inflectional morphology, agreement features
+- Punctuation insertion: syntactically motivated boundary marking
+- Disfluency elimination: performance error removal
+- Conjunction integration: clause-level coordination
+
+### Prohibited Operations
+- Semantic modification: propositional content alteration
+- Stylistic normalization: register or formality adjustment
+- Lexical enhancement: vocabulary sophistication
+- Syntactic reordering: information structure modification
+
+## FRAGMENT PROCESSING
+
+### Elliptical Constructions
+- Preserve syntactically incomplete but pragmatically felicitous utterances
+- Contextually recoverable elements remain implicit
+- Introducer phrases with colon: "what we need:" maintains fragment status
+
+## ERROR HIERARCHY
+
+### Priority Order
+1. Agreement violations (morphosyntactic)
+2. Structural ill-formedness (syntactic)
+3. Conjunction placement (discourse)
+4. Disfluency markers (performance)
+5. Punctuation (orthographic)
+
+## PROCESSING ALGORITHM
+
+### Sequential Operations
+1. Tokenization with prosodic boundary detection
+2. Morphosyntactic parsing for error identification
+3. Error classification via grammaticality judgment
+4. Minimal edit distance correction application
+5. Lexical invariance verification
+
+### Constraint Ranking
+Grammaticality >> Structural coherence >> Lexical fidelity >> Prosodic authenticity
+
+### Minimal Correction Principle
+- Apply fewest modifications necessary for well-formedness
+- Preserve maximal lexical material from source utterance
+- *the dogs is barking → the dogs are barking (single morpheme change)
+- NOT: *the dogs is barking → the dog is barking (unnecessary number alteration)
