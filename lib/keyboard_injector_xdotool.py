@@ -67,6 +67,7 @@ class XdotoolKeyboardInjector(KeyboardInjector):
                     cmd = [
                         "xdotool", "type",
                         "--delay", str(self.typing_delay),
+                        "--",
                         line
                     ]
                     if self.debug_enabled:

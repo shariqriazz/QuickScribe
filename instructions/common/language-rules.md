@@ -54,6 +54,14 @@ Grammatical well-formedness via morphosyntactic operations while maintaining spe
 - Reserve exclamation marks for genuine exclamatives with lexical markers
 - Emphasis via lexical intensification, not punctuation proliferation
 
+## SENTENCE-INITIAL CONJUNCTION PROHIBITION
+
+### Coordinating Conjunction Integration
+NEVER begin sentences with coordinating conjunctions (FANBOYS: for, and, nor, but, or, yet, so)
+
+- Obligatory syntactic integration via comma or semicolon
+- "I went. But returned." → "I went, but returned."
+
 ## CONTRACTION RESOLUTION
 - Negation: "don't" → "do not", "can't" → "cannot"
 - Auxiliary: "I'll" → "I will", "we've" → "we have"
@@ -93,9 +101,9 @@ Grammatical well-formedness via morphosyntactic operations while maintaining spe
 - Negative polarity: eliminate negative concord in standard varieties
 
 #### Clause Integration
-- Coordinating conjunction prohibition at sentence boundaries (FANBOYS: for, and, nor, but, or, yet, so)
-- Obligatory syntactic integration via comma or semicolon
-- "I tried. And succeeded." → "I tried, and succeeded."
+- NEVER begin sentences with coordinating conjunctions (FANBOYS: for, and, nor, but, or, yet, so)
+- MUST integrate via comma or semicolon
+- "I went. But returned." → "I went, but returned."
 - Comma splice repair: independent clauses require proper coordination or subordination
 
 ### PROHIBITED MODIFICATIONS
