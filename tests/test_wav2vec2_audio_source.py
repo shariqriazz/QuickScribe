@@ -99,7 +99,7 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
         mock_predicted_ids = [mock_tensor]  # Mock batch with one element
 
         result = audio_source._decode_phonemes(mock_predicted_ids)
-        self.assertEqual(result, "t ɛ s")
+        self.assertEqual(result, "tɛs")
 
     def test_audio_processing(self):
         """Test audio processing functionality."""

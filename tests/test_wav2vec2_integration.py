@@ -315,10 +315,9 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
             instructions = composer.compose('dictate', 'wav2vec2')
 
             # Verify phoneme-specific instructions are included
-            self.assertIn("PHONETIC TRANSCRIPTION ASSISTANCE", instructions)
+            self.assertIn("IPA PHONEME INPUT", instructions)
             self.assertIn("phoneme sequences", instructions)
-            self.assertIn("HH EH L OW", instructions)
-            self.assertIn("homophone disambiguation", instructions)
+            self.assertIn("MULTI-SPEED ENSEMBLE", instructions)
 
     def test_phoneme_instruction_examples(self):
         """Test that phoneme instructions include proper examples."""
@@ -335,10 +334,10 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
             composer = InstructionComposer()
             instructions = composer.compose('dictate', 'wav2vec2')
 
-            # Check for specific examples
-            self.assertIn('"HH EH L OW" → "hello"', instructions)
-            self.assertIn('"T UW" → "to/too/two"', instructions)
-            self.assertIn("mechanical transcription", instructions)
+            # Check for specific content
+            self.assertIn("ENSEMBLE RULES", instructions)
+            self.assertIn("WORKFLOW", instructions)
+            self.assertIn("80% - Completeness", instructions)
 
 
 def run_integration_tests():

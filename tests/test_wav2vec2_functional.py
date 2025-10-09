@@ -53,10 +53,9 @@ def test_model_instructions():
         instructions = composer.compose('dictate', 'wav2vec2')
 
         # Check for phoneme-specific content
-        assert "PHONETIC TRANSCRIPTION ASSISTANCE" in instructions
+        assert "IPA PHONEME INPUT" in instructions
         assert "phoneme sequences" in instructions
-        assert "HH EH L OW" in instructions
-        assert "homophone disambiguation" in instructions
+        assert "MULTI-SPEED ENSEMBLE" in instructions
         print("✓ Audio source provides phoneme processing guidance")
 
 
