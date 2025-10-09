@@ -45,6 +45,9 @@ class ConfigManager:
         self.temperature = 0.2  # Optimal for focused output (2025 best practices)
         self.max_tokens = None  # No output limit by default
         self.top_p = 0.9
+
+        # Microphone release delay
+        self.mic_release_delay = 350  # milliseconds
         
         # Load environment variables
         script_dir = os.path.dirname(__file__)
@@ -243,6 +246,12 @@ class ConfigManager:
             default=None,
             help="API key for the provider (overrides environment variables)."
         )
+        parser.add_argument(
+            "--mic-release-delay",
+            type=int,
+            default=350,
+            help="Delay in milliseconds to continue recording after trigger release (default: 350ms)."
+        )
         return parser
     
     def handle_interactive_mode(self):
@@ -305,6 +314,9 @@ class ConfigManager:
 
         # API key
         self.api_key = getattr(args, 'key', None)
+
+        # Microphone release delay
+        self.mic_release_delay = getattr(args, 'mic_release_delay', 350)
 
     def parse_configuration(self):
         """Parse configuration from command line arguments or interactive mode."""

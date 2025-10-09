@@ -161,6 +161,7 @@ class DictationApp:
         """Stop recording and process result."""
         if self._is_recording and self.audio_source:
             self._is_recording = False
+            time.sleep(self.config.mic_release_delay / 1000.0)
             result = self.audio_source.stop_recording()
 
             # Check for empty result and show prompt immediately
