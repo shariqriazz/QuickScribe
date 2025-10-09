@@ -86,20 +86,25 @@ class XMLStreamProcessor:
 
     def _extract_complete_tags(self, buffer: str) -> Tuple[List[Tuple[int, str]], str]:
         """Extract complete <N>word</N> tags, return remaining buffer."""
-        pattern = r'<(\d+)>(.*?)</\1>'
+        pattern = r'<(\d+)>(.*?)</(\d+)>'
         updates = []
         last_end = 0
 
         self._debug(f"      _extract_complete_tags(buffer='{buffer}')")
 
         for match in re.finditer(pattern, buffer):
-            seq = int(match.group(1))
+            opening_seq = int(match.group(1))
             word = match.group(2)
+            closing_seq = int(match.group(3))
+
+            if opening_seq != closing_seq:
+                print(f"⚠️  XML tag mismatch: <{opening_seq}>...</{closing_seq}> (using opening tag {opening_seq})", file=sys.stderr)
+
             # Unescape XML entities in tag content
             word = self._unescape_xml_entities(word)
-            updates.append((seq, word))
+            updates.append((opening_seq, word))
             last_end = match.end()
-            self._debug(f"        Found complete tag: seq={seq}, word='{word}')")
+            self._debug(f"        Found complete tag: seq={opening_seq}, word='{word}')")
 
         # Return remaining buffer after last complete match
         remaining_buffer = buffer[last_end:]
