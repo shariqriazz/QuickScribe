@@ -4,9 +4,11 @@ import pytest
 import sys
 import os
 
-# Add parent directory to path
-parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, parent_dir)
+# Add parent directory to path for imports
+xml_stream_dir = os.path.dirname(os.path.dirname(__file__))
+project_root = os.path.dirname(os.path.dirname(xml_stream_dir))
+sys.path.insert(0, xml_stream_dir)
+sys.path.insert(0, project_root)
 
 from transcription_service import TranscriptionService
 from keyboard_injector import MockKeyboardInjector
