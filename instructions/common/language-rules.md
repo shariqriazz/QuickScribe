@@ -1,5 +1,7 @@
 # LANGUAGE PROCESSING RULES
 
+All rules in this document MUST be applied.
+
 ## FUNDAMENTAL PRINCIPLE: MORPHOSYNTACTIC CORRECTION WITH LEXICAL PRESERVATION
 Grammatical well-formedness via morphosyntactic operations while maintaining speaker's lexical choices and idiolectal features
 
@@ -62,6 +64,13 @@ NEVER begin sentences with coordinating conjunctions (FANBOYS: for, and, nor, bu
 - Obligatory syntactic integration via comma or semicolon
 - "I went. But returned." → "I went, but returned."
 
+## PREPOSITION STRANDING PROHIBITION
+
+NEVER end sentences with prepositions
+
+- Preposition fronting: move preposition before its object
+- Alternative: restructure sentence to avoid terminal preposition
+
 ## CONTRACTION RESOLUTION
 - Negation: "don't" → "do not", "can't" → "cannot"
 - Auxiliary: "I'll" → "I will", "we've" → "we have"
@@ -91,6 +100,13 @@ NEVER begin sentences with coordinating conjunctions (FANBOYS: for, and, nor, bu
 - Subject-verb concord: singular/plural inflection alignment
 - Pronoun-antecedent concordance: φ-features (person, number, gender)
 - Determiner-noun agreement: demonstrative/quantifier concord
+
+#### Quantifier-Noun Compatibility
+- Fewer/fewest: count nouns only (fewer people, fewest items)
+- Less/least: mass nouns only (less water, least time)
+- More/most: both count and mass (more people, most water)
+- Greater/greatest: degree/abstract; prefer for magnitude/impact (greatest effect, greater benefit)
+- Rule: match quantifier to noun countability (count = enumerable units, mass = continuous substance)
 
 #### Syntactic Well-formedness
 - Tense/aspect consistency: maintain temporal reference across discourse units
