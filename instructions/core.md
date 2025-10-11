@@ -6,12 +6,24 @@ CRITICAL: Multiple <xml> blocks are STRICTLY FORBIDDEN.
 CRITICAL: All content MUST be combined into a SINGLE <xml> block.
 NO content MUST appear before or after the <xml> block.
 The ONE AND ONLY <xml> block contains:
+
 <xml>
-<tx>[ABSOLUTELY LITERAL audio transcription - preserve EVERYTHING as heard: duplicates, stutters, false starts, repetitions, fillers - NO XML tags - ONLY transcribed speech - sound-alikes use {option1|option2} format]</tx>
-<int>[primary interpretation - mode dependent - resolve sound-alikes and apply edits]</int>
-<int1>[optional: first-stage refinement - omit if identical to int]</int1>
-<int2>[optional: second-stage refinement - omit if identical to int1]</int2>
-<int3>[optional: third-stage refinement - omit if identical to int2]</int3>
+<n>[MUST list ALL silence-separated audio segment times separated by more than one second: [1,3,5,12,30,15,...] ]</n>
+<amb>[List ALL ambiguous terms using {brace|markup}, omit if none]</amb>
+<grm>[List ALL [mode violations], omit if none]</grm>
+<tx>[
+- MUST PROVIDE ABSOLUTELY LITERAL audio transcription of ALL SEGMENTS from n, above
+- VERBATIM, preserve EVERYTHING as heard: duplicates, stutters, false starts, repetitions, fillers 
+- MUST show sound-alike terms use {option1|option2} format
+- must show [segmented of language] with grammatical errors, [surrounds by] square brackets] For later cleanup
+- NO XML tags 
+- ONLY transcribed speech
+</tx>
+<req>Terse list max 2-words each of only relevant mode requirements for interpretation stages to follow</req>
+<int>[mode dependent: interperet and resolve ONLY sound-alikes]</int>
+<int1>[mode dependent: first-stage refinement - MUST OMIT if identical to int]</int1>
+<int2>[mode dependent: second-stage refinement - MUST OMIT if identical to int1]</int2>
+<int3>[mode dependent: third-stage refinement - MUST OMIT if identical to int2]</int3>
 <mode>[optional mode_name: {{AVAILABLE_MODES}} - include ONLY when switching modes]</mode>
 <update>[numbered word tags with content - all tags on ONE LINE - spacing inside tags]</update>
 </xml>

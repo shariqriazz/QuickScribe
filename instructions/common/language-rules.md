@@ -51,6 +51,9 @@ Explicit metalinguistic punctuation commands → orthographic realization:
 ### Exclamative Restraint
 Default to terminal period; reserve exclamation marks for genuine exclamatives with lexical markers. Emphasis via lexical intensification, not punctuation proliferation.
 
+### Discourse Marker Integration
+Sentence-initial phatic expressions and frame-setting discourse markers integrate via comma when followed by propositional content rather than standing as independent assertions.
+
 ## PREPOSITION STRANDING PROHIBITION
 
 NEVER end sentences with prepositions
