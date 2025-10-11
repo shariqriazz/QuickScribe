@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Yellow/amber circular arrows for processing/waiting state -->
+  <path d="M 32 8 A 24 24 0 0 1 32 56" stroke="#F57C00" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <polygon points="32,2 26,14 38,14" fill="#F57C00"/>
+  <path d="M 32 56 A 24 24 0 0 1 32 8" stroke="#F57C00" stroke-width="8" fill="none" stroke-linecap="round" opacity="0.4"/>
+</svg>

@@ -11,6 +11,8 @@ import threading
 import numpy as np
 import soundfile as sf
 from pynput import keyboard
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
+from PyQt6.QtCore import QTimer
 
 # Configuration management
 from config_manager import ConfigManager
@@ -30,6 +32,9 @@ from transcription_service import TranscriptionService
 from providers.base_provider import BaseProvider
 from providers.conversation_context import ConversationContext
 
+# Qt UI components
+from ui import PosixSignalBridge, SystemTrayUI, AppState
+
 # --- Constants ---
 DTYPE = 'int16'
 DEFAULT_TRIGGER_KEY = 'alt_r'
@@ -39,12 +44,12 @@ DEFAULT_CHANNELS = 1
 
 class DictationApp:
     """Main dictation application with provider abstraction."""
-    
+
     def __init__(self):
         # Configuration
         self.config_manager = ConfigManager()
         self.config = None
-        
+
         # Service components
         self.audio_source = None
         self.transcription_service = None
@@ -54,6 +59,12 @@ class DictationApp:
         self.trigger_key = None
         self.keyboard_listener = None
         self._is_recording = False
+
+        # Qt components
+        self.qt_app = None
+        self.signal_bridge = None
+        self.system_tray = None
+        self._app_state = AppState.IDLE
     
     def _get_conversation_context(self) -> ConversationContext:
         """Build conversation context from XMLStreamProcessor state."""
@@ -153,9 +164,19 @@ class DictationApp:
     # Recording control - single point of truth
     def start_recording(self):
         """Start recording if not already recording."""
+        print(f"start_recording called: _is_recording={self._is_recording}, audio_source={self.audio_source is not None}")
         if not self._is_recording and self.audio_source:
             self._is_recording = True
+            print("Setting state to RECORDING")
+            self._update_tray_state(AppState.RECORDING)
+            print("Calling audio_source.start_recording()")
             self.audio_source.start_recording()
+            print("Recording started")
+        else:
+            if self._is_recording:
+                print("Already recording, ignoring")
+            if not self.audio_source:
+                print("No audio source available")
 
     def stop_recording(self):
         """Stop recording and process result."""
@@ -166,10 +187,12 @@ class DictationApp:
 
             # Check for empty result and show prompt immediately
             if isinstance(result, AudioDataResult) and len(result.audio_data) == 0:
+                self._update_tray_state(AppState.IDLE)
                 self._show_recording_prompt()
                 return
 
             # Process non-empty result in thread
+            self._update_tray_state(AppState.PROCESSING)
             threading.Thread(
                 target=self._process_audio_result_and_prompt,
                 args=(result,),
@@ -181,6 +204,7 @@ class DictationApp:
         try:
             self._process_audio_result(result)
         finally:
+            self._update_tray_state(AppState.IDLE)
             self._show_recording_prompt()
 
     # Input handling (moved from InputController)
@@ -202,30 +226,33 @@ class DictationApp:
         except Exception as e:
             print(f"\nError in on_release: {e}", file=sys.stderr)
 
-    def handle_sigusr1(self, signum, frame):
-        """Handle SIGUSR1 signal to switch mode and start recording."""
+    def _handle_signal_channel(self, channel_name: str):
+        """Handle signal received via bridge channel."""
+        print(f"\nSignal channel received: {channel_name}")
         try:
-            if self.transcription_service:
-                self.transcription_service._handle_mode_change(self.config.sigusr1_mode)
-            self.start_recording()
+            if channel_name == "mode_switch_1":
+                print(f"Mode switch to: {self.config.sigusr1_mode}")
+                if self.transcription_service:
+                    self.transcription_service._handle_mode_change(self.config.sigusr1_mode)
+                print("Starting recording...")
+                self.start_recording()
+            elif channel_name == "mode_switch_2":
+                print(f"Mode switch to: {self.config.sigusr2_mode}")
+                if self.transcription_service:
+                    self.transcription_service._handle_mode_change(self.config.sigusr2_mode)
+                print("Starting recording...")
+                self.start_recording()
+            elif channel_name == "stop_recording":
+                print("Stopping recording...")
+                self.stop_recording()
+            elif channel_name == "interrupt":
+                print("\nCtrl+C detected. Exiting.")
+                if self.qt_app:
+                    self.qt_app.quit()
         except Exception as e:
-            print(f"\nError in SIGUSR1 handler: {e}", file=sys.stderr)
-
-    def handle_sigusr2(self, signum, frame):
-        """Handle SIGUSR2 signal to switch mode and start recording."""
-        try:
-            if self.transcription_service:
-                self.transcription_service._handle_mode_change(self.config.sigusr2_mode)
-            self.start_recording()
-        except Exception as e:
-            print(f"\nError in SIGUSR2 handler: {e}", file=sys.stderr)
-
-    def handle_sighup(self, signum, frame):
-        """Handle SIGHUP signal to stop recording."""
-        try:
-            self.stop_recording()
-        except Exception as e:
-            print(f"\nError in SIGHUP handler: {e}", file=sys.stderr)
+            print(f"\nError handling signal channel '{channel_name}': {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
 
     def setup_trigger_key(self):
         """Sets up the trigger key based on configuration."""
@@ -245,13 +272,42 @@ class DictationApp:
         return True
 
     def setup_signal_handlers(self):
-        """Setup POSIX signal handlers for SIGUSR1/SIGUSR2/SIGHUP."""
+        """Setup POSIX signal handlers via Qt bridge."""
         try:
-            signal.signal(signal.SIGUSR1, self.handle_sigusr1)
-            signal.signal(signal.SIGUSR2, self.handle_sigusr2)
-            signal.signal(signal.SIGHUP, self.handle_sighup)
-        except Exception:
-            pass  # Signal handling may not be available on all platforms
+            self.qt_app = QApplication.instance() or QApplication(sys.argv)
+            print("Qt application initialized")
+
+            self.signal_bridge = PosixSignalBridge()
+            self.signal_bridge.register_signal(signal.SIGUSR1, "mode_switch_1")
+            self.signal_bridge.register_signal(signal.SIGUSR2, "mode_switch_2")
+            self.signal_bridge.register_signal(signal.SIGHUP, "stop_recording")
+            self.signal_bridge.register_signal(signal.SIGINT, "interrupt")
+            self.signal_bridge.signal_received.connect(self._handle_signal_channel)
+            print("Signal bridge initialized")
+
+        except Exception as e:
+            print(f"Warning: Signal bridge initialization failed: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            self.signal_bridge = None
+
+        try:
+            if not QSystemTrayIcon.isSystemTrayAvailable():
+                print("Warning: System tray not available on this system", file=sys.stderr)
+                return
+
+            self.system_tray = SystemTrayUI()
+            self.system_tray.start_recording_requested.connect(self.start_recording)
+            self.system_tray.stop_recording_requested.connect(self.stop_recording)
+            self.system_tray.quit_requested.connect(self.qt_app.quit)
+            self._update_tray_state(AppState.IDLE)
+            print("System tray initialized")
+
+        except Exception as e:
+            print(f"Warning: System tray initialization failed: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            self.system_tray = None
 
     def start_keyboard_listener(self):
         """Start the keyboard listener if trigger key is configured."""
@@ -274,6 +330,12 @@ class DictationApp:
             print(f"\nHold '{self.config.trigger_key_name}' to record...")
         else:
             print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
+
+    def _update_tray_state(self, new_state: AppState):
+        """Update application state and notify system tray."""
+        self._app_state = new_state
+        if self.system_tray:
+            self.system_tray.set_state(new_state)
 
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
@@ -411,18 +473,24 @@ class DictationApp:
         try:
             # Audio device test is handled in audio_source.initialize()
             # No additional test needed here
-            
+
             # Start input listener
             if self.is_trigger_enabled():
                 listener = self.start_keyboard_listener()
-                if listener:
-                    listener.join()
+                print(f"Keyboard listener started")
+
+            # Run Qt event loop (handles both signals and events)
+            if self.qt_app:
+                print(f"Starting Qt event loop (qt_app exists, listener={'exists' if listener else 'None'})")
+                self.qt_app.exec()
+            elif listener:
+                print("No Qt app, running keyboard listener loop")
+                listener.join()
             else:
+                print("No Qt app, no listener, running sleep loop")
                 while True:
                     time.sleep(1)
 
-        except KeyboardInterrupt:
-            print("\nCtrl+C detected. Exiting.")
         except Exception as e:
             print(f"\nAn unexpected error occurred in main execution: {e}", file=sys.stderr)
             import traceback
@@ -434,6 +502,10 @@ class DictationApp:
     def cleanup(self):
         """Clean up resources."""
         print("\nCleaning up...")
+        if self.system_tray:
+            self.system_tray.cleanup()
+        if self.signal_bridge:
+            self.signal_bridge.cleanup()
         if self.keyboard_listener and self.keyboard_listener.is_alive():
             self.keyboard_listener.stop()
         if self.audio_source:
