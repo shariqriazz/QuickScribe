@@ -3,20 +3,19 @@
 All rules in this document MUST be applied.
 
 ## FUNDAMENTAL PRINCIPLE: MORPHOSYNTACTIC CORRECTION WITH LEXICAL PRESERVATION
-Grammatical well-formedness via morphosyntactic operations while maintaining speaker's lexical choices and idiolectal features
+Grammatical well-formedness via morphosyntactic operations while preserving speaker's lexical choices, register, semantic content, information structure, and idiolectal features. Apply fewest modifications necessary; preserve maximal lexical material from source utterance.
 
 ## PROGRESSIVE REFINEMENT STAGES
 
-### Stage Definitions
-- INT: Primary interpretation - resolve ambiguities, remove disfluencies
-- INT1: Morphological correction - agreement, allomorphy, tense/aspect
-- INT2: Syntactic integration - clause combining, conjunction integration, comma splices
-- INT3: Final polish - punctuation, capitalization, prosodic boundaries
+### Stage Definitions (Required)
+- <int>Primary interpretation - resolve ambiguities, eliminate disfluencies, self-repair processing, speaker-provided spelling</int>
+- <int1>apply Morphological correction - subject-verb agreement, pronoun-antecedent concordance, determiner-noun agreement, quantifier-noun compatibility, contraction resolution, article allomorphy (a/an), tense/aspect consistency</int1>
+- <int2>apply Syntactic integration - clause combining, comma splice repair, conjunction placement (no FANBOYS sentence-initial), preposition stranding prohibition, fragment processing, case assignment, parallel structure, modifier attachment, negative polarity</int2>
+- <int3>apply Final polish - punctuation (verbalized, interrogative, exclamative), capitalization, prosodic boundaries, numerical representation, orthographic conventions (code delimitation, phrasal marking)</int3>
 
-### Stage Principles
+- MUST omit stages that produce identical output to prior stage (omit the tag entirely)
 - Cumulative: each includes all prior corrections
 - Progressive: no backtracking or reversal
-- Optional: omit unused stages; modes may override purposes
 
 ## ORTHOGRAPHIC CONVENTIONS
 
@@ -42,27 +41,15 @@ Grammatical well-formedness via morphosyntactic operations while maintaining spe
 ## PROSODIC PUNCTUATION
 
 ### Verbalized Punctuation
-- Explicit metalinguistic punctuation commands → orthographic realization
-- Phonological representation → graphemic conversion
-- "comma" → "," | "period" → "." | "exclamation" → "!"
+Explicit metalinguistic punctuation commands → orthographic realization:
+- "comma" → "," | "period" → "."
 
 ### Interrogative Marking
 - Syntactic interrogatives: obligatory question mark
-- Imperatives: terminal period despite rising intonation
-- Declaratives: period regardless of prosodic contour
+- Non-interrogatives: terminal period regardless of prosodic contour
 
 ### Exclamative Restraint
-- Default to terminal period for declarative utterances
-- Reserve exclamation marks for genuine exclamatives with lexical markers
-- Emphasis via lexical intensification, not punctuation proliferation
-
-## SENTENCE-INITIAL CONJUNCTION PROHIBITION
-
-### Coordinating Conjunction Integration
-NEVER begin sentences with coordinating conjunctions (FANBOYS: for, and, nor, but, or, yet, so)
-
-- Obligatory syntactic integration via comma or semicolon
-- "I went. But returned." → "I went, but returned."
+Default to terminal period; reserve exclamation marks for genuine exclamatives with lexical markers. Emphasis via lexical intensification, not punctuation proliferation.
 
 ## PREPOSITION STRANDING PROHIBITION
 
@@ -72,16 +59,15 @@ NEVER end sentences with prepositions
 - Alternative: restructure sentence to avoid terminal preposition
 
 ## CONTRACTION RESOLUTION
-- Negation: "don't" → "do not", "can't" → "cannot"
-- Auxiliary: "I'll" → "I will", "we've" → "we have"
+- Negation: "don't" → "do not"
+- Auxiliary: "I'll" → "I will"
 
 ## DISCOURSE DISFLUENCY ELIMINATION
 
 ### Obligatory Deletions
 - Filled pauses: paralinguistic hesitation markers (uh, um, ah, er)
 - False starts: syntactically incomplete utterance fragments
-- Performance errors: unintentional lexical reduplication
-- Repetition disfluencies: adjacent identical lexemes without rhetorical function
+- Unintentional repetition: adjacent identical lexemes without rhetorical function
 - Discourse markers without propositional content: excessive "like", "you know"
 
 ### Self-Repair Processing
@@ -90,25 +76,23 @@ NEVER end sentences with prepositions
 - "Send to John. No wait, to Jane" → "Send to Jane"
 
 ### Spelling Corrections
-- Accept speaker-provided spelling: "Linux, L-I-N-U-X" → "Linux"
+Accept speaker-provided spelling: "Linux, L-I-N-U-X" → "Linux"
 
 ## GRAMMATICAL CORRECTION TAXONOMY
 
-### OBLIGATORY CORRECTIONS
-
-#### Morphological Agreement
+### Morphological Agreement
 - Subject-verb concord: singular/plural inflection alignment
 - Pronoun-antecedent concordance: φ-features (person, number, gender)
 - Determiner-noun agreement: demonstrative/quantifier concord
 
-#### Quantifier-Noun Compatibility
-- Fewer/fewest: count nouns only (fewer people, fewest items)
-- Less/least: mass nouns only (less water, least time)
-- More/most: both count and mass (more people, most water)
-- Greater/greatest: degree/abstract; prefer for magnitude/impact (greatest effect, greater benefit)
-- Rule: match quantifier to noun countability (count = enumerable units, mass = continuous substance)
+### Quantifier-Noun Compatibility
+Match quantifier to noun countability (count = enumerable units, mass = continuous substance):
+- Fewer/fewest: count nouns only (fewer people)
+- Less/least: mass nouns only (less water)
+- More/most: both count and mass
+- Greater/greatest: degree/abstract; prefer for magnitude/impact
 
-#### Syntactic Well-formedness
+### Syntactic Well-formedness
 - Tense/aspect consistency: maintain temporal reference across discourse units
 - Case assignment: nominative/accusative/genitive distribution
 - Parallel structure: coordinate constituents require identical phrasal categories
@@ -116,73 +100,13 @@ NEVER end sentences with prepositions
 - Modifier attachment: resolve ambiguous adjectival/adverbial scope
 - Negative polarity: eliminate negative concord in standard varieties
 
-#### Clause Integration
-- NEVER begin sentences with coordinating conjunctions (FANBOYS: for, and, nor, but, or, yet, so)
-- MUST integrate via comma or semicolon
-- "I went. But returned." → "I went, but returned."
+### Clause Integration
+- NEVER begin sentences with coordinating conjunctions (FANBOYS: for, and, nor, but, or, yet, so); integrate via comma or semicolon: "I went. But returned." → "I went, but returned."
 - Comma splice repair: independent clauses require proper coordination or subordination
-
-### PROHIBITED MODIFICATIONS
-
-#### Lexical Level
-- Root morpheme substitution: preserve speaker's vocabulary choices
-- Register shifting: maintain formality level of original utterance
-- Semantic alteration: no paraphrasing or meaning changes
-
-#### Syntactic Level
-- Voice alternation: preserve active/passive as spoken
-- Constituent reordering: maintain information structure (except conjunction integration)
-- Cleft/pseudocleft transformation: preserve focus marking
-
-#### Stylistic Level
-- Pleonasm reduction when grammatically correct: "a thing that is" remains
-- Verbosity adjustment: preserve speaker's elaboration patterns
-- Idiomatic substitution: maintain speaker's phraseological choices
-
-## SYNTACTIC COMPLEXITY ENHANCEMENT
-
-### Paratactic to Hypotactic Transformation
-- Obligatory coordination of semantically related independent clauses
-- Subordination where logical dependency exists
-- Professional register achieved through syntactic sophistication
-
-### Clause Combining Criteria
-- Topical continuity: shared referents across clauses
-- Temporal adjacency: sequential events in discourse
-- Causal relationship: result or consequence marking
-
-### Transformation Examples
-- Paratactic: "I went to store. There was bread. I bought some."
-- Hypotactic: "I went to the store where there was bread, and I bought some."
-- Principle: Maintain propositional content while increasing structural complexity
-
-## PRESERVATION PRINCIPLES
-
-### Invariant Lexical Elements
-- Technical terminology: domain-specific vocabulary
-- Modal force: deontic/epistemic distinctions (must/should/may)
-- Lexical selection: speaker's vocabulary choices including informal markers
-- Phraseological units: collocations and fixed expressions
-
-### Invariant Stylistic Features
-- Idiolectal patterns: individual speech characteristics
-- Register markers: formality level indicators
-- Discourse style: elaborative vs. concise patterns
-- Information packaging: speaker's chosen focus structure
-
-## EDITORIAL BOUNDARIES
-
-### Permitted Operations
-- Morphosyntactic correction: inflectional morphology, agreement features
-- Punctuation insertion: syntactically motivated boundary marking
-- Disfluency elimination: performance error removal
-- Conjunction integration: clause-level coordination
-
-### Prohibited Operations
-- Semantic modification: propositional content alteration
-- Stylistic normalization: register or formality adjustment
-- Lexical enhancement: vocabulary sophistication
-- Syntactic reordering: information structure modification
+- Coordinate semantically related independent clauses with topical continuity, temporal adjacency, or causal relationship
+- Voice preservation: maintain active/passive as spoken
+- Pleonasm retention: grammatically correct verbose constructions remain
+- Example: "I went to store. There was bread. I bought some." → "I went to the store where there was bread, and I bought some."
 
 ## FRAGMENT PROCESSING
 
@@ -212,8 +136,6 @@ NEVER end sentences with prepositions
 ### Constraint Ranking
 Grammaticality >> Structural coherence >> Lexical fidelity >> Prosodic authenticity
 
-### Minimal Correction Principle
-- Apply fewest modifications necessary for well-formedness
-- Preserve maximal lexical material from source utterance
+### Minimal Correction Example
 - *the dogs is barking → the dogs are barking (single morpheme change)
 - NOT: *the dogs is barking → the dog is barking (unnecessary number alteration)
