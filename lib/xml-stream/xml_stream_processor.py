@@ -39,9 +39,21 @@ class XMLStreamProcessor:
         # Process each update
         for seq, word in updates:
             self._process_single_update(seq, word)
-    
+
     def end_stream(self) -> None:
         """Flush remaining chunks from last_emitted_seq to end."""
+        # Ensure last word has trailing space for xdotool
+        if self.current_words:
+            max_seq = max(self.current_words.keys())
+            if max_seq in self.current_words:
+                word = self.current_words[max_seq]
+                if word and not word.endswith(' '):
+                    self.current_words[max_seq] = word + ' '
+
+                    # If already emitted, emit just the space
+                    if max_seq <= self.last_emitted_seq:
+                        self.keyboard.emit(' ')
+
         if self.backspace_performed:
             # Emit all remaining chunks
             max_seq = max(self.current_words.keys()) if self.current_words else 0
