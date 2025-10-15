@@ -9,6 +9,7 @@ import base64
 import io
 import soundfile as sf
 from .conversation_context import ConversationContext
+from .mapper_factory import MapperFactory
 from instruction_composer import InstructionComposer
 
 
@@ -35,6 +36,18 @@ class BaseProvider:
 
         # Instruction composition
         self.instruction_composer = InstructionComposer()
+
+        # Provider extraction (single point of truth)
+        self.provider = self._extract_provider(config.model_id)
+
+        # Provider-specific configuration mapper
+        self.mapper = MapperFactory.get_mapper(self.provider)
+
+    def _extract_provider(self, model_id: str) -> str:
+        """Extract provider from model_id (format: provider/model)."""
+        if '/' in model_id:
+            return model_id.split('/', 1)[0].lower()
+        return ''
     
     def initialize(self) -> bool:
         """Initialize LiteLLM and validate model."""
@@ -48,7 +61,7 @@ class BaseProvider:
                 litellm._turn_on_debug()
 
             if self.config.api_key:
-                print(f"Using provided API key for {self.config.model_id.split('/')[0]}")
+                print(f"Using provided API key for {self.provider}")
 
             print(f"LiteLLM initialized with model: {self.config.model_id}")
 
@@ -197,8 +210,7 @@ class BaseProvider:
             # System message: Static instructions (cached)
             system_content = {"type": "text", "text": xml_instructions}
 
-            provider = self.config.model_id.split('/')[0].lower() if '/' in self.config.model_id else ''
-            if provider == 'anthropic':
+            if self.provider == 'anthropic':
                 system_content["cache_control"] = {"type": "ephemeral"}
 
             system_message = {
@@ -268,14 +280,12 @@ class BaseProvider:
             if self.config.api_key:
                 completion_params["api_key"] = self.config.api_key
 
-            # Reasoning control
-            if self.config.enable_reasoning == 'none':
-                completion_params["thinking"] = {"type": "disabled"}
-            elif self.config.enable_reasoning in ['low', 'medium', 'high']:
-                completion_params["reasoning_effort"] = self.config.enable_reasoning
-
-            if self.config.thinking_budget > 0:
-                completion_params["thinking"] = {"type": "enabled", "budget_tokens": self.config.thinking_budget}
+            # Map reasoning parameters via provider-specific mapper
+            reasoning_params = self.mapper.map_reasoning_params(
+                self.config.enable_reasoning,
+                self.config.thinking_budget
+            )
+            completion_params.update(reasoning_params)
 
             response = self.litellm.completion(**completion_params)
 
@@ -292,14 +302,11 @@ class BaseProvider:
         if self.config.audio_source in ['phoneme', 'wav2vec']:
             audio_source_name = 'wav2vec2'
 
-        # Extract provider from model_id
-        provider_name = self.config.model_id.split('/')[0].lower() if '/' in self.config.model_id else ''
-
         # Compose instructions from files (reads current mode from config)
         instructions = self.instruction_composer.compose(
             self.config.mode,
             audio_source_name,
-            provider_name
+            self.provider
         )
 
         return instructions
