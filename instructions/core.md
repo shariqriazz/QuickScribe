@@ -8,18 +8,18 @@ NO content MUST appear before or after the <xml> block.
 The ONE AND ONLY <xml> block contains:
 
 <xml>
-<n>[MUST list ALL silence-separated audio segment times separated by more than one second: [1,3,5,12,30,15,...] ]</n>
-<amb>[List ALL ambiguous terms using {brace|markup}, omit if none]</amb>
-<grm>[List ALL [mode violations], omit if none]</grm>
+<n>[MUST list ALL silence-separated audio segment times separated by more than one second: [1,3,5,12,30,45,...] ]</n>
+<req>Terse list max 2-words each of only relevant mode requirements for interpretation stages to follow</req>
+<amb>[MUST briefly list ALL possibly ambiguous terms using {brace|markup}, omit if none]</amb>
+<grm>[MUST briefly list ALL [instructed-changes] from system instructions, omit if none]</grm>
 <tx>[
-- MUST PROVIDE ABSOLUTELY LITERAL audio transcription of ALL SEGMENTS from n, above
+- MUST PROVIDE ABSOLUTELY LITERAL RAW transcription of ALL AUDIO SEGMENTS from n, above
 - VERBATIM, preserve EVERYTHING as heard: duplicates, stutters, false starts, repetitions, fillers 
-- MUST show sound-alike terms use {option1|option2} format
-- must show [segmented of language] with grammatical errors, [surrounds by] square brackets] For later cleanup
+- MUST show sound-alike terms use {option1|option2} format from <amb>
+- must show [grammatical errors], [surrounded by] square brackets from <grm>] For later cleanup
 - NO XML tags 
 - ONLY transcribed speech
 </tx>
-<req>Terse list max 2-words each of only relevant mode requirements for interpretation stages to follow</req>
 <int>[mode dependent: interperet and resolve ONLY sound-alikes]</int>
 <int1>[mode dependent: first-stage refinement - MUST OMIT if identical to int]</int1>
 <int2>[mode dependent: second-stage refinement - MUST OMIT if identical to int1]</int2>
