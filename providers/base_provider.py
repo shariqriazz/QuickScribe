@@ -65,22 +65,67 @@ class BaseProvider:
 
             print(f"LiteLLM initialized with model: {self.config.model_id}")
 
-            # Validate model with minimal API call
+            # Generate minimal test audio (0.1 second silence)
+            test_audio = np.zeros(int(0.1 * self.config.sample_rate), dtype=np.int16)
+            test_audio_b64 = self._encode_audio_to_base64(test_audio, self.config.sample_rate)
+
+            # Validate model with parallel text and audio tests
             print("Validating model access...", end=' ', flush=True)
             try:
-                completion_params = {
-                    "model": self.config.model_id,
-                    "messages": [{"role": "user", "content": "test"}],
-                    "max_tokens": 1,
-                    "stream": False
-                }
-                if self.config.api_key:
-                    completion_params["api_key"] = self.config.api_key
+                import concurrent.futures
 
-                test_response = self.litellm.completion(**completion_params)
-                print("✓")
-                self._initialized = True
-                return True
+                text_error = None
+                audio_error = None
+
+                def test_text():
+                    completion_params = {
+                        "model": self.config.model_id,
+                        "messages": [{"role": "user", "content": "test"}],
+                        "max_tokens": 1,
+                        "stream": False
+                    }
+                    if self.config.api_key:
+                        completion_params["api_key"] = self.config.api_key
+                    return self.litellm.completion(**completion_params)
+
+                def test_audio():
+                    audio_content = self.mapper.map_audio_params(test_audio_b64, "wav")
+                    completion_params = {
+                        "model": self.config.model_id,
+                        "messages": [{"role": "user", "content": [audio_content]}],
+                        "max_tokens": 1,
+                        "stream": False
+                    }
+                    if self.config.api_key:
+                        completion_params["api_key"] = self.config.api_key
+                    return self.litellm.completion(**completion_params)
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    text_future = executor.submit(test_text)
+                    audio_future = executor.submit(test_audio)
+
+                    try:
+                        text_future.result()
+                    except Exception as e:
+                        text_error = e
+
+                    try:
+                        audio_future.result()
+                    except Exception as e:
+                        audio_error = e
+
+                if text_error is None and audio_error is None:
+                    print("✓")
+                    self._initialized = True
+                    return True
+                else:
+                    print("✗")
+                    if text_error:
+                        print(f"Text validation failed: {text_error}", file=sys.stderr)
+                    if audio_error:
+                        print(f"Audio validation failed: {audio_error}", file=sys.stderr)
+                    return False
+
             except self.litellm_exceptions.AuthenticationError as e:
                 print("✗")
                 print(f"Error: Authentication failed for model '{self.config.model_id}'", file=sys.stderr)
