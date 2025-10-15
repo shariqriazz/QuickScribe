@@ -43,11 +43,240 @@ class BaseProvider:
         # Provider-specific configuration mapper
         self.mapper = MapperFactory.get_mapper(self.provider)
 
+        # Validation results (populated after initialize)
+        self._validation_results = None
+
     def _extract_provider(self, model_id: str) -> str:
         """Extract provider from model_id (format: provider/model)."""
         if '/' in model_id:
             return model_id.split('/', 1)[0].lower()
         return ''
+
+    def _run_validation_tests(self, test_audio_silence_b64: str, sumtest_audio_b64: str):
+        """
+        Run parallel validation tests with intelligence checking.
+
+        Args:
+            test_audio_silence_b64: Base64 encoded silent audio
+            sumtest_audio_b64: Base64 encoded sumtest.wav audio
+
+        Returns:
+            dict: Validation results with keys: overall_success, text_passed, text_error,
+                  text_response, audio_passed, audio_error, audio_response, combined1_passed,
+                  combined1_error, combined1_response, combined2_passed, combined2_error, combined2_response
+        """
+        import concurrent.futures
+        import re
+
+        text_error = None
+        text_response = None
+        audio_error = None
+        audio_response = None
+        combined1_error = None
+        combined1_response = None
+        combined2_error = None
+        combined2_response = None
+
+        def test_text():
+            completion_params = {
+                "model": self.config.model_id,
+                "messages": [{"role": "user", "content": "1 + 1 compute exactly only provide answer"}],
+                "max_tokens": 512,
+                "stream": False
+            }
+            if self.config.api_key:
+                completion_params["api_key"] = self.config.api_key
+            return self.litellm.completion(**completion_params)
+
+        def test_audio():
+            audio_content = self.mapper.map_audio_params(sumtest_audio_b64, "wav")
+            completion_params = {
+                "model": self.config.model_id,
+                "messages": [{"role": "user", "content": [audio_content]}],
+                "max_tokens": 512,
+                "stream": False
+            }
+            if self.config.api_key:
+                completion_params["api_key"] = self.config.api_key
+            return self.litellm.completion(**completion_params)
+
+        def test_combined1_text_with_silence():
+            audio_content = self.mapper.map_audio_params(test_audio_silence_b64, "wav")
+            completion_params = {
+                "model": self.config.model_id,
+                "messages": [{"role": "user", "content": [
+                    {"type": "text", "text": "1 + 1 compute exactly only provide answer"},
+                    audio_content
+                ]}],
+                "max_tokens": 512,
+                "stream": False
+            }
+            if self.config.api_key:
+                completion_params["api_key"] = self.config.api_key
+            return self.litellm.completion(**completion_params)
+
+        def test_combined2_audio_with_prompt():
+            audio_content = self.mapper.map_audio_params(sumtest_audio_b64, "wav")
+            completion_params = {
+                "model": self.config.model_id,
+                "messages": [{"role": "user", "content": [
+                    {"type": "text", "text": "compute value"},
+                    audio_content
+                ]}],
+                "max_tokens": 512,
+                "stream": False
+            }
+            if self.config.api_key:
+                completion_params["api_key"] = self.config.api_key
+            return self.litellm.completion(**completion_params)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            text_future = executor.submit(test_text)
+            audio_future = executor.submit(test_audio)
+            combined1_future = executor.submit(test_combined1_text_with_silence)
+            combined2_future = executor.submit(test_combined2_audio_with_prompt)
+
+            try:
+                text_result = text_future.result()
+                text_response = text_result.choices[0].message.content
+                print(f"DEBUG text_response raw: {repr(text_response)}", file=sys.stderr)
+                if text_response is None:
+                    text_response = ""
+                else:
+                    text_response = text_response.strip()
+                print(f"DEBUG text_response stripped: {repr(text_response)}", file=sys.stderr)
+            except Exception as e:
+                text_error = e
+                print(f"DEBUG text_error: {e}", file=sys.stderr)
+
+            try:
+                audio_result = audio_future.result()
+                audio_response = audio_result.choices[0].message.content
+                print(f"DEBUG audio_response raw: {repr(audio_response)}", file=sys.stderr)
+
+                # Check for reasoning_content if main content is empty/minimal
+                if not audio_response or len(audio_response.strip()) < 3:
+                    reasoning = getattr(audio_result.choices[0].message, 'reasoning_content', None)
+                    if reasoning:
+                        print(f"DEBUG audio reasoning_content found: {repr(reasoning[:100])}", file=sys.stderr)
+                        audio_response = reasoning
+
+                if audio_response is None:
+                    audio_response = ""
+                else:
+                    audio_response = audio_response.strip()
+                print(f"DEBUG audio_response stripped: {repr(audio_response)}", file=sys.stderr)
+            except Exception as e:
+                audio_error = e
+                print(f"DEBUG audio_error: {e}", file=sys.stderr)
+
+            try:
+                combined1_result = combined1_future.result()
+                combined1_response = combined1_result.choices[0].message.content
+                print(f"DEBUG combined1_response raw: {repr(combined1_response)}", file=sys.stderr)
+                if combined1_response is None:
+                    combined1_response = ""
+                else:
+                    combined1_response = combined1_response.strip()
+                print(f"DEBUG combined1_response stripped: {repr(combined1_response)}", file=sys.stderr)
+            except Exception as e:
+                combined1_error = e
+                print(f"DEBUG combined1_error: {e}", file=sys.stderr)
+
+            try:
+                combined2_result = combined2_future.result()
+                combined2_response = combined2_result.choices[0].message.content
+                print(f"DEBUG combined2_response raw: {repr(combined2_response)}", file=sys.stderr)
+                if combined2_response is None:
+                    combined2_response = ""
+                else:
+                    combined2_response = combined2_response.strip()
+                print(f"DEBUG combined2_response stripped: {repr(combined2_response)}", file=sys.stderr)
+            except Exception as e:
+                combined2_error = e
+                print(f"DEBUG combined2_error: {e}", file=sys.stderr)
+
+        def check_intelligence(response):
+            if response and re.search(r'\b2\b|two', response, re.IGNORECASE):
+                return True
+            return False
+
+        # For raw audio source, allow text-only failure if audio tests pass
+        audio_only_passed = (audio_error is None and combined1_error is None and combined2_error is None)
+        all_passed = (text_error is None and audio_error is None and
+                     combined1_error is None and combined2_error is None)
+
+        # Determine overall success
+        overall_success = all_passed or (self.config.audio_source == 'raw' and audio_only_passed)
+
+        from colorama import Fore, Style, init
+        init(autoreset=True)
+
+        # Helper to format response for display (replace newlines with space)
+        def format_response(resp):
+            if resp:
+                return resp.replace('\n', ' ').replace('\r', ' ')
+            return resp
+
+        if text_error is None:
+            print(f"{Fore.GREEN}Text validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            if check_intelligence(text_response):
+                print(f"{Fore.GREEN}Text intelligence test: ✓ Got: {format_response(text_response)}{Style.RESET_ALL}", file=sys.stderr)
+            else:
+                print(f"{Fore.YELLOW}Text intelligence test: ⚠ Expected '2' but got: {format_response(text_response)}{Style.RESET_ALL}", file=sys.stderr)
+        else:
+            print(f"{Fore.RED}Text validation failed: {text_error}{Style.RESET_ALL}", file=sys.stderr)
+
+        if audio_error is None:
+            print(f"{Fore.GREEN}Audio validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            if check_intelligence(audio_response):
+                print(f"{Fore.GREEN}Audio intelligence test: ✓ Got: {format_response(audio_response)}{Style.RESET_ALL}", file=sys.stderr)
+            else:
+                print(f"{Fore.YELLOW}Audio intelligence test: ⚠ Expected '2' but got: {format_response(audio_response)}{Style.RESET_ALL}", file=sys.stderr)
+        else:
+            print(f"{Fore.RED}Audio validation failed: {audio_error}{Style.RESET_ALL}", file=sys.stderr)
+
+        if combined1_error is None:
+            print(f"{Fore.GREEN}Combined (text+silence) validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            if check_intelligence(combined1_response):
+                print(f"{Fore.GREEN}Combined (text+silence) intelligence test: ✓ Got: {format_response(combined1_response)}{Style.RESET_ALL}", file=sys.stderr)
+            else:
+                print(f"{Fore.YELLOW}Combined (text+silence) intelligence test: ⚠ Expected '2' but got: {format_response(combined1_response)}{Style.RESET_ALL}", file=sys.stderr)
+        else:
+            print(f"{Fore.RED}Combined (text+silence) validation failed: {combined1_error}{Style.RESET_ALL}", file=sys.stderr)
+
+        if combined2_error is None:
+            print(f"{Fore.GREEN}Combined (audio+prompt) validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            if check_intelligence(combined2_response):
+                print(f"{Fore.GREEN}Combined (audio+prompt) intelligence test: ✓ Got: {format_response(combined2_response)}{Style.RESET_ALL}", file=sys.stderr)
+            else:
+                print(f"{Fore.YELLOW}Combined (audio+prompt) intelligence test: ⚠ Expected '2' but got: {format_response(combined2_response)}{Style.RESET_ALL}", file=sys.stderr)
+        else:
+            print(f"{Fore.RED}Combined (audio+prompt) validation failed: {combined2_error}{Style.RESET_ALL}", file=sys.stderr)
+
+        # Print overall validation result
+        if overall_success:
+            print("✓")
+            self._initialized = True
+        else:
+            print("✗")
+
+        # Return structured results dict
+        return {
+            'overall_success': overall_success,
+            'text_passed': text_error is None,
+            'text_error': str(text_error) if text_error else None,
+            'text_response': text_response,
+            'audio_passed': audio_error is None,
+            'audio_error': str(audio_error) if audio_error else None,
+            'audio_response': audio_response,
+            'combined1_passed': combined1_error is None,
+            'combined1_error': str(combined1_error) if combined1_error else None,
+            'combined1_response': combined1_response,
+            'combined2_passed': combined2_error is None,
+            'combined2_error': str(combined2_error) if combined2_error else None,
+            'combined2_response': combined2_response
+        }
     
     def initialize(self) -> bool:
         """Initialize LiteLLM and validate model."""
@@ -58,6 +287,7 @@ class BaseProvider:
             self.litellm_exceptions = exceptions
 
             if self.config.litellm_debug:
+                print("DEBUG: Enabling LiteLLM debug logging", file=sys.stderr)
                 litellm._turn_on_debug()
 
             if self.config.api_key:
@@ -66,65 +296,22 @@ class BaseProvider:
             print(f"LiteLLM initialized with model: {self.config.model_id}")
 
             # Generate minimal test audio (0.1 second silence)
-            test_audio = np.zeros(int(0.1 * self.config.sample_rate), dtype=np.int16)
-            test_audio_b64 = self._encode_audio_to_base64(test_audio, self.config.sample_rate)
+            test_audio_silence = np.zeros(int(0.1 * self.config.sample_rate), dtype=np.int16)
+            test_audio_silence_b64 = self._encode_audio_to_base64(test_audio_silence, self.config.sample_rate)
 
-            # Validate model with parallel text and audio tests
+            # Load sumtest.wav for audio intelligence test
+            import os
+            sumtest_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'samples', 'sumtest.wav')
+            sumtest_audio, sumtest_sr = sf.read(sumtest_path)
+            if sumtest_audio.dtype != np.int16:
+                sumtest_audio = (sumtest_audio * 32767).astype(np.int16)
+            sumtest_audio_b64 = self._encode_audio_to_base64(sumtest_audio, sumtest_sr)
+
+            # Validate model with parallel intelligence tests
             print("Validating model access...", end=' ', flush=True)
             try:
-                import concurrent.futures
-
-                text_error = None
-                audio_error = None
-
-                def test_text():
-                    completion_params = {
-                        "model": self.config.model_id,
-                        "messages": [{"role": "user", "content": "test"}],
-                        "max_tokens": 1,
-                        "stream": False
-                    }
-                    if self.config.api_key:
-                        completion_params["api_key"] = self.config.api_key
-                    return self.litellm.completion(**completion_params)
-
-                def test_audio():
-                    audio_content = self.mapper.map_audio_params(test_audio_b64, "wav")
-                    completion_params = {
-                        "model": self.config.model_id,
-                        "messages": [{"role": "user", "content": [audio_content]}],
-                        "max_tokens": 1,
-                        "stream": False
-                    }
-                    if self.config.api_key:
-                        completion_params["api_key"] = self.config.api_key
-                    return self.litellm.completion(**completion_params)
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    text_future = executor.submit(test_text)
-                    audio_future = executor.submit(test_audio)
-
-                    try:
-                        text_future.result()
-                    except Exception as e:
-                        text_error = e
-
-                    try:
-                        audio_future.result()
-                    except Exception as e:
-                        audio_error = e
-
-                if text_error is None and audio_error is None:
-                    print("✓")
-                    self._initialized = True
-                    return True
-                else:
-                    print("✗")
-                    if text_error:
-                        print(f"Text validation failed: {text_error}", file=sys.stderr)
-                    if audio_error:
-                        print(f"Audio validation failed: {audio_error}", file=sys.stderr)
-                    return False
+                self._validation_results = self._run_validation_tests(test_audio_silence_b64, sumtest_audio_b64)
+                return self._validation_results['overall_success']
 
             except self.litellm_exceptions.AuthenticationError as e:
                 print("✗")
@@ -155,6 +342,11 @@ class BaseProvider:
     def is_initialized(self) -> bool:
         """Check if provider is initialized."""
         return self._initialized and self.litellm is not None
+
+    @property
+    def validation_results(self) -> Optional[dict]:
+        """Get validation test results from initialization."""
+        return self._validation_results
 
     def _encode_audio_to_base64(self, audio_np: np.ndarray, sample_rate: int) -> str:
         """Encode audio numpy array to base64 WAV string."""

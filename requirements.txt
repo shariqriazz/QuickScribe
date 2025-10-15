@@ -6,6 +6,7 @@ pynput
 python-dotenv
 pyperclip
 litellm
+colorama
 
 # Development and testing
 pytest
