@@ -34,7 +34,7 @@ class TestAppendOnlyEmissionBug(unittest.TestCase):
 
         initial_output = self.keyboard.output
         print(f"Initial output: '{initial_output}'")
-        self.assertEqual(initial_output, "Hello world", "Initial content should be emitted")
+        self.assertEqual(initial_output, "Hello world ", "Initial content should be emitted")
 
         # Verify processor state
         print(f"Current words: {self.processor.current_words}")
@@ -67,13 +67,13 @@ class TestAppendOnlyEmissionBug(unittest.TestCase):
         # BUILD FULL STRING to verify internal state is correct
         full_text = self.processor._build_string_from_words(self.processor.current_words)
         print(f"Full internal text: '{full_text}'")
-        self.assertEqual(full_text, "Hello worldHow are you?", "Internal state should have all content")
+        self.assertEqual(full_text, "Hello world How are you? ", "Internal state should have all content")
 
         # THIS ASSERTION SHOULD FAIL - proving the bug
         self.assertEqual(
             append_output,
-            expected_append,
-            f"BUG DETECTED: Appended content not emitted! Expected '{expected_append}' but got '{append_output}'"
+            expected_append + " ",
+            f"BUG DETECTED: Appended content not emitted! Expected '{expected_append} ' but got '{append_output}'"
         )
 
 

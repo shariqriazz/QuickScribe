@@ -56,10 +56,12 @@ class TestConfigAccessorPattern(unittest.TestCase):
         self.assertFalse(hasattr(provider, 'debug_enabled'))
         self.assertFalse(hasattr(provider, 'litellm_debug'))
 
-        # Provider should NOT have mode, audio_source, or provider name fields
+        # Provider should NOT have mode or audio_source fields
         self.assertFalse(hasattr(provider, 'mode'))
         self.assertFalse(hasattr(provider, 'audio_source'))
-        self.assertFalse(hasattr(provider, 'provider'))
+
+        # Provider SHOULD have provider attribute (single point of truth)
+        self.assertTrue(hasattr(provider, 'provider'))
 
     def test_base_provider_has_instance_state(self):
         """Test BaseProvider has its own instance state."""

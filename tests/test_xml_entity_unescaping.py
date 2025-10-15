@@ -61,7 +61,7 @@ class TestXMLEntityUnescaping(unittest.TestCase):
         self.processor.end_stream()
 
         output = self.keyboard.output
-        self.assertEqual(output, "AT&T <test> done", f"Expected 'AT&T <test> done' but got '{output}'")
+        self.assertEqual(output, "AT&T <test> done ", f"Expected 'AT&T <test> done ' but got '{output}'")
 
     def test_no_entities_unchanged(self):
         """Test that content without entities is unchanged."""

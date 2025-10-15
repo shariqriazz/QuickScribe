@@ -38,10 +38,11 @@ class TestXMLStateTransition:
         expected_stage1 = [
             ('emit', "Fake "),
             ('emit', "initial "),
-            ('emit', "content")
+            ('emit', "content"),
+            ('emit', ' ')
         ]
         assert self.keyboard.operations == expected_stage1
-        assert self.keyboard.output == "Fake initial content"
+        assert self.keyboard.output == "Fake initial content "
         processor = self.service.processor
         assert 1 in processor.current_words
         assert 2 in processor.current_words
@@ -52,7 +53,7 @@ class TestXMLStateTransition:
 
         # Validate stage 2: reset cleared state, no new operations
         assert self.keyboard.operations == expected_stage1  # No new operations added
-        assert self.keyboard.output == "Fake initial content"  # Output unchanged
+        assert self.keyboard.output == "Fake initial content "  # Output unchanged
         assert len(processor.current_words) == 0  # State was reset
 
         # Third operation: "once upon a time" initial state via XML transcription
@@ -67,10 +68,11 @@ class TestXMLStateTransition:
             ('emit', "One day, "),
             ('emit', "he jumped "),
             ('emit', "to a tree "),
-            ('emit', "1,000 miles away.")
+            ('emit', "1,000 miles away."),
+            ('emit', ' ')
         ]
         assert self.keyboard.operations == expected_stage3
-        assert self.keyboard.output == "Fake initial contentOnce upon a time, there was a fox, and he liked to jump from tree to tree.One day, he jumped to a tree 1,000 miles away."
+        assert self.keyboard.output == "Fake initial content Once upon a time, there was a fox, and he liked to jump from tree to tree.One day, he jumped to a tree 1,000 miles away. "
         assert 10 in processor.current_words
         assert 80 in processor.current_words
 
@@ -81,10 +83,11 @@ class TestXMLStateTransition:
         expected_final = expected_stage3 + [
             ('emit', "Sounds great. "),
             ('emit', "I will give "),
-            ('emit', "it a shot.")
+            ('emit', "it a shot."),
+            ('emit', ' ')
         ]
         assert self.keyboard.operations == expected_final
-        assert self.keyboard.output == "Fake initial contentOnce upon a time, there was a fox, and he liked to jump from tree to tree.One day, he jumped to a tree 1,000 miles away.Sounds great. I will give it a shot."
+        assert self.keyboard.output == "Fake initial content Once upon a time, there was a fox, and he liked to jump from tree to tree.One day, he jumped to a tree 1,000 miles away. Sounds great. I will give it a shot. "
 
         # Verify final internal state - both old and new sequences coexist
         assert 10 in processor.current_words
@@ -94,7 +97,7 @@ class TestXMLStateTransition:
         assert 110 in processor.current_words
         assert processor.current_words[90] == "Sounds great. "
         assert processor.current_words[100] == "I will give "
-        assert processor.current_words[110] == "it a shot."
+        assert processor.current_words[110] == "it a shot. "
 
     def test_incremental_paragraph_replacement(self):
         """Test incremental replacement of a paragraph."""
@@ -140,10 +143,11 @@ class TestXMLStateTransition:
         # Process third chunk and end stream
         self.service.processor.process_chunk("<110>it a shot.</110>")
         self.service.processor.end_stream()
-        # Should emit third chunk
+        # Should emit third chunk plus trailing space
         expected_final = expected_after_second + [
-            ('emit', "it a shot.")
+            ('emit', "it a shot."),
+            ('emit', ' ')
         ]
         assert self.keyboard.operations == expected_final
         # Output includes original text plus new content since no backspace occurred
-        assert self.keyboard.output == "Once upon a time, there was a fox, and he liked to jump from tree to tree.One day, he jumped to a tree 1,000 miles away.Sounds great. I will give it a shot."
+        assert self.keyboard.output == "Once upon a time, there was a fox, and he liked to jump from tree to tree.One day, he jumped to a tree 1,000 miles away.Sounds great. I will give it a shot. "

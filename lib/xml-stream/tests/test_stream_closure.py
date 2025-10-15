@@ -84,7 +84,7 @@ class TestStreamClosure:
         print(f"Final output: '{final_output}'")
 
         # With the fix, this should now work correctly
-        expected_complete_output = initial_output + "Sounds great. I will give it a shot."
+        expected_complete_output = initial_output + "Sounds great. I will give it a shot. "
 
         # This assertion should now PASS with the fix
         assert final_output == expected_complete_output, f"Expected complete text but got: '{final_output}'"
@@ -104,7 +104,7 @@ class TestStreamClosure:
                        '<110>it a shot.</110></update>')
         service1.process_streaming_chunk(complete_xml)
 
-        # This should work fine - all content processed
+        # This should work fine - all content processed (no trailing space without end_stream call)
         complete_output = keyboard1.output
         assert complete_output == "Sounds great. I will give it a shot."
 
@@ -127,7 +127,7 @@ class TestStreamClosure:
         fixed_output = keyboard2.output
 
         # This assertion should now PASS with the fix
-        assert fixed_output == "Sounds great. I will give it a shot.", f"Expected complete text but got: '{fixed_output}'"
+        assert fixed_output == "Sounds great. I will give it a shot. ", f"Expected complete text but got: '{fixed_output}'"
 
     def test_incomplete_tag_handling(self):
         """Test handling of truly incomplete tags that can't be recovered."""

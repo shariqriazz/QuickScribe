@@ -67,7 +67,7 @@ class TestResetWithWordMarkup(unittest.TestCase):
         self.assertNotIn("jumps", self.keyboard.output)
 
         # Verify new content exists in the output
-        self.assertEqual(self.keyboard.output, "Fresh new content here.")
+        self.assertEqual(self.keyboard.output, "Fresh new content here. ")
 
         # Verify new words are in the processor state
         self.assertIn(100, self.service.processor.current_words)
@@ -82,7 +82,7 @@ class TestResetWithWordMarkup(unittest.TestCase):
         self.assertEqual(self.service.processor.current_words[100], "Fresh ")
         self.assertEqual(self.service.processor.current_words[110], "new ")
         self.assertEqual(self.service.processor.current_words[120], "content ")
-        self.assertEqual(self.service.processor.current_words[130], "here.")
+        self.assertEqual(self.service.processor.current_words[130], "here. ")
 
 
 if __name__ == '__main__':

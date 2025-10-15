@@ -74,7 +74,7 @@ class TestStreamCompletionBug(unittest.TestCase):
         print(f"After complete_stream: '{final_output}'")
 
         # Should have the complete sentence
-        expected = "I think the dependency tree is backwards compared to the original script."
+        expected = "I think the dependency tree is backwards compared to the original script. "
         self.assertEqual(final_output, expected)
 
     def test_stream_completion_with_malformed_tags(self):

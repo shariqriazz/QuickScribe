@@ -140,7 +140,7 @@ class TestMalformedXMLFix(unittest.TestCase):
         print(f"After complete_stream (proper XML): '{final_output}'")
 
         # This should now have the complete sentence
-        expected_complete = "I think the dependency tree is backwards compared to the original script."
+        expected_complete = "I think the dependency tree is backwards compared to the original script. "
         self.assertEqual(final_output, expected_complete)
 
 
