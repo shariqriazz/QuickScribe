@@ -23,5 +23,8 @@ class OpenAIMapper(ProviderConfigMapper):
         return params
 
     def supports_reasoning(self, model_name: str) -> bool:
-        """OpenAI supports reasoning on o1/o3 models."""
+        """OpenAI supports reasoning on o1/o3 models, but not audio models."""
+        model_lower = model_name.lower()
+        if 'audio' in model_lower:
+            return False
         return True

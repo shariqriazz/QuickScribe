@@ -17,8 +17,11 @@ class MapperFactory:
         'anthropic': AnthropicMapper,
         'openai': OpenAIMapper,
         'gemini': GeminiMapper,
-        'google': GeminiMapper,
         'groq': GroqMapper,
+    }
+
+    _provider_aliases = {
+        'google': 'gemini',
     }
 
     @classmethod
@@ -36,7 +39,8 @@ class MapperFactory:
             ValueError: If provider not supported
         """
         provider_lower = provider.lower()
-        mapper_class = cls._mappers.get(provider_lower)
+        canonical_provider = cls._provider_aliases.get(provider_lower, provider_lower)
+        mapper_class = cls._mappers.get(canonical_provider)
 
         if mapper_class is None:
             raise ValueError(

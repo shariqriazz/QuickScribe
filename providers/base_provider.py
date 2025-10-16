@@ -518,11 +518,12 @@ class BaseProvider:
                 completion_params["api_key"] = self.config.api_key
 
             # Map reasoning parameters via provider-specific mapper
-            reasoning_params = self.mapper.map_reasoning_params(
-                self.config.enable_reasoning,
-                self.config.thinking_budget
-            )
-            completion_params.update(reasoning_params)
+            if self.mapper.supports_reasoning(self.config.model_id):
+                reasoning_params = self.mapper.map_reasoning_params(
+                    self.config.enable_reasoning,
+                    self.config.thinking_budget
+                )
+                completion_params.update(reasoning_params)
 
             response = self.litellm.completion(**completion_params)
 
