@@ -2,28 +2,30 @@
 
 Real-time AI-powered dictation application with multiple audio source options and intelligent text processing. Record audio with configurable triggers, transcribe using local models or cloud APIs, and automatically inject professionally formatted text into any application.
 
+**⚠️ Privacy Notice:** All processing modes send data to remote AI models. Raw audio mode sends audio directly to the LLM. Transcription mode sends audio to transcription service, then sends text to LLM for formatting.
+
 ## Features
 
-- **Multi-Source Audio Processing**
-  - Raw microphone recording (default)
-  - VOSK local speech recognition
-  - Wav2Vec2 phoneme recognition with Hugging Face models
-- **AI-Powered Transcription**
-  - Groq (Whisper models): `distil-whisper-large-v3-en`, `whisper-large-v3-turbo`, `whisper-large-v3`
-  - Google Gemini: `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`
-- **Intelligent Text Processing**
-  - Real-time XML-based streaming with live updates
-  - Professional copy editing with minimal intervention
-  - Context-aware command detection and conversation continuity
-  - Technical term formatting with backticks and proper quotation handling
-- **Flexible Input Methods**
-  - Configurable keyboard triggers (any key combination)
-  - POSIX signal control (SIGUSR1/SIGUSR2)
-  - Cross-platform compatibility (macOS, Linux, Windows)
-- **Advanced Output Control**
-  - Native macOS keyboard injection with accessibility integration
-  - Linux xdotool support with configurable keystroke rates
-  - Mock mode for testing and development
+- **Audio Sources**
+  - Raw microphone (default): Direct audio to LLM
+  - Transcription: Audio → transcription model → text → LLM
+- **LLM Providers**
+  - Groq, Google Gemini, OpenAI, Anthropic, OpenRouter
+- **Transcription Models** (when using transcription audio source)
+  - HuggingFace Wav2Vec2 (local, phoneme-based)
+  - OpenAI Whisper (cloud API)
+  - Groq Whisper (cloud API)
+  - VOSK (local, offline)
+- **Text Processing**
+  - Real-time streaming with incremental updates
+  - Grammar correction, punctuation, technical term formatting
+  - Conversation context across recordings
+- **Input Control**
+  - Keyboard triggers (configurable key)
+  - POSIX signals (SIGUSR1/SIGUSR2)
+- **Output**
+  - macOS: Native keyboard injection via Accessibility API
+  - Linux: xdotool with configurable keystroke rate
 
 ## Requirements
 
@@ -33,12 +35,12 @@ pip install -r requirements.txt
 ```
 
 ### System Dependencies
-- **Linux**: `sudo apt-get install xdotool` (for --use-xdotool option)
+**Linux**: `sudo apt-get install xdotool`
 
-### System Permissions
-- **Microphone Access**: Required for all audio recording
-- **Accessibility/Input Monitoring**: Required for keyboard triggers and text injection
-- **macOS**: Grant accessibility permissions in System Settings → Privacy & Security → Accessibility
+### Permissions
+- Microphone access (all modes)
+- Accessibility/input monitoring (keyboard triggers and text injection)
+- **macOS**: System Settings → Privacy & Security → Accessibility
 
 ## Installation
 
@@ -60,216 +62,101 @@ pip install -r requirements.txt
 
 ### Core Arguments
 
-| Option | Short | Choices/Type | Default | Description |
-|--------|-------|-------------|---------|-------------|
-| `--provider` | | `groq`, `gemini` | None | Transcription provider (required in non-interactive mode) |
-| `--model` | | String | None | Specific model ID for chosen provider (required in non-interactive mode) |
-| `--audio-source` | `-a` | `raw`, `vosk`, `phoneme`, `wav2vec` | `raw` | Audio source type |
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--model` | | None | Model in format `provider/model` (e.g., `groq/llama-3.3-70b-versatile`) |
+| `--audio-source` | `-a` | `raw` | Audio source: `raw` (audio→LLM) or `transcribe`/`trans` (audio→transcription→LLM) |
+| `--transcription-model` | `-T` | `huggingface/...` | Transcription model when using `-a transcribe` (format: `provider/model`) |
 
-### Audio Source Configuration
+### Model Format
 
-| Audio Source | Required Options | Optional Options | Description |
-|-------------|------------------|------------------|-------------|
-| `raw` | None | `--sample-rate`, `--channels` | Direct microphone recording |
-| `vosk` | `--vosk-model` | `--vosk-lgraph` | Local VOSK speech recognition |
-| `phoneme`/`wav2vec` | None | `--wav2vec2-model` | Wav2Vec2 phoneme recognition |
+Both `--model` and `--transcription-model` use format: `provider/identifier`
 
-### Audio Processing
+**LLM providers**: `groq`, `gemini`, `openai`, `anthropic`, `openrouter`
+**Transcription providers**: `huggingface`, `openai`, `groq`, `vosk`
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--sample-rate` | Integer | `16000` | Audio sample rate in Hz |
-| `--channels` | Integer | `1` | Number of audio channels (1=mono, 2=stereo) |
-| `--vosk-model` | Path | None | Path to VOSK model directory |
-| `--vosk-lgraph` | Path | None | Path to VOSK L-graph file for grammar constraints |
-| `--wav2vec2-model` | String | `facebook/wav2vec2-lv-60-espeak-cv-ft` | Wav2Vec2 model path or Hugging Face model ID |
+### Other Options
 
-### Input Control
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--trigger-key` | `alt_r` | Keyboard trigger key |
+| `--no-trigger-key` | disabled | Use SIGUSR1/SIGUSR2 signals instead of keyboard |
+| `--xdotool-hz` | None | Keystroke rate for xdotool (Linux) |
+| `--enable-reasoning` | `low` | Reasoning level: `none`, `low`, `medium`, `high` |
+| `--temperature` | `0.2` | LLM temperature (0.0-2.0) |
+| `--debug` / `-D` | disabled | Debug output |
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--trigger-key` | String | `alt_r` | Key to trigger recording (`alt_r`, `ctrl_l`, `f19`, `a`, etc.) |
-| `--no-trigger-key` | Flag | False | Disable keyboard trigger; use SIGUSR1/SIGUSR2 signals |
-| `--language` | String | None | Language code for Groq transcription (`en`, `es`, etc.) |
-
-### Output Control
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--use-xdotool` | Flag | False | Use xdotool for text injection (Linux only) |
-| `--xdotool-hz`, `--xdotool-cps` | Float | None | Xdotool keystroke rate in Hz/CPS |
-
-### AI Model Performance
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--enable-reasoning` | Flag | False | Enable chain-of-thought reasoning (increases latency) |
-| `--temperature` | Float | `0.2` | Response randomness (0.0-2.0, lower = more focused) |
-| `--max-tokens` | Integer | None | Maximum response length (None = provider default) |
-| `--top-p` | Float | `0.9` | Nucleus sampling parameter (0.0-1.0) |
-
-### Development & Debugging
-
-| Option | Short | Type | Default | Description |
-|--------|-------|------|---------|-------------|
-| `--debug` | `-D` | Flag | False | Enable debug output and XML processing details |
-
-## Usage Examples
+## Usage
 
 ### Interactive Mode
 ```bash
-# Auto-detect API keys and select provider/model interactively
 python dictate.py
-
-# With custom trigger key
-python dictate.py --trigger-key f19
 ```
 
-### Command-Line Mode
-
-#### Basic Usage
+### Specify Model
 ```bash
-# Groq with Whisper
-python dictate.py --provider groq --model whisper-large-v3
+# Raw audio → LLM
+python dictate.py --model groq/llama-3.3-70b-versatile
 
-# Gemini with custom trigger
-python dictate.py --provider gemini --model gemini-2.5-flash --trigger-key ctrl_r
-
-# With language specification (Groq only)
-python dictate.py --provider groq --model whisper-large-v3 --language es
+# Transcription → LLM
+python dictate.py -a transcribe -T openai/whisper-1 --model anthropic/claude-3-5-sonnet-20241022
 ```
 
-#### Audio Source Selection
+### Signal Control (background mode)
 ```bash
-# Default raw microphone
-python dictate.py --provider groq --model whisper-large-v3
-
-# VOSK local recognition
-python dictate.py -a vosk --vosk-model ~/.vosk/model-en-us --provider groq --model whisper-large-v3
-
-# Wav2Vec2 phoneme recognition (default model)
-python dictate.py -a phoneme --provider groq --model whisper-large-v3
-
-# Wav2Vec2 with custom model
-python dictate.py -a wav2vec --wav2vec2-model facebook/wav2vec2-large-lv60-timit --provider groq --model whisper-large-v3
-```
-
-#### Advanced Configuration
-```bash
-# High-performance setup with xdotool
-python dictate.py --provider groq --model whisper-large-v3-turbo \
-  --use-xdotool --xdotool-hz 250 \
-  --temperature 0.1 --top-p 0.95
-
-# VOSK with grammar constraints and signal control
-python dictate.py -a vosk \
-  --vosk-model ~/.vosk/model-en-us \
-  --vosk-lgraph ~/.vosk/grammar.txt \
-  --no-trigger-key --provider groq --model whisper-large-v3
-
-# Development mode with debug output
-python dictate.py --provider gemini --model gemini-2.0-flash \
-  --debug --temperature 0.0
-```
-
-#### Production Deployment
-```bash
-# Background process with signal control
-python dictate.py --provider groq --model distil-whisper-large-v3-en \
-  --no-trigger-key --use-xdotool &
+python dictate.py --model groq/llama-3.3-70b-versatile --no-trigger-key &
 PID=$!
-
-# Control via signals
 kill -USR1 $PID  # Start recording
 kill -USR2 $PID  # Stop recording
-kill $PID        # Shutdown
 ```
 
-## Workflow
+## How It Works
 
-1. **Startup**: Configure provider, model, and audio source
-2. **Ready State**: Shows trigger key or signal instructions
-3. **Recording**: Hold trigger key or send SIGUSR1 signal
-4. **Processing**: Audio transcribed and processed through AI model
-5. **Output**: Professional text automatically injected into active application
-6. **Continuation**: Ready for next recording with conversation context maintained
+1. Hold trigger key (or send SIGUSR1 signal)
+2. Audio captured → processed (raw or transcribed) → sent to LLM
+3. Text streamed back and injected into active application
+4. Conversation context maintained across recordings
 
-## Audio Source Details
+## Audio Sources Explained
 
-### Raw Microphone (`--audio-source raw`)
-- **Description**: Direct microphone recording with real-time audio capture
-- **Use Case**: Standard dictation with cloud AI processing
-- **Requirements**: System microphone access
-- **Performance**: Lowest latency, highest quality for AI transcription
+### Raw Audio (`-a raw`, default)
+Audio sent directly to LLM for transcription and formatting.
 
-### VOSK Local Recognition (`--audio-source vosk`)
-- **Description**: Local speech-to-text using VOSK models
-- **Use Case**: Privacy-sensitive environments, offline operation
-- **Requirements**: VOSK models downloaded locally
-- **Model Format**: Pre-trained VOSK models (download from vosk-api.org)
-- **Grammar Support**: Optional L-graph files for constrained recognition
-- **Performance**: No cloud dependency, consistent latency
+**When to use:** LLM supports audio input (Gemini, OpenAI, Anthropic)
+**Note:** Groq LLMs do not support audio; use transcription mode
 
-### Wav2Vec2 Phoneme Recognition (`--audio-source phoneme`/`wav2vec`)
-- **Description**: Phoneme-level transcription using Wav2Vec2 models
-- **Use Case**: Technical dictation, pronunciation analysis
-- **Requirements**: PyTorch, transformers, Hugging Face models
-- **Model Support**: Any Wav2Vec2-CTC model from Hugging Face
-- **Output**: Phoneme sequences processed by AI for final text
-- **Performance**: Specialized for technical/pronunciation work
+### Transcription Mode (`-a transcribe`)
+Two-stage: audio → transcription model → text → LLM → formatted text
 
-## Technical Features
+**When to use:**
+- LLM lacks audio support (Groq)
+- Lower cost (cheap transcription + expensive LLM)
+- Local/offline transcription (VOSK, Wav2Vec2)
 
-### XML Stream Processing
-- Real-time XML tag processing with incremental updates
-- Word-level ID tracking for precise editing and continuation
-- Context-aware conversation state management
-- Professional copy editing with minimal intervention
+**Example:** "their are too errors hear" → transcription → "their are too errors hear" → LLM → "There are two errors here."
 
-### Cross-Platform Text Injection
-- **macOS**: Native Accessibility API integration with permission detection
-- **Linux**: Xdotool integration with configurable keystroke rates
-- **Testing**: Mock injection for development and CI/CD
+LLM corrects: homophones, grammar, punctuation, technical terms
 
-### Model Performance Optimization
-- Streaming responses for real-time feedback
-- Configurable temperature and sampling parameters
-- Optional reasoning chains for complex transcription tasks
-- Provider-specific optimization (Groq vs Gemini)
+### Transcription Models
+
+**HuggingFace Wav2Vec2** (local, phoneme-based)
+```bash
+python dictate.py -a transcribe -T huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft --model groq/llama-3.3-70b-versatile
+```
+
+**OpenAI Whisper** (cloud API)
+```bash
+python dictate.py -a transcribe -T openai/whisper-1 --model anthropic/claude-3-5-sonnet-20241022
+```
+
+**VOSK** (local, offline)
+```bash
+python dictate.py -a transcribe -T vosk/~/.vosk/model-en-us --model groq/llama-3.3-70b-versatile
+```
 
 ## Troubleshooting
 
-### Audio Issues
-- **No microphone access**: Check system permissions and default audio device
-- **Poor audio quality**: Adjust `--sample-rate` (try 22050 or 44100)
-- **VOSK model errors**: Verify model path and compatibility with sample rate
-
-### Text Injection Issues
-- **macOS**: Grant accessibility permissions to Terminal/Python in System Settings
-- **Linux**: Install xdotool package and use `--use-xdotool` flag
-- **Rate limiting**: Adjust `--xdotool-hz` for slower injection
-
-### API Issues
-- **Groq rate limits**: Use `distil-whisper-large-v3-en` for higher rate limits
-- **Gemini quota**: Monitor usage in Google AI Studio console
-- **Network timeouts**: Check internet connection and API key validity
-
-### Performance Optimization
-- **High latency**: Disable `--enable-reasoning`, use `--temperature 0.1`
-- **Memory usage**: Use smaller models, avoid multiple concurrent sessions
-- **CPU usage**: For Wav2Vec2, consider CPU-only PyTorch installation
-
-## Model Information
-
-### Groq Models (Whisper-based)
-- `distil-whisper-large-v3-en`: Fastest, English-optimized, highest rate limits
-- `whisper-large-v3-turbo`: Balanced speed and accuracy
-- `whisper-large-v3`: Highest accuracy, supports multiple languages
-
-### Gemini Models (Google)
-- `gemini-2.5-pro`: Highest capability, slower response
-- `gemini-2.5-flash`: Balanced performance
-- `gemini-2.5-flash-lite`: Fastest, basic capability
-- `gemini-2.0-flash`: Previous generation, reliable
-- `gemini-2.0-flash-lite`: Legacy fast option
-
+- **No microphone**: Check system permissions
+- **macOS text injection fails**: Grant accessibility permissions (System Settings → Privacy & Security)
+- **Linux text injection fails**: Install xdotool
+- **High latency**: Set `--enable-reasoning none`, lower `--temperature`
