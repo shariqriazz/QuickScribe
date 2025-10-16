@@ -1,20 +1,38 @@
 # LANGUAGE PROCESSING RULES
 
-**Core**: Morphosyntactic correction preserving lexical choices/register/semantics—minimal edits only.
+Core: Morphosyntactic correction preserving lexical choices/register/semantics—minimal edits only.
 
-**Stages** (cumulative, omit if identical to prior):
+## Stages
+
+- `<tx>`: Full verbatim transcription
+- `<int>`: Full first interpretation (baseline)
+- `<int1>`, `<int2>`, `<int3>`: Changes only with 2-3 word context (`...old→new...`); omit if unchanged from prior
+- `<update>`: Phrase chunks (3-8 words) with numbered tags; final cumulative result
+
+Example with multiple stage changes:
+```
+<int>We know neither are provided, then limit or offset govern the file.</int>
+<int1>...neither are→is provided...</int1>
+<int2>...then limit→`limit` or offset→`offset` govern...</int2>
+<update><10>We know neither is </10><20>provided, then `limit` or </20><30>`offset` govern the file.</30></update>
+```
+
+### Stage Transformations
+
 - `<int>` Resolve ambiguities
-	- **Ambiguity notation**: {option1|option2} selects correct alternative, removes braces
-	- Eliminate disfluencies (um/uh/er/ah filled pauses)
+	- Ambiguity notation: `<tx>` and `<amb>` tags use {option1|option2} literal format; first interpretation selects correct alternative, removes braces
+	- Apply domain knowledge to resolve underspecified technical references using surrounding context (e.g., "PR_star" with Linux→`pr_*`)
+	- Eliminate disfluencies: um/uh/er/ah/err filled pauses
 	- Self-repairs: delete original utterance before repair marker
-		- Markers: "excuse me"/"I mean"/"actually"/"rather"/"no wait"
-		- "or" triggers deletion ONLY with:
+		- Markers: "excuse me"/"I mean"/"actually"/"rather"/"no wait"/"err"
+		- "or" triggers deletion ONLY when clear context is modification of most recent statement:
 			- Explicit repair marker: "use apt, or actually pip" → "use pip"
 			- Negation: "install it, or no, skip that" → "skip that"
 			- Intensifier: "log it, or better yet, throw exception" → "throw exception"
-		- Preserve genuine alternatives: "use apt or pip" → "use apt or pip"
-		- "send to John, excuse me, not John, Jane" → "send to Jane"
-	- Speaker spelling (L-I-N-U-X→Linux)
+			- Preserve genuine alternatives: "use apt or pip" → "use apt or pip"
+		- Example: "send to John, excuse me, not John, Jane" → "send to Jane"
+	- Speaker spelling: L-I-N-U-X→Linux (proper capitalization, not acronym unless context confirms)
+	- Verbalized wildcards: "star"/"asterisk"→* in code patterns; apply code delimitation rules
 - `<int1>` Morphological
 	- Subject-verb (*dogs is→dogs are)
 	- Pronoun-antecedent (φ-features)
@@ -23,8 +41,9 @@
 	- Article allomorphy (a/an before vowels)
 	- Tense consistency
 	- Quantifiers (fewer+count/less+mass)
+	- Comparative/superlative structures (fix malformed syntax, preserve all lexical items)
 - `<int2>` Syntactic
-	- Clause combining ("I went. There was bread."→"I went where there was bread")
+	- Clause combining: "I went. There was bread."→"I went where there was bread"
 	- FANBOYS never sentence-initial (integrate via comma/semicolon)
 	- No terminal prepositions (restructure: "what for?"→"for what?")
 	- Comma splice repair
@@ -33,25 +52,25 @@
 	- Parallel structure
 	- Negative polarity elimination
 - `<int3>` Polish
-	- **Discourse markers**: Sentence-initial frame-setters integrate via comma when followed by propositional content ("just in case, internally it...")
-	- Verbalized punctuation ("comma"→,)
+	- Discourse markers: sentence-initial frame-setters integrate via comma when followed by propositional content ("just in case, internally it...")
+	- Verbalized punctuation: "comma"→,
 	- Interrogatives→?
 	- Restraint on exclamatives (prefer lexical intensity)
 	- Capitalize
-	- Numbers (zero-three spelled/4+ digits, 25%, $5, 3.14)
-	- **Code delimitation**: Backticks for executable syntax (commands/functions/methods/variables/parameters/paths/type-identifiers/operators/configuration-keys), NOT proper nouns (technology-names/protocols/products/acronyms)
+	- Numbers: zero-three spelled/4+ digits, 25%, $5, 3.14
+	- Code delimitation: backticks for executable/structural syntax (commands/functions/variables/paths/config-keys/operators/type-identifiers/environment-variables/glob-patterns), NOT technology-names/products/versions/protocols/acronyms/URLs (Docker/EL8/HTTP/API/github.com)
+	- Quotation marks: double quotes for metalinguistic mention (referring to a word itself rather than its referent), distancing usage (irony/euphemisms/questionable-claims/approximation)
 
-**Priority**: Agreement violations > structural > FANBOYS > disfluencies > punctuation
+## Priority
+Agreement violations > structural > FANBOYS > disfluencies > punctuation
 
-**Specifics**:
-- Quantifiers
-	- fewer people/less water
-	- more/most both
-	- greater for magnitude/abstract
-- Self-repair markers ("I mean"/"actually"/"rather") trigger original deletion
+## Specifics
+- Quantifiers: fewer people/less water; more/most both; greater for magnitude/abstract
 - Preserve elliptical constructions with recoverable elements
-- Voice/pleonasm unchanged (retain verbose if grammatical)
+- Preserve all lexical choices including semantic redundancy (retain verbose/pleonastic expressions); eliminate syntactic redundancy without losing original word choices
 - Modifier attachment resolves scope ambiguity
 
-**Algorithm**: Tokenize→parse for errors→classify→minimal correction→verify lexical invariance
-- Constraint ranking: grammaticality>>coherence>>fidelity>>prosody
+## Algorithm
+Tokenize→parse for errors→classify→minimal correction→verify lexical invariance
+
+Constraint ranking: grammaticality>>coherence>>fidelity>>prosody

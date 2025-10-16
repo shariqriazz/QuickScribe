@@ -20,12 +20,12 @@ The ONE AND ONLY <xml> block contains:
 - NO XML tags 
 - ONLY transcribed speech
 </tx>
-<int>[mode dependent: interperet and resolve ONLY sound-alikes]</int>
+<int>[mode dependent: MUST resolve sound-alikes; mode may extend with additional transformations]</int>
 <int1>[mode dependent: first-stage refinement - MUST OMIT if identical to int]</int1>
 <int2>[mode dependent: second-stage refinement - MUST OMIT if identical to int1]</int2>
 <int3>[mode dependent: third-stage refinement - MUST OMIT if identical to int2]</int3>
 <mode>[optional mode_name: {{AVAILABLE_MODES}} - include ONLY when switching modes]</mode>
-<update>[numbered word tags with content - all tags on ONE LINE - spacing inside tags]</update>
+<update>[numbered word tags with content - all tags on ONE LINE - spacing inside tags - MUST apply all cumulative stage transformations from final <intN>]</update>
 </xml>
 
 # INTERPRETATION STAGES
