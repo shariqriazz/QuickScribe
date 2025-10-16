@@ -8,10 +8,12 @@ from typing import Dict, Any
 class ProviderConfigMapper(ABC):
     """Abstract base class for provider-specific configuration mapping."""
 
-    @abstractmethod
     def map_reasoning_params(self, enable_reasoning: str, thinking_budget: int) -> Dict[str, Any]:
         """
         Map generic reasoning configuration to provider-specific parameters.
+
+        Default implementation uses Anthropic-style thinking format.
+        Override in subclasses for provider-specific formats.
 
         Args:
             enable_reasoning: 'none', 'low', 'medium', 'high'
@@ -20,12 +22,26 @@ class ProviderConfigMapper(ABC):
         Returns:
             Dictionary of provider-specific parameters to add to completion call
         """
-        pass
+        params = {}
 
-    @abstractmethod
+        if enable_reasoning == 'none':
+            params['thinking'] = {'type': 'disabled'}
+        elif thinking_budget > 0:
+            params['thinking'] = {
+                'type': 'enabled',
+                'budget_tokens': thinking_budget
+            }
+
+        return params
+
     def supports_reasoning(self, model_name: str) -> bool:
-        """Check if the given model supports reasoning parameters."""
-        pass
+        """
+        Check if the given model supports reasoning parameters.
+
+        Default implementation returns True for all models.
+        Override in subclasses to exclude specific models.
+        """
+        return True
 
     def uses_transcription_endpoint(self, model_name: str) -> bool:
         """Check if model uses transcription endpoint (not chat completions)."""

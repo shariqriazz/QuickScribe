@@ -37,11 +37,13 @@ def test_anthropic_mapper():
 
 
 def test_gemini_mapper():
-    """Test Gemini mapper returns empty params (no reasoning support)."""
+    """Test Gemini mapper uses default thinking format."""
     mapper = MapperFactory.get_mapper('gemini')
     params = mapper.map_reasoning_params('high', 4096)
 
-    assert params == {}
+    assert 'thinking' in params
+    assert params['thinking']['type'] == 'enabled'
+    assert params['thinking']['budget_tokens'] == 4096
 
 
 def test_base_provider_integration():
