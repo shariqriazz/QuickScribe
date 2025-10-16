@@ -11,6 +11,8 @@ import sys
 import os
 from typing import Dict, List, Callable, Optional
 from PyQt6.QtCore import QObject, QSocketNotifier, pyqtSignal
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib'))
+from pr_log import pr_err, pr_warn, pr_debug
 
 
 class SignalChannel:
@@ -41,8 +43,7 @@ class SignalChannel:
             self.read_endpoint.setblocking(False)
             return True
         except OSError as e:
-            print(f"Failed to create signal channel '{self.channel_name}': {e}",
-                  file=sys.stderr)
+            pr_err(f"Failed to create signal channel '{self.channel_name}': {e}")
             return False
 
     def notify_received(self):
@@ -101,7 +102,7 @@ class SignalRouter:
         os.set_blocking(cls._wakeup_pipe_write, False)
 
         old_wakeup = signal.set_wakeup_fd(cls._wakeup_pipe_write)
-        print(f"Set signal wakeup fd to {cls._wakeup_pipe_write}, old: {old_wakeup}", file=sys.stderr)
+        pr_debug(f"Set signal wakeup fd to {cls._wakeup_pipe_write}, old: {old_wakeup}")
 
     @classmethod
     def register_channel(cls, channel: SignalChannel) -> bool:
@@ -123,10 +124,9 @@ class SignalRouter:
             cls._channel_map[sig_num] = []
             try:
                 old_handler = signal.signal(sig_num, cls._posix_handler)
-                print(f"Installed signal handler for {sig_num}, replaced: {old_handler}", file=sys.stderr)
+                pr_debug(f"Installed signal handler for {sig_num}, replaced: {old_handler}")
             except (ValueError, OSError) as e:
-                print(f"Failed to install handler for signal {sig_num}: {e}",
-                      file=sys.stderr)
+                pr_err(f"Failed to install handler for signal {sig_num}: {e}")
                 return False
 
         cls._channel_map[sig_num].append(channel)
@@ -177,7 +177,7 @@ class PosixSignalBridge(QObject):
             self
         )
         self._wakeup_notifier.activated.connect(self._handle_wakeup)
-        print(f"Monitoring wakeup pipe fd {SignalRouter._wakeup_pipe_read}", file=sys.stderr)
+        pr_debug(f"Monitoring wakeup pipe fd {SignalRouter._wakeup_pipe_read}")
 
     def _handle_wakeup(self):
         """Handle wakeup notification - drain pipe to allow more signals."""
@@ -198,8 +198,7 @@ class PosixSignalBridge(QObject):
             True if registration succeeded, False on error
         """
         if channel_name in self.channels:
-            print(f"Channel '{channel_name}' already registered",
-                  file=sys.stderr)
+            pr_warn(f"Channel '{channel_name}' already registered")
             return False
 
         channel = SignalChannel(signal_number, channel_name)
@@ -222,7 +221,7 @@ class PosixSignalBridge(QObject):
             return False
 
         self.channels[channel_name] = channel
-        print(f"Registered signal {signal_number} as channel '{channel_name}'", file=sys.stderr)
+        pr_debug(f"Registered signal {signal_number} as channel '{channel_name}'")
 
         # Setup wakeup monitoring if not already done
         if self._wakeup_notifier is None and SignalRouter._wakeup_pipe_read >= 0:
@@ -237,15 +236,15 @@ class PosixSignalBridge(QObject):
         Args:
             channel_name: Name of the activated channel
         """
-        print(f"Channel activated: {channel_name}", file=sys.stderr)
+        pr_debug(f"Channel activated: {channel_name}")
         channel = self.channels.get(channel_name)
         if not channel:
-            print(f"Channel {channel_name} not found!", file=sys.stderr)
+            pr_err(f"Channel {channel_name} not found!")
             return
 
         channel.qt_notifier.setEnabled(False)
         channel.drain()
-        print(f"Emitting signal_received for {channel_name}", file=sys.stderr)
+        pr_debug(f"Emitting signal_received for {channel_name}")
         self.signal_received.emit(channel_name)
         channel.qt_notifier.setEnabled(True)
 

@@ -11,6 +11,10 @@ import soundfile as sf
 from .conversation_context import ConversationContext
 from .mapper_factory import MapperFactory
 from instruction_composer import InstructionComposer
+from lib.pr_log import (
+    pr_emerg, pr_alert, pr_crit, pr_err, pr_warn, pr_notice, pr_info, pr_debug,
+    get_streaming_handler
+)
 
 
 class BaseProvider:
@@ -139,62 +143,62 @@ class BaseProvider:
             try:
                 text_result = text_future.result()
                 text_response = text_result.choices[0].message.content
-                print(f"DEBUG text_response raw: {repr(text_response)}", file=sys.stderr)
+                pr_debug(f"text_response raw: {repr(text_response)}")
                 if text_response is None:
                     text_response = ""
                 else:
                     text_response = text_response.strip()
-                print(f"DEBUG text_response stripped: {repr(text_response)}", file=sys.stderr)
+                pr_debug(f"text_response stripped: {repr(text_response)}")
             except Exception as e:
                 text_error = e
-                print(f"DEBUG text_error: {e}", file=sys.stderr)
+                pr_debug(f"text_error: {e}")
 
             try:
                 audio_result = audio_future.result()
                 audio_response = audio_result.choices[0].message.content
-                print(f"DEBUG audio_response raw: {repr(audio_response)}", file=sys.stderr)
+                pr_debug(f"audio_response raw: {repr(audio_response)}")
 
                 # Check for reasoning_content if main content is empty/minimal
                 if not audio_response or len(audio_response.strip()) < 3:
                     reasoning = getattr(audio_result.choices[0].message, 'reasoning_content', None)
                     if reasoning:
-                        print(f"DEBUG audio reasoning_content found: {repr(reasoning[:100])}", file=sys.stderr)
+                        pr_debug(f"audio reasoning_content found: {repr(reasoning[:100])}")
                         audio_response = reasoning
 
                 if audio_response is None:
                     audio_response = ""
                 else:
                     audio_response = audio_response.strip()
-                print(f"DEBUG audio_response stripped: {repr(audio_response)}", file=sys.stderr)
+                pr_debug(f"audio_response stripped: {repr(audio_response)}")
             except Exception as e:
                 audio_error = e
-                print(f"DEBUG audio_error: {e}", file=sys.stderr)
+                pr_debug(f"audio_error: {e}")
 
             try:
                 combined1_result = combined1_future.result()
                 combined1_response = combined1_result.choices[0].message.content
-                print(f"DEBUG combined1_response raw: {repr(combined1_response)}", file=sys.stderr)
+                pr_debug(f"combined1_response raw: {repr(combined1_response)}")
                 if combined1_response is None:
                     combined1_response = ""
                 else:
                     combined1_response = combined1_response.strip()
-                print(f"DEBUG combined1_response stripped: {repr(combined1_response)}", file=sys.stderr)
+                pr_debug(f"combined1_response stripped: {repr(combined1_response)}")
             except Exception as e:
                 combined1_error = e
-                print(f"DEBUG combined1_error: {e}", file=sys.stderr)
+                pr_debug(f"combined1_error: {e}")
 
             try:
                 combined2_result = combined2_future.result()
                 combined2_response = combined2_result.choices[0].message.content
-                print(f"DEBUG combined2_response raw: {repr(combined2_response)}", file=sys.stderr)
+                pr_debug(f"combined2_response raw: {repr(combined2_response)}")
                 if combined2_response is None:
                     combined2_response = ""
                 else:
                     combined2_response = combined2_response.strip()
-                print(f"DEBUG combined2_response stripped: {repr(combined2_response)}", file=sys.stderr)
+                pr_debug(f"combined2_response stripped: {repr(combined2_response)}")
             except Exception as e:
                 combined2_error = e
-                print(f"DEBUG combined2_error: {e}", file=sys.stderr)
+                pr_debug(f"combined2_error: {e}")
 
         def check_intelligence(response):
             if response and re.search(r'\b2\b|two', response, re.IGNORECASE):
@@ -209,8 +213,7 @@ class BaseProvider:
         # Determine overall success
         overall_success = all_passed or (self.config.audio_source == 'raw' and audio_only_passed)
 
-        from colorama import Fore, Style, init
-        init(autoreset=True)
+        from lib.pr_log import pr_info, pr_warn, pr_err
 
         # Helper to format response for display (replace newlines with space)
         def format_response(resp):
@@ -219,47 +222,47 @@ class BaseProvider:
             return resp
 
         if text_error is None:
-            print(f"{Fore.GREEN}Text validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            pr_info("Text validation: ✓")
             if check_intelligence(text_response):
-                print(f"{Fore.GREEN}Text intelligence test: ✓ Got: {format_response(text_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_info(f"Text intelligence test: ✓ Got: {format_response(text_response)}")
             else:
-                print(f"{Fore.YELLOW}Text intelligence test: ⚠ Expected '2' but got: {format_response(text_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_warn(f"Text intelligence test: ⚠ Expected '2' but got: {format_response(text_response)}")
         else:
-            print(f"{Fore.RED}Text validation failed: {text_error}{Style.RESET_ALL}", file=sys.stderr)
+            pr_err(f"Text validation failed: {text_error}")
 
         if audio_error is None:
-            print(f"{Fore.GREEN}Audio validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            pr_info("Audio validation: ✓")
             if check_intelligence(audio_response):
-                print(f"{Fore.GREEN}Audio intelligence test: ✓ Got: {format_response(audio_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_info(f"Audio intelligence test: ✓ Got: {format_response(audio_response)}")
             else:
-                print(f"{Fore.YELLOW}Audio intelligence test: ⚠ Expected '2' but got: {format_response(audio_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_warn(f"Audio intelligence test: ⚠ Expected '2' but got: {format_response(audio_response)}")
         else:
-            print(f"{Fore.RED}Audio validation failed: {audio_error}{Style.RESET_ALL}", file=sys.stderr)
+            pr_err(f"Audio validation failed: {audio_error}")
 
         if combined1_error is None:
-            print(f"{Fore.GREEN}Combined (text+silence) validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            pr_info("Combined (text+silence) validation: ✓")
             if check_intelligence(combined1_response):
-                print(f"{Fore.GREEN}Combined (text+silence) intelligence test: ✓ Got: {format_response(combined1_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_info(f"Combined (text+silence) intelligence test: ✓ Got: {format_response(combined1_response)}")
             else:
-                print(f"{Fore.YELLOW}Combined (text+silence) intelligence test: ⚠ Expected '2' but got: {format_response(combined1_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_warn(f"Combined (text+silence) intelligence test: ⚠ Expected '2' but got: {format_response(combined1_response)}")
         else:
-            print(f"{Fore.RED}Combined (text+silence) validation failed: {combined1_error}{Style.RESET_ALL}", file=sys.stderr)
+            pr_err(f"Combined (text+silence) validation failed: {combined1_error}")
 
         if combined2_error is None:
-            print(f"{Fore.GREEN}Combined (audio+prompt) validation: ✓{Style.RESET_ALL}", file=sys.stderr)
+            pr_info("Combined (audio+prompt) validation: ✓")
             if check_intelligence(combined2_response):
-                print(f"{Fore.GREEN}Combined (audio+prompt) intelligence test: ✓ Got: {format_response(combined2_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_info(f"Combined (audio+prompt) intelligence test: ✓ Got: {format_response(combined2_response)}")
             else:
-                print(f"{Fore.YELLOW}Combined (audio+prompt) intelligence test: ⚠ Expected '2' but got: {format_response(combined2_response)}{Style.RESET_ALL}", file=sys.stderr)
+                pr_warn(f"Combined (audio+prompt) intelligence test: ⚠ Expected '2' but got: {format_response(combined2_response)}")
         else:
-            print(f"{Fore.RED}Combined (audio+prompt) validation failed: {combined2_error}{Style.RESET_ALL}", file=sys.stderr)
+            pr_err(f"Combined (audio+prompt) validation failed: {combined2_error}")
 
         # Print overall validation result
         if overall_success:
-            print("✓")
+            pr_info("Model validation complete: ✓")
             self._initialized = True
         else:
-            print("✗")
+            pr_err("Model validation failed: ✗")
 
         # Return structured results dict
         return {
@@ -287,17 +290,17 @@ class BaseProvider:
             self.litellm_exceptions = exceptions
 
             if self.config.litellm_debug:
-                print("DEBUG: Enabling LiteLLM debug logging", file=sys.stderr)
+                pr_debug("Enabling LiteLLM debug logging")
                 litellm._turn_on_debug()
 
             if self.config.api_key:
-                print(f"Using provided API key for {self.provider}")
+                pr_info(f"Using provided API key for {self.provider}")
 
-            print(f"LiteLLM initialized with model: {self.config.model_id}")
+            pr_info(f"LiteLLM initialized with model: {self.config.model_id}")
 
             # Skip validation for transcription-only models
             if self.mapper.uses_transcription_endpoint(self.config.model_id):
-                print("Skipping validation for transcription-only model")
+                pr_info("Skipping validation for transcription-only model")
                 self._initialized = True
                 return True
 
@@ -314,35 +317,35 @@ class BaseProvider:
             sumtest_audio_b64 = self._encode_audio_to_base64(sumtest_audio, sumtest_sr)
 
             # Validate model with parallel intelligence tests
-            print("Validating model access...", end=' ', flush=True)
+            pr_info("Validating model access...")
             try:
                 self._validation_results = self._run_validation_tests(test_audio_silence_b64, sumtest_audio_b64)
                 return self._validation_results['overall_success']
 
             except self.litellm_exceptions.AuthenticationError as e:
-                print("✗")
-                print(f"Error: Authentication failed for model '{self.config.model_id}'", file=sys.stderr)
-                print(f"Check your API key environment variable for this provider", file=sys.stderr)
+                pr_crit("Model validation failed: ✗")
+                pr_err(f"Authentication failed for model '{self.config.model_id}'")
+                pr_err(f"Check your API key environment variable for this provider")
                 return False
             except self.litellm_exceptions.NotFoundError as e:
-                print("✗")
-                print(f"Error: Model '{self.config.model_id}' not found", file=sys.stderr)
-                print(f"Verify the model name and provider prefix are correct", file=sys.stderr)
+                pr_crit("Model validation failed: ✗")
+                pr_err(f"Model '{self.config.model_id}' not found")
+                pr_err(f"Verify the model name and provider prefix are correct")
                 return False
             except self.litellm_exceptions.RateLimitError as e:
-                print("✗")
-                print(f"Error: Rate limit exceeded for model '{self.config.model_id}'", file=sys.stderr)
+                pr_crit("Model validation failed: ✗")
+                pr_err(f"Rate limit exceeded for model '{self.config.model_id}'")
                 return False
             except Exception as e:
-                print("✗")
-                print(f"Error validating model '{self.config.model_id}': {e}", file=sys.stderr)
+                pr_crit("Model validation failed: ✗")
+                pr_err(f"Error validating model '{self.config.model_id}': {e}")
                 return False
 
         except ImportError:
-            print("Error: litellm library not found. Please install it: pip install litellm", file=sys.stderr)
+            pr_alert("litellm library not found. Please install it: pip install litellm")
             return False
         except Exception as e:
-            print(f"Error initializing LiteLLM: {e}", file=sys.stderr)
+            pr_err(f"Error initializing LiteLLM: {e}")
             return False
 
     def is_initialized(self) -> bool:
@@ -375,7 +378,7 @@ class BaseProvider:
 
     def _process_streaming_response(self, response, streaming_callback=None, final_callback=None):
         """Process streaming response chunks from LiteLLM completion."""
-        print("\nRECEIVED FROM MODEL (streaming):")
+        pr_info("RECEIVED FROM MODEL (streaming):")
         accumulated_text = ""
         usage_data = None
         last_chunk = None
@@ -383,44 +386,41 @@ class BaseProvider:
         thinking_header_shown = False
         output_header_shown = False
 
-        for chunk in response:
-            last_chunk = chunk
-            delta = chunk.choices[0].delta
+        with get_streaming_handler() as stream:
+            for chunk in response:
+                last_chunk = chunk
+                delta = chunk.choices[0].delta
 
-            # Display reasoning content (extended thinking)
-            if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
-                if not reasoning_header_shown:
-                    print("\n[REASONING]")
-                    reasoning_header_shown = True
-                print(delta.reasoning_content, end='', flush=True)
+                if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                    if not reasoning_header_shown:
+                        pr_notice("[REASONING]")
+                        reasoning_header_shown = True
+                    stream.write(delta.reasoning_content)
 
-            # Display thinking blocks (Anthropic-specific)
-            if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
-                if not thinking_header_shown:
-                    print("\n[THINKING]")
-                    thinking_header_shown = True
-                for block in delta.thinking_blocks:
-                    if 'thinking' in block:
-                        print(block['thinking'], end='', flush=True)
+                if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
+                    if not thinking_header_shown:
+                        pr_notice("[THINKING]")
+                        thinking_header_shown = True
+                    for block in delta.thinking_blocks:
+                        if 'thinking' in block:
+                            stream.write(block['thinking'])
 
-            if delta.content is not None:
-                if not output_header_shown:
-                    print("\n[OUTPUT]")
-                    output_header_shown = True
-                chunk_text = delta.content
-                self.mark_first_response()
-                if streaming_callback:
-                    streaming_callback(chunk_text)
-                accumulated_text += chunk_text
+                if delta.content is not None:
+                    if not output_header_shown:
+                        pr_notice("[OUTPUT]")
+                        output_header_shown = True
+                    chunk_text = delta.content
+                    self.mark_first_response()
+                    stream.write(chunk_text)
+                    if streaming_callback:
+                        streaming_callback(chunk_text)
+                    accumulated_text += chunk_text
 
-            # Capture usage data from final chunk
-            if hasattr(chunk, 'usage') and chunk.usage is not None:
-                usage_data = chunk.usage
+                if hasattr(chunk, 'usage') and chunk.usage is not None:
+                    usage_data = chunk.usage
 
-        # Print timing after streaming completes
         self._print_timing_stats()
 
-        # Display cache statistics and cost
         if usage_data:
             self._display_cache_stats(usage_data, completion_response=last_chunk)
 
@@ -443,7 +443,7 @@ class BaseProvider:
             final_callback: Optional callback for final result
         """
         if not self.is_initialized():
-            print("\nError: Provider not initialized.", file=sys.stderr)
+            pr_err("Provider not initialized.")
             return
 
         try:
@@ -576,38 +576,38 @@ class BaseProvider:
         """Print timing statistics."""
         if self.model_start_time and self.first_response_time:
             model_time = self.first_response_time - self.model_start_time
-            print(f"\n🚀 Model processing time: {model_time:.3f}s")
+            pr_debug(f"Model processing time: {model_time:.3f}s")
 
     def _handle_provider_error(self, error: Exception, operation: str) -> None:
         """Common error handling for provider operations with full error details."""
         import traceback
 
         # Print full error details for debugging
-        print(f"\n❌ ERROR during {operation}:", file=sys.stderr)
-        print(f"Error Type: {type(error).__name__}", file=sys.stderr)
-        print(f"Error Message: {str(error)}", file=sys.stderr)
+        pr_err(f"ERROR during {operation}:")
+        pr_err(f"Error Type: {type(error).__name__}")
+        pr_err(f"Error Message: {str(error)}")
 
         if hasattr(self, 'google_exceptions'):
             # Gemini-specific errors
             if isinstance(error, self.google_exceptions.InvalidArgument):
-                print(f"Gemini API Error (Invalid Argument) - check your request parameters", file=sys.stderr)
+                pr_err(f"Gemini API Error (Invalid Argument) - check your request parameters")
             elif isinstance(error, self.google_exceptions.PermissionDenied):
-                print(f"Gemini API Error (Permission Denied) - check your API key and permissions", file=sys.stderr)
+                pr_err(f"Gemini API Error (Permission Denied) - check your API key and permissions")
             elif isinstance(error, self.google_exceptions.ResourceExhausted):
-                print(f"Gemini API Error (Rate Limit/Quota) - you may have exceeded usage limits", file=sys.stderr)
+                pr_err(f"Gemini API Error (Rate Limit/Quota) - you may have exceeded usage limits")
             else:
-                print(f"Gemini API Error - see details above", file=sys.stderr)
+                pr_err(f"Gemini API Error - see details above")
         elif hasattr(self, 'GroqError'):
             # Groq-specific errors
             if isinstance(error, self.GroqError):
-                print(f"Groq API Error - see details above", file=sys.stderr)
+                pr_err(f"Groq API Error - see details above")
             else:
-                print(f"Groq Provider Error - see details above", file=sys.stderr)
+                pr_err(f"Groq Provider Error - see details above")
         else:
-            print(f"Provider Error - see details above", file=sys.stderr)
+            pr_err(f"Provider Error - see details above")
 
         # Print stack trace for debugging
-        print(f"Stack trace:", file=sys.stderr)
+        pr_debug(f"Stack trace:")
         traceback.print_exc(file=sys.stderr)
 
     def _display_cache_stats(self, usage_data, completion_response=None) -> None:
@@ -615,30 +615,30 @@ class BaseProvider:
         if not self.config.debug_enabled:
             return
 
-        print("\n" + "-" * 60)
-        print("USAGE STATISTICS:")
+        pr_debug("-" * 60)
+        pr_debug("USAGE STATISTICS:")
 
         # Standard token counts
         if hasattr(usage_data, 'prompt_tokens'):
-            print(f"  Prompt tokens: {usage_data.prompt_tokens}")
+            pr_debug(f"  Prompt tokens: {usage_data.prompt_tokens}")
         if hasattr(usage_data, 'completion_tokens'):
-            print(f"  Completion tokens: {usage_data.completion_tokens}")
+            pr_debug(f"  Completion tokens: {usage_data.completion_tokens}")
         if hasattr(usage_data, 'total_tokens'):
-            print(f"  Total tokens: {usage_data.total_tokens}")
+            pr_debug(f"  Total tokens: {usage_data.total_tokens}")
 
         # Anthropic-specific cache fields
         if hasattr(usage_data, 'cache_creation_input_tokens') and usage_data.cache_creation_input_tokens:
-            print(f"  Cache creation tokens: {usage_data.cache_creation_input_tokens} (Anthropic: written to cache)")
+            pr_debug(f"  Cache creation tokens: {usage_data.cache_creation_input_tokens} (Anthropic: written to cache)")
 
         if hasattr(usage_data, 'cache_read_input_tokens') and usage_data.cache_read_input_tokens:
-            print(f"  Cache read tokens: {usage_data.cache_read_input_tokens} (Anthropic: read from cache)")
+            pr_debug(f"  Cache read tokens: {usage_data.cache_read_input_tokens} (Anthropic: read from cache)")
 
         # DeepSeek-specific cache fields
         if hasattr(usage_data, 'prompt_cache_hit_tokens') and usage_data.prompt_cache_hit_tokens:
-            print(f"  Cache hit tokens: {usage_data.prompt_cache_hit_tokens} (DeepSeek: cache hits)")
+            pr_debug(f"  Cache hit tokens: {usage_data.prompt_cache_hit_tokens} (DeepSeek: cache hits)")
 
         if hasattr(usage_data, 'prompt_cache_miss_tokens') and usage_data.prompt_cache_miss_tokens:
-            print(f"  Cache miss tokens: {usage_data.prompt_cache_miss_tokens} (DeepSeek: cache misses)")
+            pr_debug(f"  Cache miss tokens: {usage_data.prompt_cache_miss_tokens} (DeepSeek: cache misses)")
 
         # OpenAI/Gemini format: prompt_tokens_details
         if hasattr(usage_data, 'prompt_tokens_details') and usage_data.prompt_tokens_details:
@@ -646,20 +646,20 @@ class BaseProvider:
 
             # Show audio tokens if present
             if hasattr(details, 'audio_tokens') and details.audio_tokens:
-                print(f"  Audio tokens: {details.audio_tokens}")
+                pr_debug(f"  Audio tokens: {details.audio_tokens}")
 
             # Show text tokens if present
             if hasattr(details, 'text_tokens') and details.text_tokens:
-                print(f"  Text tokens: {details.text_tokens}")
+                pr_debug(f"  Text tokens: {details.text_tokens}")
 
             # Show cached tokens (None = no caching, 0 = cache warming, >0 = cache hit)
             if hasattr(details, 'cached_tokens'):
                 if details.cached_tokens is None:
-                    print(f"  Cached tokens: None (no implicit caching detected)")
+                    pr_debug(f"  Cached tokens: None (no implicit caching detected)")
                 elif details.cached_tokens == 0:
-                    print(f"  Cached tokens: 0 (cache warming - first request)")
+                    pr_debug(f"  Cached tokens: 0 (cache warming - first request)")
                 else:
-                    print(f"  Cached tokens: {details.cached_tokens} (cache hit!)")
+                    pr_debug(f"  Cached tokens: {details.cached_tokens} (cache hit!)")
 
         # Completion token details
         if hasattr(usage_data, 'completion_tokens_details') and usage_data.completion_tokens_details:
@@ -667,42 +667,42 @@ class BaseProvider:
 
             # Show reasoning tokens if present (extended thinking)
             if hasattr(details, 'reasoning_tokens') and details.reasoning_tokens:
-                print(f"  Reasoning tokens: {details.reasoning_tokens} (extended thinking)")
+                pr_debug(f"  Reasoning tokens: {details.reasoning_tokens} (extended thinking)")
 
         # Gemini-specific: cached_content_token_count (alternative field)
         if hasattr(usage_data, 'cached_content_token_count') and usage_data.cached_content_token_count:
-            print(f"  Cached content tokens: {usage_data.cached_content_token_count} (Gemini: implicit cache)")
+            pr_debug(f"  Cached content tokens: {usage_data.cached_content_token_count} (Gemini: implicit cache)")
 
         # Calculate and display cost
         if completion_response:
             try:
                 current_cost = self.litellm.completion_cost(completion_response=completion_response)
                 self.total_cost += current_cost
-                print(f"\nCOST:")
-                print(f"  Current request: ${current_cost:.6f}")
-                print(f"  Total session: ${self.total_cost:.6f}")
+                pr_debug(f"COST:")
+                pr_debug(f"  Current request: ${current_cost:.6f}")
+                pr_debug(f"  Total session: ${self.total_cost:.6f}")
             except Exception as e:
-                print(f"\nCOST: Unable to calculate ({str(e)})")
+                pr_debug(f"COST: Unable to calculate ({str(e)})")
 
-        print("-" * 60)
+        pr_debug("-" * 60)
 
     def _display_user_content(self, user_content):
         """Display user content being sent to model."""
-        print("\n" + "="*60)
-        print("SENDING TO MODEL:")
+        pr_debug("=" * 60)
+        pr_debug("SENDING TO MODEL:")
 
         # Handle list format (audio transcription)
         if isinstance(user_content, list):
             for content_block in user_content:
                 if content_block["type"] == "text":
-                    print(content_block["text"])
+                    pr_debug(content_block["text"])
                 elif content_block["type"] == "input_audio":
-                    print("Audio: audio_data.wav (base64)")
+                    pr_debug("Audio: audio_data.wav (base64)")
         # Handle string format (text transcription)
         else:
-            print(user_content)
+            pr_debug(user_content)
 
-        print("-" * 60)
+        pr_debug("-" * 60)
 
     def _get_generation_config(self) -> dict:
         """Get provider-agnostic generation configuration."""

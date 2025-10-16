@@ -11,7 +11,8 @@ except ImportError:
     vosk = None
 
 from audio_source import AudioChunkHandler
-from transcription.base import TranscriptionAudioSource
+from transcription.base import TranscriptionAudioSource, parse_transcription_model
+from lib.pr_log import pr_err, pr_warn, pr_info, get_streaming_handler
 
 
 class VoskChunkHandler(AudioChunkHandler):
@@ -38,7 +39,7 @@ class VoskChunkHandler(AudioChunkHandler):
                         grammar = f.read()
                     self.recognizer.SetGrammar(grammar)
                 except Exception as e:
-                    print(f"Warning: Failed to load L-graph from {lgraph_path}: {e}", file=sys.stderr)
+                    pr_warn(f"Failed to load L-graph from {lgraph_path}: {e}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize VOSK model from {model_path}: {e}")
@@ -48,8 +49,23 @@ class VoskChunkHandler(AudioChunkHandler):
         self.final_text = ""
         self.is_complete = False
 
+        # Streaming handler for partial results (maintained across chunks)
+        self.stream_handler = None
+
+    def end_streaming(self):
+        """
+        End streaming if active.
+
+        Single point of truth for stream cleanup.
+        """
+        if self.stream_handler is not None:
+            self.stream_handler.__exit__(None, None, None)
+            self.stream_handler = None
+
     def reset(self):
         """Reset handler for new recording."""
+        self.end_streaming()
+
         # Clear transcription state
         self.final_text = ""
         self.partial_results = []
@@ -66,37 +82,41 @@ class VoskChunkHandler(AudioChunkHandler):
                         grammar = f.read()
                     self.recognizer.SetGrammar(grammar)
                 except Exception as e:
-                    print(f"Warning: Failed to reload L-graph during reset: {e}", file=sys.stderr)
+                    pr_warn(f"Failed to reload L-graph during reset: {e}")
         except Exception as e:
-            print(f"Error resetting VOSK recognizer: {e}", file=sys.stderr)
+            pr_err(f"Error resetting VOSK recognizer: {e}")
 
     def on_chunk(self, chunk: np.ndarray, timestamp: float) -> None:
         """Process audio chunk through VOSK recognizer."""
         try:
-            # Convert numpy array to bytes (VOSK expects bytes)
             if chunk.dtype != np.int16:
                 chunk = chunk.astype(np.int16)
             audio_bytes = chunk.tobytes()
 
-            # Feed audio to recognizer
+            # Start streaming on first chunk
+            if self.stream_handler is None:
+                self.stream_handler = get_streaming_handler()
+                self.stream_handler.__enter__()
+
             if self.recognizer.AcceptWaveform(audio_bytes):
-                # Final result available
                 result = json.loads(self.recognizer.Result())
                 if result.get('text'):
                     self.final_text += result['text'] + " "
-                    print(result['text'], end=' ', flush=True)
+                    self.stream_handler.write_full(self.final_text)
             else:
-                # Partial result - display in real-time
                 partial = json.loads(self.recognizer.PartialResult())
                 if partial.get('partial'):
-                    print(f"\r{partial['partial']}", end='', flush=True)
+                    temp_display = self.final_text + partial['partial']
+                    self.stream_handler.write_full(temp_display)
 
         except Exception as e:
-            print(f"Error processing audio chunk in VOSK: {e}", file=sys.stderr)
+            pr_err(f"Error processing audio chunk in VOSK: {e}")
 
     def finalize(self) -> str:
         """Get final transcription result."""
         try:
+            self.end_streaming()
+
             # Get any remaining final result
             final_result = json.loads(self.recognizer.FinalResult())
             if final_result.get('text'):
@@ -106,7 +126,7 @@ class VoskChunkHandler(AudioChunkHandler):
             return self.final_text.strip()
 
         except Exception as e:
-            print(f"Error finalizing VOSK transcription: {e}", file=sys.stderr)
+            pr_err(f"Error finalizing VOSK transcription: {e}")
             return self.final_text.strip()
 
 
@@ -115,7 +135,7 @@ class VoskTranscriptionAudioSource(TranscriptionAudioSource):
 
     def __init__(self, config, transcription_model: str):
         import os
-        model_identifier = transcription_model.split('/', 1)[1]
+        model_identifier = parse_transcription_model(transcription_model)
         model_path = os.path.expanduser(model_identifier)
         lgraph_path = getattr(config, 'vosk_lgraph_path', None)
 
@@ -134,20 +154,20 @@ class VoskTranscriptionAudioSource(TranscriptionAudioSource):
         """Initialize VOSK transcription source."""
         try:
             if vosk is None:
-                print("Error: VOSK library not available", file=sys.stderr)
+                pr_err("VOSK library not available")
                 return False
 
             if not super().initialize():
                 return False
 
-            print(f"VOSK initialized with model: {self.model_identifier}")
+            pr_info(f"VOSK initialized with model: {self.model_identifier}")
             if self.lgraph_path:
-                print(f"L-graph enabled: {self.lgraph_path}")
+                pr_info(f"L-graph enabled: {self.lgraph_path}")
 
             return True
 
         except Exception as e:
-            print(f"Error initializing VOSK: {e}", file=sys.stderr)
+            pr_err(f"Error initializing VOSK: {e}")
             return False
 
     def start_recording(self) -> None:

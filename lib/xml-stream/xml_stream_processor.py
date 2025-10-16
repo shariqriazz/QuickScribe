@@ -2,9 +2,12 @@
 
 import re
 import sys
+import os
 from typing import Dict, List, Tuple
 
 from keyboard_injector import KeyboardInjector
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__))))
+from pr_log import pr_warn, pr_debug
 
 
 class XMLStreamProcessor:
@@ -73,15 +76,15 @@ class XMLStreamProcessor:
         if self.streaming_active:
             self.debug_buffer.append(message)
         elif self.debug_enabled:
-            print(message, file=sys.stderr)
+            pr_debug(message)
 
     def _flush_debug_buffer(self) -> None:
         """Flush all buffered debug messages to stderr."""
         if self.debug_buffer:
-            print("\n=== DEBUG TRACE ===", file=sys.stderr)
+            pr_debug("=== DEBUG TRACE ===")
             for message in self.debug_buffer:
-                print(message, file=sys.stderr)
-            print("=== END DEBUG ===\n", file=sys.stderr)
+                pr_debug(message)
+            pr_debug("=== END DEBUG ===")
             self.debug_buffer.clear()
 
     def start_stream(self) -> None:
@@ -110,7 +113,7 @@ class XMLStreamProcessor:
             closing_seq = int(match.group(3))
 
             if opening_seq != closing_seq:
-                print(f"⚠️  XML tag mismatch: <{opening_seq}>...</{closing_seq}> (using opening tag {opening_seq})", file=sys.stderr)
+                pr_warn(f"XML tag mismatch: <{opening_seq}>...</{closing_seq}> (using opening tag {opening_seq})")
 
             # Unescape XML entities in tag content
             word = self._unescape_xml_entities(word)
@@ -177,11 +180,11 @@ class XMLStreamProcessor:
     def _perform_backspace(self, count: int) -> None:
         """Execute keyboard backspace operation."""
         if count > 0:
-            self._debug(f"            ⌫ BACKSPACE({count})")
+            self._debug(f"            BACKSPACE({count})")
             self.keyboard.bksp(count)
             self.backspace_performed = True
         else:
-            self._debug(f"            ⚪ NO BACKSPACE NEEDED")
+            self._debug(f"            NO BACKSPACE NEEDED")
 
     def _emit_up_to_sequence(self, target_seq: int) -> None:
         """Emit all chunks from last_emitted_seq+1 to target_seq (filling gaps)."""
@@ -196,13 +199,13 @@ class XMLStreamProcessor:
         # Emit each chunk in order
         for seq in seqs_to_emit:
             word = self.current_words[seq]
-            self._debug(f"            📝 EMIT('{word}') for seq={seq}")
+            self._debug(f"            EMIT('{word}') for seq={seq}")
             self.keyboard.emit(word)
 
         # Update last emitted sequence
         if seqs_to_emit:
             self.last_emitted_seq = max(seqs_to_emit)
-            self._debug(f"            ➡️  last_emitted_seq = {self.last_emitted_seq}")
+            self._debug(f"            last_emitted_seq = {self.last_emitted_seq}")
     
     def _build_string_from_words(self, words: Dict[int, str]) -> str:
         """Build complete string from word dictionary."""

@@ -6,6 +6,7 @@ import queue
 import sys
 from typing import Optional
 from audio_source import AudioSource, AudioResult, AudioDataResult, AudioChunkHandler, DefaultAudioChunkHandler
+from lib.pr_log import pr_emerg, pr_err, pr_warn, pr_info
 
 
 class MicrophoneAudioSource(AudioSource):
@@ -27,16 +28,16 @@ class MicrophoneAudioSource(AudioSource):
                 return True
             return False
         except Exception as e:
-            print(f"Error initializing microphone audio source: {e}", file=sys.stderr)
+            pr_err(f"Error initializing microphone audio source: {e}")
             return False
 
     def audio_callback(self, indata, frames, time_info, status):
         """This is called (from a separate thread) for each audio block."""
         if status:
             if status.input_overflow:
-                print("W", end='', flush=True)  # Indicate overflow warning
+                pr_warn("Audio buffer overflow")
             else:
-                print(f"\nAudio callback status: {status}", file=sys.stderr)
+                pr_warn(f"Audio callback status: {status}")
 
         if self._is_recording:
             chunk_copy = indata.copy()
@@ -50,7 +51,7 @@ class MicrophoneAudioSource(AudioSource):
         if self._is_recording:
             return
 
-        print("\nRecording started... ", end='', flush=True)
+        pr_info("Recording started...")
         self._is_recording = True
         self.audio_queue.queue.clear()
 
@@ -63,12 +64,12 @@ class MicrophoneAudioSource(AudioSource):
             )
             self.recording_stream.start()
         except sd.PortAudioError as e:
-            print(f"\nError starting audio stream: {e}", file=sys.stderr)
-            print("Check audio device settings and permissions.", file=sys.stderr)
+            pr_err(f"Error starting audio stream: {e}")
+            pr_err("Check audio device settings and permissions.")
             self._is_recording = False
             self.recording_stream = None
         except Exception as e:
-            print(f"\nUnexpected error during recording start: {e}", file=sys.stderr)
+            pr_err(f"Unexpected error during recording start: {e}")
             self._is_recording = False
             self.recording_stream = None
 
@@ -81,7 +82,7 @@ class MicrophoneAudioSource(AudioSource):
                 sample_rate=self.config.sample_rate
             )
 
-        print("Stopped. Processing... ", end='', flush=True)
+        pr_info("Stopped. Processing...")
         self._is_recording = False
 
         if self.recording_stream:
@@ -89,9 +90,9 @@ class MicrophoneAudioSource(AudioSource):
                 self.recording_stream.stop()
                 self.recording_stream.close()
             except sd.PortAudioError as e:
-                print(f"\nError stopping/closing audio stream: {e}", file=sys.stderr)
+                pr_err(f"Error stopping/closing audio stream: {e}")
             except Exception as e:
-                print(f"\nUnexpected error stopping/closing audio stream: {e}", file=sys.stderr)
+                pr_err(f"Unexpected error stopping/closing audio stream: {e}")
             finally:
                 self.recording_stream = None
 
@@ -103,7 +104,7 @@ class MicrophoneAudioSource(AudioSource):
                 break
 
         if not audio_data:
-            print("No audio data recorded.")
+            pr_info("No audio data recorded.")
             return AudioDataResult(
                 audio_data=np.array([], dtype=self.dtype),
                 sample_rate=self.config.sample_rate
@@ -112,13 +113,13 @@ class MicrophoneAudioSource(AudioSource):
         try:
             full_audio = np.concatenate(audio_data, axis=0)
         except ValueError as e:
-            print(f"\nError concatenating audio data: {e}", file=sys.stderr)
+            pr_err(f"Error concatenating audio data: {e}")
             return AudioDataResult(
                 audio_data=np.array([], dtype=self.dtype),
                 sample_rate=self.config.sample_rate
             )
         except Exception as e:
-            print(f"\nUnexpected error combining audio: {e}", file=sys.stderr)
+            pr_err(f"Unexpected error combining audio: {e}")
             return AudioDataResult(
                 audio_data=np.array([], dtype=self.dtype),
                 sample_rate=self.config.sample_rate
@@ -144,14 +145,14 @@ class MicrophoneAudioSource(AudioSource):
                 callback=lambda i, f, t, s: None
             ):
                 pass
-            print("Audio device check successful.")
+            pr_info("Audio device check successful.")
             return True
         except sd.PortAudioError as e:
-            print(f"\nFATAL: Audio device error: {e}", file=sys.stderr)
-            print("Please check connection, selection, and permissions.", file=sys.stderr)
+            pr_emerg(f"Audio device error: {e}")
+            pr_emerg("Please check connection, selection, and permissions.")
             return False
         except Exception as e:
-            print(f"\nWarning: Could not query/test audio devices: {e}", file=sys.stderr)
+            pr_warn(f"Could not query/test audio devices: {e}")
             return False
 
     def _cleanup(self):
@@ -161,6 +162,6 @@ class MicrophoneAudioSource(AudioSource):
                 if self.recording_stream.active:
                     self.recording_stream.stop()
                 self.recording_stream.close()
-                print("Audio stream stopped.")
+                pr_info("Audio stream stopped.")
             except Exception:
-                pass  # Ignore errors on final cleanup
+                pass

@@ -13,14 +13,15 @@ except ImportError:
     litellm = None
     sf = None
 
-from transcription.base import TranscriptionAudioSource
+from transcription.base import TranscriptionAudioSource, parse_transcription_model
+from lib.pr_log import pr_err, pr_warn, pr_info
 
 
 class OpenAITranscriptionAudioSource(TranscriptionAudioSource):
     """OpenAI Whisper transcription implementation using litellm."""
 
     def __init__(self, config, transcription_model: str):
-        model_identifier = transcription_model.split('/', 1)[1]
+        model_identifier = parse_transcription_model(transcription_model)
         super().__init__(config, model_identifier, supports_streaming=False, dtype='int16')
 
         self.api_key = getattr(config, 'api_key', None)
@@ -40,7 +41,7 @@ class OpenAITranscriptionAudioSource(TranscriptionAudioSource):
             audio_data = self.squeeze_to_mono(audio_data)
 
             if not self.validate_audio_length(audio_data, self.config.sample_rate):
-                print("Audio too short for Whisper", file=sys.stderr)
+                pr_warn("Audio too short for Whisper")
                 return ""
 
             audio_bytes = io.BytesIO()
@@ -62,22 +63,22 @@ class OpenAITranscriptionAudioSource(TranscriptionAudioSource):
             return transcribed_text
 
         except Exception as e:
-            print(f"Error transcribing with Whisper: {e}", file=sys.stderr)
+            pr_err(f"Error transcribing with Whisper: {e}")
             return ""
 
     def initialize(self) -> bool:
         """Initialize OpenAI Whisper transcription source."""
         try:
             if litellm is None or sf is None:
-                print("Error: litellm or soundfile library not available", file=sys.stderr)
+                pr_err("litellm or soundfile library not available")
                 return False
 
             if not super().initialize():
                 return False
 
-            print(f"OpenAI Whisper initialized with model: {self.model_identifier}")
+            pr_info(f"OpenAI Whisper initialized with model: {self.model_identifier}")
             return True
 
         except Exception as e:
-            print(f"Error initializing Whisper: {e}", file=sys.stderr)
+            pr_err(f"Error initializing Whisper: {e}")
             return False

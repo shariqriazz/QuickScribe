@@ -8,6 +8,31 @@ from typing import Optional
 from audio_source import AudioResult, AudioTextResult, AudioChunkHandler
 from microphone_audio_source import MicrophoneAudioSource
 
+sys.path.insert(0, 'lib')
+from pr_log import pr_info
+
+
+def parse_transcription_model(transcription_model: str) -> str:
+    """
+    Parse transcription model identifier.
+
+    Single point of truth for model identifier extraction.
+
+    Handles both formats:
+    - "provider/model" → extracts "model"
+    - "model" → returns "model" as-is
+
+    Args:
+        transcription_model: Model specification string
+
+    Returns:
+        Model identifier without provider prefix
+    """
+    if '/' in transcription_model:
+        return transcription_model.split('/', 1)[1]
+
+    return transcription_model
+
 
 class TranscriptionAudioSource(MicrophoneAudioSource):
     """
@@ -56,14 +81,17 @@ class TranscriptionAudioSource(MicrophoneAudioSource):
         audio_result = super().stop_recording()
 
         if hasattr(audio_result, 'audio_data') and len(audio_result.audio_data) > 0:
-            print(f"Transcribing with {self.model_identifier}... ", end='', flush=True)
+            if self.chunk_handler and hasattr(self.chunk_handler, 'end_streaming'):
+                self.chunk_handler.end_streaming()
+
+            pr_info(f"Transcribing with {self.model_identifier}...")
 
             self.transcription_start_time = time.time()
             transcribed_text = self._transcribe_audio(audio_result.audio_data)
             self.transcription_end_time = time.time()
 
             elapsed_ms = int((self.transcription_end_time - self.transcription_start_time) * 1000)
-            print(f"({elapsed_ms}ms)")
+            pr_info(f"Transcription completed ({elapsed_ms}ms)")
 
             formatted_text = f"<tx>{transcribed_text}</tx>" if transcribed_text else ""
 

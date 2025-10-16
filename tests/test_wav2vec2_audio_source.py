@@ -20,8 +20,8 @@ class MockConfig:
         self.channels = 1
 
 
-class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
-    """Test Wav2Vec2AudioSource with all dependencies mocked."""
+class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
+    """Test HuggingFaceTranscriptionAudioSource with all dependencies mocked."""
 
     def setUp(self):
         """Set up test fixtures with mocked dependencies."""
@@ -48,12 +48,12 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
         mock_file.__exit__ = Mock(return_value=None)
 
         self.patches = [
-            patch('wav2vec2_audio_source.torch', self.torch_mock),
-            patch('wav2vec2_audio_source.transformers', self.transformers_mock),
-            patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor', self.feature_extractor_mock),
-            patch('wav2vec2_audio_source.Wav2Vec2ForCTC', self.model_mock),
-            patch('wav2vec2_audio_source.is_offline_mode', Mock(return_value=False)),
-            patch('wav2vec2_audio_source.HfApi', Mock()),
+            patch('transcription.implementations.huggingface.torch', self.torch_mock),
+            patch('transcription.implementations.huggingface.transformers', self.transformers_mock),
+            patch('transcription.implementations.huggingface.Wav2Vec2FeatureExtractor', self.feature_extractor_mock),
+            patch('transcription.implementations.huggingface.Wav2Vec2ForCTC', self.model_mock),
+            patch('transcription.implementations.huggingface.is_offline_mode', Mock(return_value=False)),
+            patch('transcription.implementations.huggingface.HfApi', Mock()),
             patch('huggingface_hub.hf_hub_download', Mock(return_value='/tmp/vocab.json')),
             patch('builtins.open', Mock(return_value=mock_file)),
             patch('json.load', Mock(return_value=self.mock_vocab))
@@ -75,23 +75,23 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
             patcher.stop()
 
     def test_audio_source_initialization(self):
-        """Test that Wav2Vec2AudioSource initializes correctly."""
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        """Test that HuggingFaceTranscriptionAudioSource initializes correctly."""
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Check basic attributes
         self.assertEqual(audio_source.config.sample_rate, 16000)
-        self.assertEqual(audio_source.model_path, "test_model")
+        self.assertEqual(audio_source.model_identifier, "test_model")
         self.assertIsNotNone(audio_source.feature_extractor)
         self.assertIsNotNone(audio_source.model)
         self.assertIsInstance(audio_source.id_to_phoneme, dict)
 
     def test_phoneme_decoding(self):
         """Test phoneme decoding functionality."""
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Mock predicted IDs tensor - create a proper mock that supports indexing
         mock_tensor = Mock()
@@ -103,9 +103,9 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
 
     def test_audio_processing(self):
         """Test audio processing functionality."""
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Mock the feature extractor and model
         mock_input_values = Mock()
@@ -132,30 +132,30 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
 
     def test_stop_recording_with_audio(self):
         """Test stop_recording returns AudioTextResult with phonemes."""
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
         from audio_source import AudioDataResult, AudioTextResult
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Mock the parent stop_recording to return AudioDataResult
         test_audio = np.random.random(16000).astype(np.float32)
         mock_audio_result = AudioDataResult(test_audio, 16000)
 
-        with patch.object(audio_source.__class__.__bases__[0], 'stop_recording', return_value=mock_audio_result):
-            # Mock the _process_audio method
-            with patch.object(audio_source, '_process_audio', return_value="t ɛ s t"):
+        with patch('microphone_audio_source.MicrophoneAudioSource.stop_recording', return_value=mock_audio_result):
+            # Mock the _transcribe_audio method
+            with patch.object(audio_source, '_transcribe_audio', return_value="t ɛ s t"):
                 result = audio_source.stop_recording()
 
                 self.assertIsInstance(result, AudioTextResult)
-                self.assertEqual(result.transcribed_text, "t ɛ s t")
+                self.assertEqual(result.transcribed_text, "<tx>t ɛ s t</tx>")
                 self.assertEqual(result.sample_rate, 16000)
                 np.testing.assert_array_equal(result.audio_data, test_audio)
 
     def test_reset_functionality(self):
         """Test that reset works (inherited from parent)."""
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Should have basic audio source functionality
         self.assertTrue(hasattr(audio_source, 'start_recording'))
@@ -165,20 +165,20 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
     def test_chunk_handler_initialization(self):
         """Test legacy chunk handler interface (backward compatibility)."""
         # This test ensures the old chunk handler tests don't break completely
-        # In the new implementation, chunk handling is integrated into Wav2Vec2AudioSource
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        # In the new implementation, chunk handling is integrated into HuggingFaceTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Basic functionality should work
-        self.assertEqual(audio_source.model_path, "test_model")
+        self.assertEqual(audio_source.model_identifier, "test_model")
         self.assertEqual(audio_source.config.sample_rate, 16000)
 
     def test_chunk_processing(self):
         """Test that audio processing works (replaces old chunk processing)."""
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Test that we can process audio data
         test_audio = np.random.random(16000).astype(np.float32)
@@ -190,9 +190,9 @@ class TestWav2Vec2AudioSourceMocked(unittest.TestCase):
 
     def test_finalize_with_mock_inference(self):
         """Test phoneme inference with mocked model."""
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-        audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+        audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
         # Mock torch operations
         mock_tensor = Mock()
@@ -226,25 +226,25 @@ class TestErrorHandling(unittest.TestCase):
 
     def test_model_loading_error(self):
         """Test handling of model loading errors."""
-        with patch('wav2vec2_audio_source.torch', None):
-            with patch('wav2vec2_audio_source.transformers', None):
-                from wav2vec2_audio_source import Wav2Vec2AudioSource
+        with patch('transcription.implementations.huggingface.torch', None):
+            with patch('transcription.implementations.huggingface.transformers', None):
+                from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
                 with self.assertRaises(ImportError):
-                    Wav2Vec2AudioSource(self.config, "test_model")
+                    HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
     def test_audio_too_short(self):
         """Test handling of audio that's too short."""
-        with patch('wav2vec2_audio_source.torch', Mock()):
-            with patch('wav2vec2_audio_source.transformers', Mock()):
-                with patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor'):
-                    with patch('wav2vec2_audio_source.Wav2Vec2ForCTC'):
+        with patch('transcription.implementations.huggingface.torch', Mock()):
+            with patch('transcription.implementations.huggingface.transformers', Mock()):
+                with patch('transcription.implementations.huggingface.Wav2Vec2FeatureExtractor'):
+                    with patch('transcription.implementations.huggingface.Wav2Vec2ForCTC'):
                         with patch('huggingface_hub.hf_hub_download'):
                             with patch('builtins.open'):
                                 with patch('json.load', return_value={}):
-                                    from wav2vec2_audio_source import Wav2Vec2AudioSource
+                                    from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
-                                    audio_source = Wav2Vec2AudioSource(self.config, "test_model")
+                                    audio_source = HuggingFaceTranscriptionAudioSource(self.config, "test_model")
 
                                     # Test with very short audio
                                     short_audio = np.array([0.1, 0.2], dtype=np.float32)

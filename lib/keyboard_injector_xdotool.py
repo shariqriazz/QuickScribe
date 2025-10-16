@@ -5,6 +5,8 @@ import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'xml-stream'))
 from keyboard_injector import KeyboardInjector
+sys.path.insert(0, os.path.dirname(__file__))
+from pr_log import pr_err, pr_debug
 
 
 class XdotoolKeyboardInjector(KeyboardInjector):
@@ -23,11 +25,11 @@ class XdotoolKeyboardInjector(KeyboardInjector):
             # Convert Hz to milliseconds delay: delay = 1000 / rate
             self.typing_delay = int(1000 / xdotool_rate)
             if getattr(config, 'debug_enabled', False):
-                print(f"[DEBUG] XdotoolKeyboardInjector: typing_rate={xdotool_rate}Hz -> delay={self.typing_delay}ms", file=sys.stderr)
+                pr_debug(f"XdotoolKeyboardInjector: typing_rate={xdotool_rate}Hz -> delay={self.typing_delay}ms")
         else:
             self.typing_delay = typing_delay
             if config and getattr(config, 'debug_enabled', False):
-                print(f"[DEBUG] XdotoolKeyboardInjector: using default typing_delay={self.typing_delay}ms", file=sys.stderr)
+                pr_debug(f"XdotoolKeyboardInjector: using default typing_delay={self.typing_delay}ms")
         self.debug_enabled = getattr(config, 'debug_enabled', False) if config else False
         # Detect if we're running in test mode
         self.test_mode = (
@@ -50,10 +52,10 @@ class XdotoolKeyboardInjector(KeyboardInjector):
                 "BackSpace"
             ]
             if self.debug_enabled:
-                print(f"[DEBUG] xdotool bksp command: {' '.join(cmd)}", file=sys.stderr)
+                pr_debug(f"xdotool bksp command: {' '.join(cmd)}")
             subprocess.run(cmd, check=True, capture_output=True, text=True)
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            print(f"xdotool backspace command failed: {str(e)}", file=sys.stderr)
+            pr_err(f"xdotool backspace command failed: {str(e)}")
     
     def emit(self, text: str) -> None:
         """Emit text at current cursor position."""
@@ -71,15 +73,15 @@ class XdotoolKeyboardInjector(KeyboardInjector):
                         line
                     ]
                     if self.debug_enabled:
-                        print(f"[DEBUG] xdotool type command: {' '.join(cmd)}", file=sys.stderr)
+                        pr_debug(f"xdotool type command: {' '.join(cmd)}")
                     subprocess.run(cmd, check=True, capture_output=True, text=True)
-                
+
                 # If it's not the last line, press Enter
                 if i < len(lines) - 1:
                     cmd = ["xdotool", "key", "Return"]
                     if self.debug_enabled:
-                        print(f"[DEBUG] xdotool key command: {' '.join(cmd)}", file=sys.stderr)
+                        pr_debug(f"xdotool key command: {' '.join(cmd)}")
                     subprocess.run(cmd, check=True, capture_output=True, text=True)
-                                 
+
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            print(f"xdotool type command failed: {str(e)}", file=sys.stderr)
+            pr_err(f"xdotool type command failed: {str(e)}")

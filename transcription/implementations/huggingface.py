@@ -28,8 +28,9 @@ except ImportError:
     pyrb = None
 
 from audio_source import AudioChunkHandler, AudioResult, AudioTextResult, AudioDataResult
-from transcription.base import TranscriptionAudioSource
+from transcription.base import TranscriptionAudioSource, parse_transcription_model
 from phoneme_mapper import process_wav2vec2_output
+from lib.pr_log import pr_err, pr_warn, pr_info
 
 
 def format_phoneme_output(raw_phonemes: str) -> str:
@@ -49,19 +50,19 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
 
         # Initialize Wav2Vec2 model and processor
         try:
-            print(f"Loading Wav2Vec2 model: {model_path}")
+            pr_info(f"Loading Wav2Vec2 model: {model_path}")
 
             # Check if we're offline or if model exists
             is_local_path = os.path.exists(model_path)
             if not is_local_path and not is_offline_mode():
-                print("Downloading from Hugging Face (this may take a moment)...")
+                pr_info("Downloading from Hugging Face (this may take a moment)...")
                 # Verify model exists on HF Hub
                 try:
                     if HfApi:
                         api = HfApi()
                         api.model_info(model_path)
                 except Exception as hf_error:
-                    print(f"Warning: Could not verify model on Hugging Face: {hf_error}", file=sys.stderr)
+                    pr_warn(f"Could not verify model on Hugging Face: {hf_error}")
 
             # Load as phoneme model (required for phoneme recognition)
             self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
@@ -82,13 +83,12 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
                 force_download=False,  # Use cached if available
                 local_files_only=is_offline_mode()  # Only use local files if offline
             )
-            print(f"Loaded as Wav2Vec2 Phoneme model")
-            self.model.eval()  # Set to evaluation mode
-            print(f"Successfully loaded Wav2Vec2 model: {model_path}")
+            pr_info(f"Loaded as Wav2Vec2 Phoneme model")
+            self.model.eval()
+            pr_info(f"Successfully loaded Wav2Vec2 model: {model_path}")
 
-            # Print model info
             if hasattr(self.model.config, 'vocab_size'):
-                print(f"Model vocab size: {self.model.config.vocab_size}")
+                pr_info(f"Model vocab size: {self.model.config.vocab_size}")
 
         except Exception as e:
             error_msg = f"Failed to load Wav2Vec2 model from {model_path}: {e}\n"
@@ -125,7 +125,7 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
             self.accumulated_audio.append(chunk)
 
         except Exception as e:
-            print(f"Error processing audio chunk in Wav2Vec2: {e}", file=sys.stderr)
+            pr_err(f"Error processing audio chunk in Wav2Vec2: {e}")
 
     def finalize(self) -> str:
         """Get final phoneme transcription result."""
@@ -138,9 +138,9 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
             full_audio = np.concatenate(self.accumulated_audio)
 
             # Check minimum audio length for Wav2Vec2 (need at least 320 samples for 16kHz)
-            min_samples = max(320, self.sample_rate // 50)  # At least 20ms of audio
+            min_samples = max(320, self.sample_rate // 50)
             if len(full_audio) < min_samples:
-                print(f"Audio too short for Wav2Vec2: {len(full_audio)} samples, need at least {min_samples}", file=sys.stderr)
+                pr_warn(f"Audio too short for Wav2Vec2: {len(full_audio)} samples, need at least {min_samples}")
                 self.is_complete = True
                 return ""
 
@@ -166,7 +166,7 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
             return self.phoneme_text.strip()
 
         except Exception as e:
-            print(f"Error finalizing Wav2Vec2 transcription: {e}", file=sys.stderr)
+            pr_err(f"Error finalizing Wav2Vec2 transcription: {e}")
             self.is_complete = True
             return ""
 
@@ -175,7 +175,7 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
     """HuggingFace Wav2Vec2 transcription implementation using phoneme recognition."""
 
     def __init__(self, config, transcription_model: str):
-        model_identifier = transcription_model.split('/', 1)[1]
+        model_identifier = parse_transcription_model(transcription_model)
         super().__init__(config, model_identifier, supports_streaming=False, dtype='float32')
 
         self.speed_factors = [0.80, 0.85, 0.90, 0.95]
@@ -191,9 +191,8 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
             raise ImportError("PyTorch and transformers libraries not installed. Install with: pip install torch transformers huggingface_hub")
 
         try:
-            print(f"Loading Wav2Vec2 model: {model_path}")
+            pr_info(f"Loading Wav2Vec2 model: {model_path}")
 
-            # Load components
             self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                 model_path,
                 cache_dir=None,
@@ -201,7 +200,6 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
                 local_files_only=is_offline_mode()
             )
 
-            # Load model
             self.model = Wav2Vec2ForCTC.from_pretrained(
                 model_path,
                 cache_dir=None,
@@ -209,11 +207,10 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
                 local_files_only=is_offline_mode()
             )
 
-            # Load vocabulary for phoneme decoding
             self._load_phoneme_vocab(model_path)
 
             self.model.eval()
-            print(f"Successfully loaded Wav2Vec2 model: {model_path}")
+            pr_info(f"Successfully loaded Wav2Vec2 model: {model_path}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to load Wav2Vec2 model from {model_path}: {e}")
@@ -230,12 +227,11 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
             with open(vocab_path, 'r') as f:
                 vocab = json.load(f)
 
-            # Create id to phoneme mapping
             self.id_to_phoneme = {int(idx): phoneme for phoneme, idx in vocab.items()}
-            print(f"Wav2Vec2 phoneme vocabulary loaded ({len(self.id_to_phoneme)} phonemes)")
+            pr_info(f"Wav2Vec2 phoneme vocabulary loaded ({len(self.id_to_phoneme)} phonemes)")
 
         except Exception as e:
-            print(f"Warning: Could not load phoneme vocabulary: {e}", file=sys.stderr)
+            pr_warn(f"Could not load phoneme vocabulary: {e}")
             self.id_to_phoneme = {}
 
     def _decode_phonemes(self, predicted_ids):
@@ -314,7 +310,7 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
                 return raw_phonemes
 
         except Exception as e:
-            print(f"Error processing audio at speed {speed_factor}: {e}", file=sys.stderr)
+            pr_err(f"Error processing audio at speed {speed_factor}: {e}")
             return ""
 
     def _process_audio(self, audio_data: np.ndarray) -> str:
@@ -327,7 +323,7 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
             audio_data = self.squeeze_to_mono(audio_data)
 
             if not self.validate_audio_length(audio_data, self.config.sample_rate):
-                print(f"Audio too short for Wav2Vec2", file=sys.stderr)
+                pr_warn(f"Audio too short for Wav2Vec2")
                 return ""
 
             # Process at multiple speeds in parallel threads
@@ -347,7 +343,7 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
                         raw_phonemes = future.result()
                         speed_results[speed_factor] = raw_phonemes
                     except Exception as e:
-                        print(f"Error processing speed {speed_factor}: {e}", file=sys.stderr)
+                        pr_err(f"Error processing speed {speed_factor}: {e}")
                         speed_results[speed_factor] = ""
 
             for speed_factor in self.speed_factors:
@@ -357,10 +353,10 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
                         seen_phonemes.add(raw_phonemes)
                         speed_pct = int(speed_factor * 100)
                         results.append(f"  {speed_pct}% speed:\n    IPA: {raw_phonemes}")
-                        print(f"{speed_pct}% speed - IPA: {raw_phonemes}")
+                        pr_info(f"{speed_pct}% speed - IPA: {raw_phonemes}")
                     else:
                         speed_pct = int(speed_factor * 100)
-                        print(f"{speed_pct}% speed - Skipped (duplicate of previous speed)")
+                        pr_info(f"{speed_pct}% speed - Skipped (duplicate of previous speed)")
 
             # Combine all results
             if results:
@@ -369,22 +365,22 @@ class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
                 return ""
 
         except Exception as e:
-            print(f"Error processing audio with Wav2Vec2: {e}", file=sys.stderr)
+            pr_err(f"Error processing audio with Wav2Vec2: {e}")
             return ""
 
     def initialize(self) -> bool:
         """Initialize HuggingFace Wav2Vec2 audio source."""
         try:
             if torch is None or transformers is None:
-                print("Error: PyTorch and transformers libraries not available", file=sys.stderr)
+                pr_err("PyTorch and transformers libraries not available")
                 return False
 
             if not super().initialize():
                 return False
 
-            print(f"HuggingFace Wav2Vec2 initialized with model: {self.model_identifier}")
+            pr_info(f"HuggingFace Wav2Vec2 initialized with model: {self.model_identifier}")
             return True
 
         except Exception as e:
-            print(f"Error initializing HuggingFace audio source: {e}", file=sys.stderr)
+            pr_err(f"Error initializing HuggingFace audio source: {e}")
             return False

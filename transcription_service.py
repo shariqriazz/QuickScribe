@@ -11,6 +11,7 @@ from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
 from lib.keyboard_injector_macos import MacOSKeyboardInjector
 from lib.keyboard_injector_windows import WindowsKeyboardInjector
 from instruction_composer import InstructionComposer
+from lib.pr_log import pr_err, pr_warn, pr_notice, pr_debug
 
 
 class TranscriptionService:
@@ -29,10 +30,10 @@ class TranscriptionService:
             elif sys.platform == 'win32':
                 self.keyboard = WindowsKeyboardInjector(config)
             else:
-                print(f"Warning: No supported keyboard injector for platform '{sys.platform}'. Using mock mode (no keyboard output).", file=sys.stderr)
+                pr_warn(f"No supported keyboard injector for platform '{sys.platform}'. Using mock mode (no keyboard output).")
                 self.keyboard = MockKeyboardInjector()
         except ImportError as e:
-            print(f"Warning: Could not initialize keyboard injector: {e}. Using mock mode (no keyboard output).", file=sys.stderr)
+            pr_warn(f"Could not initialize keyboard injector: {e}. Using mock mode (no keyboard output).")
             self.keyboard = MockKeyboardInjector()
 
         self.processor = XMLStreamProcessor(self.keyboard, config.xml_stream_debug)
@@ -58,7 +59,7 @@ class TranscriptionService:
         # Check for reset commands
         for pattern in reset_patterns:
             if pattern in text_lower:
-                print(f"\nCommand detected: '{pattern}' - Resetting conversation...")
+                pr_notice(f"Command detected: '{pattern}' - Resetting conversation...")
                 self.reset_all_state()
                 text = re.sub(re.escape(pattern), '', text, flags=re.IGNORECASE).strip()
                 break
@@ -95,7 +96,7 @@ class TranscriptionService:
                         remaining_content = self.streaming_buffer[self.last_update_position:]
                         if remaining_content.strip():
                             if self.config.debug_enabled:
-                                print(f"[DEBUG] complete_stream: processing remaining content: '{remaining_content}'", file=sys.stderr)
+                                pr_debug(f"complete_stream: processing remaining content: '{remaining_content}'")
                             self.processor.process_chunk(remaining_content)
                 else:
                     # Process content up to closing tag
@@ -103,32 +104,32 @@ class TranscriptionService:
                         remaining_content = self.streaming_buffer[self.last_update_position:update_end_pos]
                         if remaining_content.strip():
                             if self.config.debug_enabled:
-                                print(f"[DEBUG] complete_stream: processing remaining content to </update>: '{remaining_content}'", file=sys.stderr)
+                                pr_debug(f"complete_stream: processing remaining content to </update>: '{remaining_content}'")
                             self.processor.process_chunk(remaining_content)
 
             # Always call end_stream to flush XMLStreamProcessor state
             self.processor.end_stream()
 
             if self.config.debug_enabled:
-                print(f"[DEBUG] complete_stream: stream completed", file=sys.stderr)
+                pr_debug("complete_stream: stream completed")
 
         except Exception as e:
-            print(f"Error in complete_stream: {e}", file=sys.stderr)
+            pr_err(f"Error in complete_stream: {e}")
     
     def _handle_mode_change(self, new_mode: str):
         """Reset state for new mode."""
         if not self.composer:
-            print(f"Warning: Cannot change mode - composer not available", file=sys.stderr)
+            pr_warn("Cannot change mode - composer not available")
             return False
 
         available_modes = self.composer.get_available_modes()
         if new_mode not in available_modes:
-            print(f"Warning: Invalid mode '{new_mode}' - available: {available_modes}", file=sys.stderr)
+            pr_warn(f"Invalid mode '{new_mode}' - available: {available_modes}")
             return False
 
         # Check if already in this mode
         if self.config.mode == new_mode:
-            print(f"\n[Already in mode: {new_mode}]", file=sys.stderr)
+            pr_notice(f"Already in mode: {new_mode}")
             return None
 
         # Mode change to different mode = reset (same as <reset> tag)
@@ -137,7 +138,7 @@ class TranscriptionService:
         # Update configuration (single source of truth)
         self.config.mode = new_mode
 
-        print(f"\n[Mode switched to: {new_mode}]", file=sys.stderr)
+        pr_notice(f"Mode switched to: {new_mode}")
         return True
 
     def process_streaming_chunk(self, chunk_text):
@@ -220,10 +221,10 @@ class TranscriptionService:
                         self.last_update_position = process_until
 
         except Exception as e:
-            print(f"\n❌ STREAMING ERROR: {type(e).__name__}: {e}", file=sys.stderr)
-            print(f"Last processed position: {self.last_update_position}", file=sys.stderr)
-            print(f"Buffer length: {len(self.streaming_buffer)}", file=sys.stderr)
-            print(f"Buffer content: {repr(self.streaming_buffer[-100:])}", file=sys.stderr)
+            pr_err(f"STREAMING ERROR: {type(e).__name__}: {e}")
+            pr_err(f"Last processed position: {self.last_update_position}")
+            pr_err(f"Buffer length: {len(self.streaming_buffer)}")
+            pr_err(f"Buffer content: {repr(self.streaming_buffer[-100:])}")
             # Always flush debug on error
             self.processor._flush_debug_buffer()
             raise
@@ -255,7 +256,7 @@ class TranscriptionService:
                     # Process commands in conversation content
                     cleaned_content = self.detect_and_execute_commands(content)
                     if cleaned_content.strip():
-                        print(f"AI: {cleaned_content}")
+                        pr_info(f"AI: {cleaned_content}")
             
             # Remove conversation tags from text before processing words
             text_without_conversation = conversation_pattern.sub('', text)
@@ -263,9 +264,9 @@ class TranscriptionService:
             # Use XMLStreamProcessor for final processing
             self.processor.process_chunk(text_without_conversation)
             self.processor.end_stream()
-        
+
         except Exception as e:
-            print(f"\nError processing XML transcription: {e}", file=sys.stderr)
+            pr_err(f"Error processing XML transcription: {e}")
     
     def _build_current_text(self):
         """Build current text from XMLStreamProcessor state."""

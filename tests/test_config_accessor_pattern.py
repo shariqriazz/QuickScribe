@@ -160,7 +160,7 @@ class TestDictationAppIntegration(unittest.TestCase):
 
 
 class TestWav2Vec2Integration(unittest.TestCase):
-    """Test Wav2Vec2AudioSource uses config accessor."""
+    """Test HuggingFaceTranscriptionAudioSource uses config accessor."""
 
     def setUp(self):
         """Setup test config."""
@@ -174,14 +174,14 @@ class TestWav2Vec2Integration(unittest.TestCase):
         sys.argv = self.original_argv
 
     def test_wav2vec2_no_sample_rate_copy(self):
-        """Test Wav2Vec2AudioSource does not copy sample_rate."""
+        """Test HuggingFaceTranscriptionAudioSource does not copy sample_rate."""
         try:
-            from wav2vec2_audio_source import Wav2Vec2AudioSource
+            from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
 
             # Create source
-            source = Wav2Vec2AudioSource(
+            source = HuggingFaceTranscriptionAudioSource(
                 self.config,
-                model_path="facebook/wav2vec2-lv-60-espeak-cv-ft"
+                "huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft"
             )
 
             # Should NOT have sample_rate as direct attribute

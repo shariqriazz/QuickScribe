@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from importlib.resources import files
 from typing import Optional
+from lib.pr_log import pr_warn, pr_notice
 
 
 class InstructionComposer:
@@ -41,7 +42,7 @@ class InstructionComposer:
 
         # Directory changed or first load - scan files
         if self._modes_dir_mtime is not None and self._modes_dir_mtime != current_dir_mtime:
-            print(f"Modes directory updated (mtime changed), refreshing available modes")
+            pr_notice("Modes directory updated, refreshing available modes")
 
         modes = sorted([
             Path(f.name).stem
@@ -62,7 +63,7 @@ class InstructionComposer:
         except FileNotFoundError:
             return None
         except Exception as e:
-            print(f"Warning: Failed to load file '{file_path}': {e}")
+            pr_warn(f"Failed to load file '{file_path}': {e}")
             return None
 
     def _resolve_imports(self, content: str, file_path: Path) -> str:
@@ -115,7 +116,7 @@ class InstructionComposer:
                     return self._cache[path]
                 else:
                     # File was modified, reload
-                    print(f"Instruction file '{path}' updated (mtime changed), refreshing cache")
+                    pr_notice(f"Instruction file '{path}' updated, refreshing cache")
 
             # Load and cache
             content = (instruction_files / path).read_text()
@@ -131,7 +132,7 @@ class InstructionComposer:
         except FileNotFoundError:
             return None
         except Exception as e:
-            print(f"Warning: Failed to load instruction file '{path}': {e}")
+            pr_warn(f"Failed to load instruction file '{path}': {e}")
             return None
 
     def compose(self, mode: str, audio_source: Optional[str] = None, provider: Optional[str] = None) -> str:

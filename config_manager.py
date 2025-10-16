@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 from dotenv import load_dotenv
+from lib.pr_log import pr_err, pr_notice
 
 
 class ConfigManager:
@@ -59,10 +60,10 @@ class ConfigManager:
                 models = [line.strip() for line in f if line.strip()]
             return models
         except FileNotFoundError:
-            print(f"Error: Model file '{filename}' not found in '{script_dir}'.", file=sys.stderr)
+            pr_err(f"Model file '{filename}' not found in '{script_dir}'.")
             return []
         except Exception as e:
-            print(f"Error reading model file '{filename}': {e}", file=sys.stderr)
+            pr_err(f"Error reading model file '{filename}': {e}")
             return []
     
     def select_from_list(self, options, prompt):
@@ -83,7 +84,7 @@ class ConfigManager:
             except ValueError:
                 print("Invalid input. Please enter a number.")
             except EOFError:
-                print("\nSelection cancelled.")
+                pr_notice("Selection cancelled.")
                 return None
     
     def is_interactive_mode(self, args_without_script):
@@ -252,11 +253,11 @@ class ConfigManager:
         self.model_id = input("Model: ").strip()
 
         if not self.model_id:
-            print("No model specified. Exiting.")
+            pr_notice("No model specified. Exiting.")
             return False
 
         if '/' not in self.model_id:
-            print(f"Error: Model '{self.model_id}' is malformed. Required format: provider/model", file=sys.stderr)
+            pr_err(f"Model '{self.model_id}' is malformed. Required format: provider/model")
             return False
         
         return True
@@ -331,13 +332,13 @@ class ConfigManager:
             # Validate required model
             if not self.model_id:
                 parser.print_help()
-                print("\nError: --model is required. Format: provider/model (e.g., gemini/gemini-2.5-flash)", file=sys.stderr)
+                pr_err("--model is required. Format: provider/model (e.g., gemini/gemini-2.5-flash)")
                 return False
 
             # Validate model format
             if '/' not in self.model_id:
                 parser.print_help()
-                print(f"\nError: Model '{self.model_id}' is malformed. Required format: provider/model (e.g., gemini/gemini-2.5-flash)", file=sys.stderr)
+                pr_err(f"Model '{self.model_id}' is malformed. Required format: provider/model (e.g., gemini/gemini-2.5-flash)")
                 return False
 
         # Validate transcription-model flag usage
@@ -345,14 +346,14 @@ class ConfigManager:
         if self.transcription_model != default_transcription_model:
             if self.audio_source not in ['transcribe', 'trans']:
                 parser.print_help()
-                print(f"\nError: --transcription-model requires --audio-source to be 'transcribe' or 'trans', not '{self.audio_source}'", file=sys.stderr)
+                pr_err(f"--transcription-model requires --audio-source to be 'transcribe' or 'trans', not '{self.audio_source}'")
                 return False
 
         # Validate audio source requirements
         if self.audio_source in ['transcribe', 'trans']:
             if '/' not in self.transcription_model:
                 parser.print_help()
-                print(f"\nError: Invalid transcription model format: '{self.transcription_model}'. Expected format: provider/model", file=sys.stderr)
+                pr_err(f"Invalid transcription model format: '{self.transcription_model}'. Expected format: provider/model")
                 return False
 
         return True

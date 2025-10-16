@@ -35,6 +35,9 @@ from providers.conversation_context import ConversationContext
 # Qt UI components
 from ui import PosixSignalBridge, SystemTrayUI, AppState
 
+# Logging
+from lib.pr_log import pr_emerg, pr_alert, pr_crit, pr_err, pr_warn, pr_notice, pr_info, pr_debug, get_streaming_handler
+
 # --- Constants ---
 DTYPE = 'int16'
 DEFAULT_TRIGGER_KEY = 'alt_r'
@@ -97,14 +100,14 @@ class DictationApp:
                 # Handle pre-transcribed text from VOSK
                 self._process_transcribed_text(result.transcribed_text)
             else:
-                print(f"Unsupported audio result type: {type(result)}", file=sys.stderr)
+                pr_err(f"Unsupported audio result type: {type(result)}")
         except Exception as e:
-            print(f"\nError in process_audio_result: {e}", file=sys.stderr)
+            pr_err(f"Error in process_audio_result: {e}")
 
     def _process_audio_data(self, audio_np):
         """Process raw audio data using provider."""
         if not self.provider:
-            print("Error: No provider available for audio transcription", file=sys.stderr)
+            pr_err("No provider available for audio transcription")
             return
 
         self.transcription_service.reset_streaming_state()
@@ -114,7 +117,6 @@ class DictationApp:
 
         # Define callbacks
         def streaming_callback(chunk_text):
-            print(chunk_text, end='', flush=True)
             self.transcription_service.process_streaming_chunk(chunk_text)
 
         # Use unified provider interface - streaming only, no final callback
@@ -127,9 +129,9 @@ class DictationApp:
         # Show final clean state when streaming is complete
         final_text = self.transcription_service._build_current_text()
         if final_text:
-            print(f"\n{final_text}")  # New line and show final result
+            pr_info(f"{final_text}\n")
         else:
-            print()  # Just add a newline
+            pr_info("")
 
     def _process_transcribed_text(self, text):
         """Process pre-transcribed text from VOSK through AI provider."""
@@ -144,7 +146,6 @@ class DictationApp:
 
         # Define callbacks (same as audio processing)
         def streaming_callback(chunk_text):
-            print(chunk_text, end='', flush=True)
             self.transcription_service.process_streaming_chunk(chunk_text)
 
         # Send text to AI provider for processing
@@ -157,26 +158,26 @@ class DictationApp:
         # Show final clean state when streaming is complete
         final_text = self.transcription_service._build_current_text()
         if final_text:
-            print(f"\n{final_text}")  # New line and show final result
+            pr_info(f"{final_text}\n")
         else:
-            print()  # Just add a newline
+            pr_info("")
 
     # Recording control - single point of truth
     def start_recording(self):
         """Start recording if not already recording."""
-        print(f"start_recording called: _is_recording={self._is_recording}, audio_source={self.audio_source is not None}")
+        pr_debug(f"start_recording called: _is_recording={self._is_recording}, audio_source={self.audio_source is not None}")
         if not self._is_recording and self.audio_source:
             self._is_recording = True
-            print("Setting state to RECORDING")
+            pr_debug("Setting state to RECORDING")
             self._update_tray_state(AppState.RECORDING)
-            print("Calling audio_source.start_recording()")
+            pr_debug("Calling audio_source.start_recording()")
             self.audio_source.start_recording()
-            print("Recording started")
+            pr_debug("Recording started")
         else:
             if self._is_recording:
-                print("Already recording, ignoring")
+                pr_debug("Already recording, ignoring")
             if not self.audio_source:
-                print("No audio source available")
+                pr_debug("No audio source available")
 
     def stop_recording(self):
         """Stop recording and process result."""
@@ -214,7 +215,7 @@ class DictationApp:
             if key == self.trigger_key:
                 self.start_recording()
         except Exception as e:
-            print(f"\nError in on_press: {e}", file=sys.stderr)
+            pr_err(f"Error in on_press: {e}")
 
     def on_release(self, key):
         """Handle key release events."""
@@ -224,33 +225,33 @@ class DictationApp:
             elif key == keyboard.Key.esc:
                 return False  # Stop listener
         except Exception as e:
-            print(f"\nError in on_release: {e}", file=sys.stderr)
+            pr_err(f"Error in on_release: {e}")
 
     def _handle_signal_channel(self, channel_name: str):
         """Handle signal received via bridge channel."""
-        print(f"\nSignal channel received: {channel_name}")
+        pr_notice(f"Signal channel received: {channel_name}")
         try:
             if channel_name == "mode_switch_1":
-                print(f"Mode switch to: {self.config.sigusr1_mode}")
+                pr_notice(f"Mode switch to: {self.config.sigusr1_mode}")
                 if self.transcription_service:
                     self.transcription_service._handle_mode_change(self.config.sigusr1_mode)
-                print("Starting recording...")
+                pr_info("Starting recording...")
                 self.start_recording()
             elif channel_name == "mode_switch_2":
-                print(f"Mode switch to: {self.config.sigusr2_mode}")
+                pr_notice(f"Mode switch to: {self.config.sigusr2_mode}")
                 if self.transcription_service:
                     self.transcription_service._handle_mode_change(self.config.sigusr2_mode)
-                print("Starting recording...")
+                pr_info("Starting recording...")
                 self.start_recording()
             elif channel_name == "stop_recording":
-                print("Stopping recording...")
+                pr_info("Stopping recording...")
                 self.stop_recording()
             elif channel_name == "interrupt":
-                print("\nCtrl+C detected. Exiting.")
+                pr_notice("Ctrl+C detected. Exiting.")
                 if self.qt_app:
                     self.qt_app.quit()
         except Exception as e:
-            print(f"\nError handling signal channel '{channel_name}': {e}", file=sys.stderr)
+            pr_err(f"Error handling signal channel '{channel_name}': {e}")
             import traceback
             traceback.print_exc()
 
@@ -267,7 +268,7 @@ class DictationApp:
             if len(key_name) == 1:
                 self.trigger_key = keyboard.KeyCode.from_char(key_name)
             else:
-                print(f"Error: Invalid trigger key '{key_name}'. Use names like 'alt_r', 'ctrl_l', 'f1', or single characters.", file=sys.stderr)
+                pr_err(f"Invalid trigger key '{key_name}'. Use names like 'alt_r', 'ctrl_l', 'f1', or single characters.")
                 return False
         return True
 
@@ -275,7 +276,7 @@ class DictationApp:
         """Setup POSIX signal handlers via Qt bridge."""
         try:
             self.qt_app = QApplication.instance() or QApplication(sys.argv)
-            print("Qt application initialized")
+            pr_info("Qt application initialized")
 
             self.signal_bridge = PosixSignalBridge()
             self.signal_bridge.register_signal(signal.SIGUSR1, "mode_switch_1")
@@ -283,17 +284,17 @@ class DictationApp:
             self.signal_bridge.register_signal(signal.SIGHUP, "stop_recording")
             self.signal_bridge.register_signal(signal.SIGINT, "interrupt")
             self.signal_bridge.signal_received.connect(self._handle_signal_channel)
-            print("Signal bridge initialized")
+            pr_info("Signal bridge initialized")
 
         except Exception as e:
-            print(f"Warning: Signal bridge initialization failed: {e}", file=sys.stderr)
+            pr_warn(f"Signal bridge initialization failed: {e}")
             import traceback
             traceback.print_exc()
             self.signal_bridge = None
 
         try:
             if not QSystemTrayIcon.isSystemTrayAvailable():
-                print("Warning: System tray not available on this system", file=sys.stderr)
+                pr_warn("System tray not available on this system")
                 return
 
             self.system_tray = SystemTrayUI()
@@ -301,10 +302,10 @@ class DictationApp:
             self.system_tray.stop_recording_requested.connect(self.stop_recording)
             self.system_tray.quit_requested.connect(self.qt_app.quit)
             self._update_tray_state(AppState.IDLE)
-            print("System tray initialized")
+            pr_info("System tray initialized")
 
         except Exception as e:
-            print(f"Warning: System tray initialization failed: {e}", file=sys.stderr)
+            pr_warn(f"System tray initialization failed: {e}")
             import traceback
             traceback.print_exc()
             self.system_tray = None
@@ -327,9 +328,9 @@ class DictationApp:
     def _show_recording_prompt(self):
         """Show appropriate recording prompt based on trigger configuration."""
         if self.trigger_key is not None:
-            print(f"\nHold '{self.config.trigger_key_name}' to record...")
+            print(f"Hold '{self.config.trigger_key_name}' to record...")
         else:
-            print("\nKeyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
+            print("Keyboard trigger disabled. Use SIGUSR1 to start and SIGUSR2 to stop.")
 
     def _update_tray_state(self, new_state: AppState):
         """Update application state and notify system tray."""
@@ -345,7 +346,7 @@ class DictationApp:
 
             # Provider should never be None now
             if self.provider is None:
-                print("Error: No provider initialized", file=sys.stderr)
+                pr_err("No provider initialized")
                 return False
 
             if self.provider.initialize():
@@ -353,10 +354,10 @@ class DictationApp:
             else:
                 return False
         except ValueError as e:
-            print(f"Error: {e}", file=sys.stderr)
+            pr_err(f"{e}")
             return False
         except Exception as e:
-            print(f"Error initializing provider: {e}", file=sys.stderr)
+            pr_err(f"Error initializing provider: {e}")
             return False
 
     def _initialize_services(self):
@@ -367,10 +368,18 @@ class DictationApp:
     
     def initialize(self):
         """Initialize all components."""
+        from lib.pr_log import set_log_level, PR_DEBUG, PR_INFO
+
         # Parse configuration
         if not self.config_manager.parse_configuration():
             return False
         self.config = self.config_manager
+
+        # Set log level based on debug configuration
+        if self.config.debug_enabled:
+            set_log_level(PR_DEBUG)
+        else:
+            set_log_level(PR_INFO)
 
         # Initialize audio source based on --audio-source selection (BEFORE provider)
         if self.config.audio_source in ['transcribe', 'trans']:
@@ -404,11 +413,11 @@ class DictationApp:
     
     def _display_configuration(self):
         """Display startup configuration."""
-        print(f"\n--- Configuration ---")
-        print(f"Provider:      {self.config.provider.upper()}")
-        print(f"Model:         {self.config.model_id}")
-        print(f"Trigger Key:   {'disabled' if not self.is_trigger_enabled() else self.config.trigger_key_name}")
-        print(f"Audio:         {self.config.sample_rate}Hz, {self.config.channels} channel(s)")
+        pr_notice("--- Configuration ---")
+        pr_info(f"Provider:      {self.config.provider.upper()}")
+        pr_info(f"Model:         {self.config.model_id}")
+        pr_info(f"Trigger Key:   {'disabled' if not self.is_trigger_enabled() else self.config.trigger_key_name}")
+        pr_info(f"Audio:         {self.config.sample_rate}Hz, {self.config.channels} channel(s)")
         if sys.platform == 'darwin':
             output_method = 'macOS Core Graphics'
         elif sys.platform.startswith('linux') or sys.platform.startswith('freebsd'):
@@ -417,25 +426,28 @@ class DictationApp:
             output_method = 'Windows SendInput'
         else:
             output_method = 'none (test mode)'
-        print(f"Output Method: {output_method}")
+        pr_info(f"Output Method: {output_method}")
         if self.config.provider == 'groq' and self.config.language:
-            print(f"Language:      {self.config.language}")
+            pr_info(f"Language:      {self.config.language}")
         elif self.config.provider == 'gemini' and self.config.language:
-            print(f"Language:      '{self.config.language}' (Note: Ignored by Gemini)")
-        print("--------------------")
-        print("Ensure Terminal/IDE has Microphone and Accessibility/Input Monitoring permissions.")
+            pr_info(f"Language:      '{self.config.language}' (Note: Ignored by Gemini)")
+        pr_notice("--------------------")
+        pr_notice("Ensure Terminal/IDE has Microphone and Accessibility/Input Monitoring permissions.")
         if self.config.provider == 'gemini':
-            print("Note: Gemini currently only transcribes English audio well.")
-        print("Press Ctrl+C to exit.")
+            pr_notice("Note: Gemini currently only transcribes English audio well.")
+        pr_notice("Press Ctrl+C to exit.")
     
     def _display_xml_instructions(self):
-        """Display XML instructions for the model."""
-        print("\n" + "="*60)
-        print("SYSTEM INSTRUCTIONS FOR MODEL:")
-        print("-" * 60)
+        """Display XML instructions for the model (only when -DD or higher)."""
+        if not self.config.litellm_debug:
+            return
+
+        pr_debug("="*60)
+        pr_debug("SYSTEM INSTRUCTIONS FOR MODEL:")
+        pr_debug("-" * 60)
         xml_instructions = self.provider.get_xml_instructions()
-        print(xml_instructions)
-        print("="*60)
+        pr_debug(xml_instructions)
+        pr_debug("="*60)
     
     def run(self):
         """Main application loop."""
@@ -448,14 +460,14 @@ class DictationApp:
         
         # Display XML instructions
         self._display_xml_instructions()
-        
+
         if self.is_trigger_enabled():
-            print(f"\nHold '{self.config.trigger_key_name}' to record...")
+            print(f"Hold '{self.config.trigger_key_name}' to record...")
         else:
-            print(f"\nKeyboard trigger disabled. Signal controls:")
-            print(f"  SIGUSR1 → {self.config.sigusr1_mode} mode + start recording")
-            print(f"  SIGUSR2 → {self.config.sigusr2_mode} mode + start recording")
-            print(f"  SIGHUP  → stop recording")
+            pr_notice(f"Keyboard trigger disabled. Signal controls:")
+            pr_info(f"  SIGUSR1 → {self.config.sigusr1_mode} mode + start recording")
+            pr_info(f"  SIGUSR2 → {self.config.sigusr2_mode} mode + start recording")
+            pr_info(f"  SIGHUP  → stop recording")
 
         listener = None
         try:
@@ -465,22 +477,22 @@ class DictationApp:
             # Start input listener
             if self.is_trigger_enabled():
                 listener = self.start_keyboard_listener()
-                print(f"Keyboard listener started")
+                pr_debug(f"Keyboard listener started")
 
             # Run Qt event loop (handles both signals and events)
             if self.qt_app:
-                print(f"Starting Qt event loop (qt_app exists, listener={'exists' if listener else 'None'})")
+                pr_debug(f"Starting Qt event loop (qt_app exists, listener={'exists' if listener else 'None'})")
                 self.qt_app.exec()
             elif listener:
-                print("No Qt app, running keyboard listener loop")
+                pr_debug("No Qt app, running keyboard listener loop")
                 listener.join()
             else:
-                print("No Qt app, no listener, running sleep loop")
+                pr_debug("No Qt app, no listener, running sleep loop")
                 while True:
                     time.sleep(1)
 
         except Exception as e:
-            print(f"\nAn unexpected error occurred in main execution: {e}", file=sys.stderr)
+            pr_err(f"An unexpected error occurred in main execution: {e}")
             import traceback
             traceback.print_exc()
         finally:
@@ -489,7 +501,7 @@ class DictationApp:
     
     def cleanup(self):
         """Clean up resources."""
-        print("\nCleaning up...")
+        pr_info("Cleaning up...")
         if self.system_tray:
             self.system_tray.cleanup()
         if self.signal_bridge:
@@ -498,4 +510,4 @@ class DictationApp:
             self.keyboard_listener.stop()
         if self.audio_source:
             self.audio_source._cleanup()
-        print("Exited.")
+        pr_info("Exited.")
