@@ -5,15 +5,15 @@ Core: Morphosyntactic correction preserving lexical choices/register/semantics�
 ## Stages
 
 - `<tx>`: Full verbatim transcription
-- `<int>`: Full first interpretation (baseline)
 - `<int1>`, `<int2>`, `<int3>`: Changes only with 2-3 word context (`...old→new...`); omit if unchanged from prior
+- `<int>`: Full interpretation baseline applying all transformations
 - `<update>`: Phrase chunks (3-8 words) with numbered tags; final cumulative result
 
 Example with multiple stage changes:
 ```
-<int>We know neither are provided, then limit or offset govern the file.</int>
 <int1>...neither are→is provided...</int1>
 <int2>...then limit→`limit` or offset→`offset` govern...</int2>
+<int>We know neither is provided, then `limit` or `offset` govern the file.</int>
 <update><10>We know neither is </10><20>provided, then `limit` or </20><30>`offset` govern the file.</30></update>
 ```
 

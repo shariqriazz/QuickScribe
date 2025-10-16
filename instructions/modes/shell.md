@@ -3,10 +3,10 @@ SHELL MODE:
 Interpret verbalized shell commands into executable syntax.
 
 INTERPRETATION STAGES:
-- INT: Natural language intent
 - INT1: Token recognition
 - INT2: Structure assembly
 - INT3: Final executable form
+- INT: Complete executable command with all transformations applied
 
 STAGE DEFINITIONS:
 INT1: Identify semantic units from natural verbalization
