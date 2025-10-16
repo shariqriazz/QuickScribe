@@ -113,10 +113,15 @@ class VoskChunkHandler(AudioChunkHandler):
 class VoskTranscriptionAudioSource(TranscriptionAudioSource):
     """VOSK transcription implementation with streaming support."""
 
-    def __init__(self, config, model_identifier: str, lgraph_path: Optional[str] = None, dtype: str = 'int16'):
-        vosk_handler = VoskChunkHandler(model_identifier, config.sample_rate, lgraph_path)
+    def __init__(self, config, transcription_model: str):
+        import os
+        model_identifier = transcription_model.split('/', 1)[1]
+        model_path = os.path.expanduser(model_identifier)
+        lgraph_path = getattr(config, 'vosk_lgraph_path', None)
 
-        super().__init__(config, model_identifier, supports_streaming=True, dtype=dtype, chunk_handler=vosk_handler)
+        vosk_handler = VoskChunkHandler(model_path, config.sample_rate, lgraph_path)
+
+        super().__init__(config, model_path, supports_streaming=True, dtype='int16', chunk_handler=vosk_handler)
 
         self.lgraph_path = lgraph_path
         self.vosk_handler = vosk_handler

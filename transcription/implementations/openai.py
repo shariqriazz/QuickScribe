@@ -19,10 +19,11 @@ from transcription.base import TranscriptionAudioSource
 class OpenAITranscriptionAudioSource(TranscriptionAudioSource):
     """OpenAI Whisper transcription implementation using litellm."""
 
-    def __init__(self, config, model_identifier: str, api_key: Optional[str] = None, dtype: str = 'int16'):
-        super().__init__(config, model_identifier, supports_streaming=False, dtype=dtype)
+    def __init__(self, config, transcription_model: str):
+        model_identifier = transcription_model.split('/', 1)[1]
+        super().__init__(config, model_identifier, supports_streaming=False, dtype='int16')
 
-        self.api_key = api_key
+        self.api_key = getattr(config, 'api_key', None)
 
         if litellm is None:
             raise ImportError("litellm library not installed. Install with: pip install litellm")

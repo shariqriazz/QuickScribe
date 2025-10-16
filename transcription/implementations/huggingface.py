@@ -174,8 +174,9 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
 class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
     """HuggingFace Wav2Vec2 transcription implementation using phoneme recognition."""
 
-    def __init__(self, config, model_identifier: str, dtype: str = 'float32'):
-        super().__init__(config, model_identifier, supports_streaming=False, dtype=dtype)
+    def __init__(self, config, transcription_model: str):
+        model_identifier = transcription_model.split('/', 1)[1]
+        super().__init__(config, model_identifier, supports_streaming=False, dtype='float32')
 
         self.speed_factors = [0.80, 0.85, 0.90, 0.95]
 
