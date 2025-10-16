@@ -27,6 +27,10 @@ class ProviderConfigMapper(ABC):
         """Check if the given model supports reasoning parameters."""
         pass
 
+    def uses_transcription_endpoint(self, model_name: str) -> bool:
+        """Check if model uses transcription endpoint (not chat completions)."""
+        return False
+
     def map_audio_params(self, audio_base64: str, audio_format: str) -> Dict[str, Any]:
         """
         Map audio input to provider-specific format.

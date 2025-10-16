@@ -373,22 +373,10 @@ class DictationApp:
         self.config = self.config_manager
 
         # Initialize audio source based on --audio-source selection (BEFORE provider)
-        if self.config.audio_source in ['phoneme', 'wav2vec']:
-            from wav2vec2_audio_source import Wav2Vec2AudioSource
-            self.audio_source = Wav2Vec2AudioSource(
-                self.config,
-                model_path=self.config.wav2vec2_model_path,
-                dtype='float32'  # Wav2Vec2 uses float32
-            )
-        elif self.config.audio_source == 'vosk':
-            from vosk_audio_source import VoskAudioSource
-            self.audio_source = VoskAudioSource(
-                self.config,
-                model_path=self.config.vosk_model_path,
-                lgraph_path=self.config.vosk_lgraph_path,
-                dtype=DTYPE
-            )
-        else:  # 'raw' or default
+        if self.config.audio_source in ['transcribe', 'trans']:
+            from transcription.factory import get_transcription_source
+            self.audio_source = get_transcription_source(self.config)
+        else:
             self.audio_source = MicrophoneAudioSource(
                 self.config,
                 dtype=DTYPE

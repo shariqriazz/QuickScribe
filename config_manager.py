@@ -24,15 +24,11 @@ class ConfigManager:
         # API key configuration
         self.api_key = None
 
-        # VOSK configuration
-        self.vosk_model_path = None
-        self.vosk_lgraph_path = None
-
         # Audio source configuration
-        self.audio_source = "raw"  # Default to raw microphone
+        self.audio_source = "raw"
 
-        # Wav2Vec2 configuration
-        self.wav2vec2_model_path = "facebook/wav2vec2-lv-60-espeak-cv-ft"  # Default phoneme model
+        # Transcription model configuration
+        self.transcription_model = "huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft"
 
         # Operation mode
         self.mode = "dictate"  # Default to dictation mode
@@ -178,23 +174,11 @@ class ConfigManager:
             help="Set xdotool keystroke rate in Hz/CPS (keystrokes per second)."
         )
         parser.add_argument(
-            "--vosk-model",
-            type=str,
-            default=None,
-            help="Path to VOSK model directory (required for VOSK provider)."
-        )
-        parser.add_argument(
-            "--vosk-lgraph",
-            type=str,
-            default=None,
-            help="Path to VOSK L-graph file for grammar-constrained recognition."
-        )
-        parser.add_argument(
             "--audio-source", "-a",
             type=str,
-            choices=['vosk', 'phoneme', 'wav2vec', 'raw'],
+            choices=['transcribe', 'trans', 'raw'],
             default='raw',
-            help="Audio source type: 'vosk' (VOSK speech recognition), 'phoneme'/'wav2vec' (Wav2Vec2 phoneme recognition), 'raw' (direct microphone)."
+            help="Audio source type: 'transcribe'/'trans' (transcription model processing), 'raw' (direct microphone audio)."
         )
         parser.add_argument(
             "--mode", "-m",
@@ -204,10 +188,10 @@ class ConfigManager:
             help=f"Operation mode: {', '.join(available_modes)}."
         )
         parser.add_argument(
-            "--wav2vec2-model",
+            "--transcription-model", "-T",
             type=str,
-            default="facebook/wav2vec2-lv-60-espeak-cv-ft",
-            help="Path or model ID for Wav2Vec2 phoneme recognition model. Default: facebook/wav2vec2-lv-60-espeak-cv-ft (automatically downloaded from Hugging Face)."
+            default="huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft",
+            help="Transcription model specification in format 'provider/model'. Examples: 'huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft', 'openai/whisper-1', 'vosk/path/to/model'."
         )
         parser.add_argument(
             "--enable-reasoning",
@@ -299,11 +283,8 @@ class ConfigManager:
         self.sigusr1_mode = getattr(args, 'sigusr1_mode', 'dictate')
         self.sigusr2_mode = getattr(args, 'sigusr2_mode', 'shell')
 
-        # VOSK configuration
-        self.vosk_model_path = getattr(args, 'vosk_model', None)
-        self.vosk_lgraph_path = getattr(args, 'vosk_lgraph', None)
-        # Wav2Vec2 configuration
-        self.wav2vec2_model_path = getattr(args, 'wav2vec2_model', self.wav2vec2_model_path)
+        # Transcription model configuration
+        self.transcription_model = getattr(args, 'transcription_model', self.transcription_model)
 
         # Provider performance controls
         self.enable_reasoning = getattr(args, 'enable_reasoning', 'low')
@@ -359,16 +340,20 @@ class ConfigManager:
                 print(f"\nError: Model '{self.model_id}' is malformed. Required format: provider/model (e.g., gemini/gemini-2.5-flash)", file=sys.stderr)
                 return False
 
-        # Validate audio source requirements
-        if self.audio_source == 'vosk' and not self.vosk_model_path:
-            parser.print_help()
-            print("\nError: --vosk-model is required when --audio-source is 'vosk'", file=sys.stderr)
-            return False
+        # Validate transcription-model flag usage
+        default_transcription_model = self.__class__().transcription_model
+        if self.transcription_model != default_transcription_model:
+            if self.audio_source not in ['transcribe', 'trans']:
+                parser.print_help()
+                print(f"\nError: --transcription-model requires --audio-source to be 'transcribe' or 'trans', not '{self.audio_source}'", file=sys.stderr)
+                return False
 
-        if self.audio_source == 'wav2vec' and not self.wav2vec2_model_path:
-            parser.print_help()
-            print("\nError: --wav2vec2-model is required when --audio-source is 'wav2vec'", file=sys.stderr)
-            return False
+        # Validate audio source requirements
+        if self.audio_source in ['transcribe', 'trans']:
+            if '/' not in self.transcription_model:
+                parser.print_help()
+                print(f"\nError: Invalid transcription model format: '{self.transcription_model}'. Expected format: provider/model", file=sys.stderr)
+                return False
 
         return True
     

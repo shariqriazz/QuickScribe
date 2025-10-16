@@ -295,6 +295,12 @@ class BaseProvider:
 
             print(f"LiteLLM initialized with model: {self.config.model_id}")
 
+            # Skip validation for transcription-only models
+            if self.mapper.uses_transcription_endpoint(self.config.model_id):
+                print("Skipping validation for transcription-only model")
+                self._initialized = True
+                return True
+
             # Generate minimal test audio (0.1 second silence)
             test_audio_silence = np.zeros(int(0.1 * self.config.sample_rate), dtype=np.int16)
             test_audio_silence_b64 = self._encode_audio_to_base64(test_audio_silence, self.config.sample_rate)
@@ -537,8 +543,14 @@ class BaseProvider:
         """Get the composed XML instructions from files."""
         # Determine audio source name for instruction loading
         audio_source_name = None
-        if self.config.audio_source in ['phoneme', 'wav2vec']:
-            audio_source_name = 'wav2vec2'
+        if self.config.audio_source in ['transcribe', 'trans']:
+            transcription_lower = self.config.transcription_model.lower()
+            if 'wav2vec2' in transcription_lower or 'huggingface' in transcription_lower:
+                audio_source_name = 'wav2vec2'
+            elif 'vosk' in transcription_lower:
+                audio_source_name = 'vosk'
+            elif 'whisper' in transcription_lower:
+                audio_source_name = 'whisper'
 
         # Compose instructions from files (reads current mode from config)
         instructions = self.instruction_composer.compose(

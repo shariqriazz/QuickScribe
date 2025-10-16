@@ -1,4 +1,4 @@
-"""Wav2Vec2-based audio source implementation for QuickScribe."""
+"""HuggingFace Wav2Vec2-based transcription implementation for QuickScribe."""
 
 import os
 import sys
@@ -28,7 +28,7 @@ except ImportError:
     pyrb = None
 
 from audio_source import AudioChunkHandler, AudioResult, AudioTextResult, AudioDataResult
-from microphone_audio_source import MicrophoneAudioSource
+from transcription.base import TranscriptionAudioSource
 from phoneme_mapper import process_wav2vec2_output
 
 
@@ -171,24 +171,18 @@ class Wav2Vec2ChunkHandler(AudioChunkHandler):
             return ""
 
 
-class Wav2Vec2AudioSource(MicrophoneAudioSource):
-    """Audio source that performs phoneme recognition using Wav2Vec2 on complete audio."""
+class HuggingFaceTranscriptionAudioSource(TranscriptionAudioSource):
+    """HuggingFace Wav2Vec2 transcription implementation using phoneme recognition."""
 
-    def __init__(self, config, model_path: str, dtype: str = 'float32'):
-        # Initialize parent without chunk handler for now
-        super().__init__(config, dtype)
+    def __init__(self, config, model_identifier: str, dtype: str = 'float32'):
+        super().__init__(config, model_identifier, supports_streaming=False, dtype=dtype)
 
-        self.model_path = model_path
-
-        # Speed factors for multi-speed processing
         self.speed_factors = [0.80, 0.85, 0.90, 0.95]
 
-        # Check for pyrubberband
         if pyrb is None:
             raise ImportError("pyrubberband library not installed. Install with: pip install pyrubberband")
 
-        # Load Wav2Vec2 model components
-        self._load_model(model_path)
+        self._load_model(model_identifier)
 
     def _load_model(self, model_path: str):
         """Load Wav2Vec2 model, feature extractor, and tokenizer."""
@@ -291,16 +285,9 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
 
         return ''.join(result)
 
-    def get_result(self) -> AudioResult:
-        """Override to process complete audio with Wav2Vec2."""
-        result = super().get_result()
-
-        if isinstance(result, AudioDataResult):
-            # Process the complete audio data with Wav2Vec2
-            phoneme_text = self._process_audio(result.audio_data)
-            return AudioDataResult(result.audio_data, phoneme_text)
-
-        return result
+    def _transcribe_audio(self, audio_data: np.ndarray) -> str:
+        """Transcribe audio using Wav2Vec2 phoneme recognition."""
+        return self._process_audio(audio_data)
 
     def _process_audio_at_speed(self, audio_data: np.ndarray, speed_factor: float) -> str:
         """Process audio at a specific speed and return raw phonemes."""
@@ -335,18 +322,11 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
             if len(audio_data) == 0:
                 return ""
 
-            # Convert to float32 if needed
-            if audio_data.dtype != np.float32:
-                audio_data = audio_data.astype(np.float32) / 32768.0
+            audio_data = self.normalize_to_float32(audio_data)
+            audio_data = self.squeeze_to_mono(audio_data)
 
-            # Ensure 1D array - squeeze out channel dimension if present
-            if audio_data.ndim > 1:
-                audio_data = np.squeeze(audio_data)
-
-            # Check minimum length
-            min_samples = max(320, self.config.sample_rate // 50)
-            if len(audio_data) < min_samples:
-                print(f"Audio too short for Wav2Vec2: {len(audio_data)} samples (need {min_samples})", file=sys.stderr)
+            if not self.validate_audio_length(audio_data, self.config.sample_rate):
+                print(f"Audio too short for Wav2Vec2", file=sys.stderr)
                 return ""
 
             # Process at multiple speeds in parallel threads
@@ -391,23 +371,19 @@ class Wav2Vec2AudioSource(MicrophoneAudioSource):
             print(f"Error processing audio with Wav2Vec2: {e}", file=sys.stderr)
             return ""
 
-    def stop_recording(self) -> AudioResult:
-        """Override to process audio with Wav2Vec2 and return AudioTextResult."""
-        # Get the raw audio data from parent
-        audio_result = super().stop_recording()
+    def initialize(self) -> bool:
+        """Initialize HuggingFace Wav2Vec2 audio source."""
+        try:
+            if torch is None or transformers is None:
+                print("Error: PyTorch and transformers libraries not available", file=sys.stderr)
+                return False
 
-        if isinstance(audio_result, AudioDataResult):
-            # Process the audio data with Wav2Vec2
-            phoneme_text = self._process_audio(audio_result.audio_data)
+            if not super().initialize():
+                return False
 
-            if phoneme_text:
-                print(f"Wav2Vec2 phonemes: {phoneme_text}")
+            print(f"HuggingFace Wav2Vec2 initialized with model: {self.model_identifier}")
+            return True
 
-            # Return AudioTextResult with phoneme text
-            return AudioTextResult(
-                transcribed_text=phoneme_text,
-                sample_rate=audio_result.sample_rate,
-                audio_data=audio_result.audio_data
-            )
-
-        return audio_result
+        except Exception as e:
+            print(f"Error initializing HuggingFace audio source: {e}", file=sys.stderr)
+            return False

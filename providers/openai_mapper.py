@@ -28,3 +28,8 @@ class OpenAIMapper(ProviderConfigMapper):
         if 'audio' in model_lower:
             return False
         return True
+
+    def uses_transcription_endpoint(self, model_name: str) -> bool:
+        """OpenAI Whisper models use transcription endpoint."""
+        model_lower = model_name.lower()
+        return 'whisper' in model_lower

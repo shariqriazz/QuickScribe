@@ -1,4 +1,4 @@
-"""VOSK-based audio source implementation for QuickScribe."""
+"""VOSK-based transcription implementation for QuickScribe."""
 
 import json
 import sys
@@ -10,8 +10,8 @@ try:
 except ImportError:
     vosk = None
 
-from audio_source import AudioChunkHandler, AudioResult, AudioTextResult
-from microphone_audio_source import MicrophoneAudioSource
+from audio_source import AudioChunkHandler
+from transcription.base import TranscriptionAudioSource
 
 
 class VoskChunkHandler(AudioChunkHandler):
@@ -84,12 +84,12 @@ class VoskChunkHandler(AudioChunkHandler):
                 result = json.loads(self.recognizer.Result())
                 if result.get('text'):
                     self.final_text += result['text'] + " "
+                    print(result['text'], end=' ', flush=True)
             else:
-                # Partial result
+                # Partial result - display in real-time
                 partial = json.loads(self.recognizer.PartialResult())
                 if partial.get('partial'):
-                    # Store partial for display but don't accumulate
-                    pass
+                    print(f"\r{partial['partial']}", end='', flush=True)
 
         except Exception as e:
             print(f"Error processing audio chunk in VOSK: {e}", file=sys.stderr)
@@ -110,66 +110,39 @@ class VoskChunkHandler(AudioChunkHandler):
             return self.final_text.strip()
 
 
-class VoskAudioSource(MicrophoneAudioSource):
-    """Audio source that performs real-time transcription using VOSK."""
+class VoskTranscriptionAudioSource(TranscriptionAudioSource):
+    """VOSK transcription implementation with streaming support."""
 
-    def __init__(self, config, model_path: str, lgraph_path: Optional[str] = None, dtype: str = 'int16'):
-        # Create VOSK chunk handler
-        vosk_handler = VoskChunkHandler(model_path, config.sample_rate, lgraph_path)
+    def __init__(self, config, model_identifier: str, lgraph_path: Optional[str] = None, dtype: str = 'int16'):
+        vosk_handler = VoskChunkHandler(model_identifier, config.sample_rate, lgraph_path)
 
-        # Initialize parent with VOSK handler
-        super().__init__(config, dtype, vosk_handler)
+        super().__init__(config, model_identifier, supports_streaming=True, dtype=dtype, chunk_handler=vosk_handler)
 
-        self.model_path = model_path
         self.lgraph_path = lgraph_path
         self.vosk_handler = vosk_handler
 
-    def stop_recording(self) -> AudioResult:
-        """Stop recording and return transcribed text result."""
-        # First get the raw audio data from parent
-        audio_result = super().stop_recording()
-
-        # Check if we got audio data
-        if hasattr(audio_result, 'audio_data') and len(audio_result.audio_data) > 0:
-            # Finalize VOSK transcription
-            transcribed_text = self.vosk_handler.finalize()
-
-            print(f"VOSK transcribed: '{transcribed_text}'")
-
-            # Return AudioTextResult with transcribed text and original audio
-            return AudioTextResult(
-                transcribed_text=transcribed_text,
-                sample_rate=self.config.sample_rate,
-                audio_data=audio_result.audio_data
-            )
-        else:
-            # No audio data, return empty text result
-            return AudioTextResult(
-                transcribed_text="",
-                sample_rate=self.config.sample_rate,
-                audio_data=np.array([], dtype=self.dtype)
-            )
+    def _transcribe_audio(self, audio_data: np.ndarray) -> str:
+        """Transcribe audio using VOSK streaming handler."""
+        return self.vosk_handler.finalize()
 
     def initialize(self) -> bool:
-        """Initialize VOSK audio source."""
+        """Initialize VOSK transcription source."""
         try:
-            # Check if VOSK is available
             if vosk is None:
                 print("Error: VOSK library not available", file=sys.stderr)
                 return False
 
-            # Initialize parent (microphone)
             if not super().initialize():
                 return False
 
-            print(f"VOSK audio source initialized with model: {self.model_path}")
+            print(f"VOSK initialized with model: {self.model_identifier}")
             if self.lgraph_path:
                 print(f"L-graph enabled: {self.lgraph_path}")
 
             return True
 
         except Exception as e:
-            print(f"Error initializing VOSK audio source: {e}", file=sys.stderr)
+            print(f"Error initializing VOSK: {e}", file=sys.stderr)
             return False
 
     def start_recording(self) -> None:
