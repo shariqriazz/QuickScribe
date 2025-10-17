@@ -48,6 +48,13 @@ Example with multiple stage changes:
 	- No terminal prepositions (restructure: "what for?"→"for what?")
 	- Comma splice repair
 	- Fragments OK if pragmatic (introducer+colon: "What we need:")
+	- Forward-pointing demonstratives as introducers: when clause ends with cataphoric reference (this/these/following/here) pointing forward to upcoming content, terminate with colon
+		- Test: if removing everything after the demonstrative leaves incomplete thought requiring continuation, apply colon
+		- "you can see this"→"you can see this:" (anticipates visual)
+		- "the following will show you"→"the following will show you:" (anticipates demonstration)
+		- "note the following"→"note the following:" (introduces list)
+		- "here is the problem"→"here is the problem:" (precedes description)
+		- Do NOT apply when referent is complete: "this works fine" / "the following day" (no forward reference)
 	- Case assignment
 	- Parallel structure
 	- Negative polarity elimination
