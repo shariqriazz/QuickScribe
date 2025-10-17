@@ -151,8 +151,19 @@ python dictate.py -a transcribe -T openai/whisper-1 --model anthropic/claude-3-5
 
 **VOSK** (local, offline)
 ```bash
-python dictate.py -a transcribe -T vosk/~/.vosk/model-en-us --model groq/llama-3.3-70b-versatile
+# Model name (auto-downloads to ~/.cache/vosk/)
+python dictate.py -a transcribe -T vosk/vosk-model-small-en-us-0.15 --model groq/llama-3.3-70b-versatile
+python dictate.py -a transcribe -T vosk/vosk-model-en-us-0.22-lgraph --model groq/llama-3.3-70b-versatile
+
+# Local paths (relative, absolute, or home directory)
+python dictate.py -a transcribe -T vosk/~/models/vosk-model-en-us --model groq/llama-3.3-70b-versatile
+python dictate.py -a transcribe -T vosk//usr/share/vosk/model --model groq/llama-3.3-70b-versatile
+python dictate.py -a transcribe -T vosk/./models/vosk-model --model groq/llama-3.3-70b-versatile
 ```
+
+Available models: https://alphacephei.com/vosk/models
+
+**VOSK Model Loading**: Accepts either model name (downloads automatically with progress bar) or local path. Path formats supported: relative (`models/vosk`), absolute (`/usr/share/vosk/model`), home directory (`~/models/vosk`). Downloaded models cache to `~/.cache/vosk/`. Override cache location with `VOSK_MODEL_PATH` environment variable.
 
 ## Troubleshooting
 

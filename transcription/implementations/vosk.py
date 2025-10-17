@@ -1,6 +1,7 @@
 """VOSK-based transcription implementation for QuickScribe."""
 
 import json
+import os
 import sys
 import numpy as np
 from typing import Optional
@@ -29,7 +30,7 @@ class VoskChunkHandler(AudioChunkHandler):
         # Initialize VOSK model and recognizer
         try:
             vosk.SetLogLevel(-1)  # Reduce VOSK logging
-            self.model = vosk.Model(model_path)
+            self.model = self._load_vosk_model(model_path)
             self.recognizer = vosk.KaldiRecognizer(self.model, sample_rate)
 
             # Set L-graph if provided
@@ -51,6 +52,50 @@ class VoskChunkHandler(AudioChunkHandler):
 
         # Streaming handler for partial results (maintained across chunks)
         self.stream_handler = None
+
+    def _load_vosk_model(self, model_identifier: str) -> vosk.Model:
+        """
+        Load VOSK model from local path or download by name.
+
+        Supports:
+        - Relative paths: ./models/vosk-model or models/vosk-model
+        - Absolute paths: /usr/share/vosk/model
+        - Home paths: ~/models/vosk-model
+        - Model names: vosk-model-small-en-us-0.15 (auto-download)
+
+        Args:
+            model_identifier: Local path or model name for download
+
+        Returns:
+            Loaded VOSK model
+
+        Raises:
+            RuntimeError: If model loading fails
+        """
+        expanded_path = os.path.expanduser(model_identifier)
+        abs_path = os.path.abspath(expanded_path)
+        model = None
+        model_source = None
+
+        if os.path.exists(expanded_path):
+            try:
+                model = vosk.Model(expanded_path)
+                model_source = f"local path: {abs_path}"
+            except Exception as e:
+                raise RuntimeError(f"Failed to load VOSK model from local path {abs_path}: {e}")
+        else:
+            try:
+                model = vosk.Model(model_name=model_identifier)
+                cache_path = os.path.expanduser(f"~/.cache/vosk/{model_identifier}")
+                model_source = f"model name: {model_identifier} (cached at {cache_path})"
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to load VOSK model '{model_identifier}' "
+                    f"(not found locally, download failed): {e}"
+                )
+
+        pr_info(f"VOSK model loaded from {model_source}")
+        return model
 
     def end_streaming(self):
         """
