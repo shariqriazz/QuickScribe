@@ -384,7 +384,11 @@ class DictationApp:
         # Initialize audio source based on --audio-source selection (BEFORE provider)
         if self.config.audio_source in ['transcribe', 'trans']:
             from transcription.factory import get_transcription_source
-            self.audio_source = get_transcription_source(self.config)
+            try:
+                self.audio_source = get_transcription_source(self.config)
+            except RuntimeError as e:
+                pr_err(f"{e}")
+                return False
         else:
             self.audio_source = MicrophoneAudioSource(
                 self.config,

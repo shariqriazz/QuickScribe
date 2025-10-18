@@ -174,12 +174,12 @@ class TestWav2Vec2Integration(unittest.TestCase):
         sys.argv = self.original_argv
 
     def test_wav2vec2_no_sample_rate_copy(self):
-        """Test HuggingFaceTranscriptionAudioSource does not copy sample_rate."""
+        """Test HuggingFaceCTCTranscriptionAudioSource does not copy sample_rate."""
         try:
-            from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
+            from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
 
             # Create source
-            source = HuggingFaceTranscriptionAudioSource(
+            source = HuggingFaceCTCTranscriptionAudioSource(
                 self.config,
                 "huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft"
             )

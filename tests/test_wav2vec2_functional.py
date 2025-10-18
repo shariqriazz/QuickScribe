@@ -39,11 +39,11 @@ def test_model_instructions():
     print("Testing HuggingFaceTranscriptionAudioSource phoneme instructions...")
 
     # Mock the dependencies
-    with mock.patch('transcription.implementations.huggingface.torch'), \
-         mock.patch('transcription.implementations.huggingface.transformers'), \
-         mock.patch('transcription.implementations.huggingface.Wav2Vec2FeatureExtractor'), \
-         mock.patch('transcription.implementations.huggingface.Wav2Vec2ForCTC'), \
-         mock.patch('transcription.implementations.huggingface.pyrb'), \
+    with mock.patch('transcription.implementations.huggingface_ctc.torch'), \
+         mock.patch('transcription.implementations.huggingface_ctc.transformers'), \
+         mock.patch('transcription.implementations.huggingface_ctc.AutoProcessor'), \
+         mock.patch('transcription.implementations.huggingface_ctc.AutoModelForCTC'), \
+         mock.patch('transcription.implementations.huggingface_ctc.pyrb'), \
          mock.patch('microphone_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
         from instruction_composer import InstructionComposer
@@ -74,31 +74,30 @@ def test_audio_source_creation():
     config = MockConfig()
 
     # Mock all the heavy dependencies
-    with mock.patch('transcription.implementations.huggingface.torch', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface.transformers', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface.Wav2Vec2FeatureExtractor') as mock_feature_extractor, \
-         mock.patch('transcription.implementations.huggingface.Wav2Vec2ForCTC') as mock_model, \
-         mock.patch('transcription.implementations.huggingface.is_offline_mode', mock.Mock(return_value=False)), \
-         mock.patch('transcription.implementations.huggingface.HfApi', mock.Mock()), \
+    with mock.patch('transcription.implementations.huggingface_ctc.torch', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.transformers', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_processor, \
+         mock.patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_model, \
+         mock.patch('transcription.implementations.huggingface_ctc.is_offline_mode', mock.Mock(return_value=False)), \
+         mock.patch('transcription.implementations.huggingface_ctc.HfApi', mock.Mock()), \
          mock.patch('huggingface_hub.hf_hub_download', mock.Mock(return_value='/tmp/vocab.json')), \
          mock.patch('builtins.open', mock.Mock(side_effect=lambda *args, **kwargs: mock.Mock(__enter__=mock.Mock(return_value=mock.Mock()), __exit__=mock.Mock()))), \
          mock.patch('json.load', mock.Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})):
 
-        # Setup feature extractor and model mocks
-        mock_feature_extractor.from_pretrained.return_value = mock.Mock()
+        # Setup processor and model mocks
+        mock_processor.from_pretrained.return_value = mock.Mock()
         mock_model.from_pretrained.return_value = mock.Mock()
 
-        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
+        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
 
         # Create audio source
-        audio_source = HuggingFaceTranscriptionAudioSource(config, "test_model")
+        audio_source = HuggingFaceCTCTranscriptionAudioSource(config, "test_model")
 
         # Verify basic properties
         assert audio_source.model_identifier == "test_model"
-        assert hasattr(audio_source, 'feature_extractor')
+        assert hasattr(audio_source, 'processor')
         assert hasattr(audio_source, 'model')
-        assert hasattr(audio_source, 'id_to_phoneme')
-        print("✓ HuggingFaceTranscriptionAudioSource created successfully")
+        print("✓ HuggingFaceCTCTranscriptionAudioSource created successfully")
 
 
 def test_dictation_app_integration():
@@ -123,24 +122,24 @@ def test_dictation_app_integration():
             self.top_p = 1.0
 
     # Mock dependencies
-    with mock.patch('transcription.implementations.huggingface.torch', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface.transformers', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface.Wav2Vec2FeatureExtractor') as mock_feature_extractor, \
-         mock.patch('transcription.implementations.huggingface.Wav2Vec2ForCTC') as mock_model, \
-         mock.patch('transcription.implementations.huggingface.is_offline_mode', mock.Mock(return_value=False)), \
-         mock.patch('transcription.implementations.huggingface.HfApi', mock.Mock()), \
+    with mock.patch('transcription.implementations.huggingface_ctc.torch', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.transformers', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_processor, \
+         mock.patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_model, \
+         mock.patch('transcription.implementations.huggingface_ctc.is_offline_mode', mock.Mock(return_value=False)), \
+         mock.patch('transcription.implementations.huggingface_ctc.HfApi', mock.Mock()), \
          mock.patch('huggingface_hub.hf_hub_download', mock.Mock(return_value='/tmp/vocab.json')), \
          mock.patch('builtins.open', mock.Mock(side_effect=lambda *args, **kwargs: mock.Mock(__enter__=mock.Mock(return_value=mock.Mock()), __exit__=mock.Mock()))), \
          mock.patch('json.load', mock.Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})), \
          mock.patch('dictation_app.BaseProvider') as mock_base_provider, \
          mock.patch('dictation_app.TranscriptionService') as mock_transcription_service, \
          mock.patch('dictation_app.signal', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface.HuggingFaceTranscriptionAudioSource.initialize', mock.Mock(return_value=True)), \
+         mock.patch('transcription.implementations.huggingface_ctc.HuggingFaceCTCTranscriptionAudioSource.initialize', mock.Mock(return_value=True)), \
          mock.patch('dictation_app.DictationApp.setup_trigger_key', mock.Mock(return_value=True)), \
          mock.patch('microphone_audio_source.MicrophoneAudioSource.test_audio_device', mock.Mock(return_value=True)):
 
         # Setup mocks
-        mock_feature_extractor.from_pretrained.return_value = mock.Mock()
+        mock_processor.from_pretrained.return_value = mock.Mock()
         mock_model.from_pretrained.return_value = mock.Mock()
         mock_provider = mock.Mock()
         mock_provider.is_initialized.return_value = True
@@ -148,7 +147,7 @@ def test_dictation_app_integration():
         mock_transcription_service.return_value = mock.Mock()
 
         from dictation_app import DictationApp
-        from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
+        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
 
         # Create app and bypass config parsing
         app = DictationApp()
@@ -162,15 +161,15 @@ def test_dictation_app_integration():
 
         # Test audio source creation logic directly
         if app.config.audio_source in ['phoneme', 'wav2vec']:
-            from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
-            app.audio_source = HuggingFaceTranscriptionAudioSource(
+            from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+            app.audio_source = HuggingFaceCTCTranscriptionAudioSource(
                 app.config,
                 app.config.wav2vec2_model_path
             )
 
         # Verify the correct audio source was created
-        assert isinstance(app.audio_source, HuggingFaceTranscriptionAudioSource)
-        print("✓ DictationApp correctly uses HuggingFaceTranscriptionAudioSource")
+        assert isinstance(app.audio_source, HuggingFaceCTCTranscriptionAudioSource)
+        print("✓ DictationApp correctly uses HuggingFaceCTCTranscriptionAudioSource")
 
 
 def demonstrate_phoneme_conversion():

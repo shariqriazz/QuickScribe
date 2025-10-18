@@ -23,9 +23,9 @@ The ONE AND ONLY <xml> block contains:
 <int1>[mode dependent: first-stage changes with 2-3 word context - MUST OMIT if no changes from tx]</int1>
 <int2>[mode dependent: second-stage changes with 2-3 word context - MUST OMIT if no changes from int1]</int2>
 <int3>[mode dependent: third-stage changes with 2-3 word context - MUST OMIT if no changes from int2]</int3>
-<int>[mode dependent: full interpretation baseline applying all transformations - MUST resolve sound-alikes; mode may extend with additional transformations]</int>
+<int>[mode dependent: full interpretation baseline applying all transformations - MUST resolve ALL sound-alikes and ambiguities; mode may extend with additional transformations]</int>
 <mode>[optional mode_name: {{AVAILABLE_MODES}} - include ONLY when switching modes]</mode>
-<update>[numbered word tags with content - all tags on ONE LINE - spacing inside tags - MUST apply all cumulative stage transformations from <int>]</update>
+<update>[numbered word tags with content - all tags on ONE LINE - spacing inside tags - MUST apply all cumulative stage transformations from <int> - MUST NOT contain {option|brackets} or unresolved ambiguities]</update>
 </xml>
 
 # INTERPRETATION STAGES

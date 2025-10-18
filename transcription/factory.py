@@ -1,12 +1,12 @@
 """Factory for creating transcription audio sources."""
 
-from transcription.implementations.huggingface import HuggingFaceTranscriptionAudioSource
+from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
 from transcription.implementations.openai import OpenAITranscriptionAudioSource
 from transcription.implementations.vosk import VoskTranscriptionAudioSource
 
 
 _TRANSCRIPTION_IMPLEMENTATIONS = {
-    'huggingface': HuggingFaceTranscriptionAudioSource,
+    'huggingface': HuggingFaceCTCTranscriptionAudioSource,
     'openai': OpenAITranscriptionAudioSource,
     'vosk': VoskTranscriptionAudioSource,
 }
