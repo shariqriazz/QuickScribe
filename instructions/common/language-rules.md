@@ -23,6 +23,12 @@ Example with multiple stage changes:
 	- Ambiguity notation: `<tx>` and `<amb>` tags use {option1|option2} literal format; first interpretation selects correct alternative, removes braces
 	- Apply domain knowledge to resolve underspecified technical references using surrounding context (e.g., "PR_star" with Linux→`pr_*`)
 	- Eliminate disfluencies: um/uh/er/ah/err filled pauses
+	- Metapragmatic directives: strip instruction, apply indicated transformation; transformed content recursively undergoes all subsequent stage processing
+		- Structure: parenthetical→()/paragraph break→¶/bullet→•/numbered→1./heading→#
+		- Punctuation: period→./comma→,/semicolon→;/colon→:/question→?/dash→—/ellipsis→…
+		- Markup: bold→**/italic→*/code→`/link→[]()
+		- Capitalization: capitalize→Title/caps→UPPER/lowercase→lower
+		- Correction: scratch→delete-preceding/undo→revert-last
 	- Self-repairs: delete original utterance before repair marker
 		- Markers: "excuse me"/"I mean"/"actually"/"rather"/"no wait"/"err"
 		- "or" triggers deletion ONLY when clear context is modification of most recent statement:
@@ -44,9 +50,22 @@ Example with multiple stage changes:
 	- Comparative/superlative structures (fix malformed syntax, preserve all lexical items)
 - `<int2>` Syntactic
 	- Clause combining: "I went. There was bread."→"I went where there was bread"
-	- FANBOYS never sentence-initial (integrate via comma/semicolon)
+	- Coordinate interrogatives: sequential questions sharing pragmatic goal/topic join via comma; independent illocutionary acts remain separate
+		- Test: if removing first question leaves second contextually dependent, join with comma
+		- "What are your thoughts? Does this sound good?"→"What are your thoughts, does this sound good?"
+		- Preserve separation when unrelated: "What time is it? Did you finish?" (different topics)
+	- Fragment integration: temporal/locative fragments immediately following complete clause integrate if semantically dependent; preserve only if afterthought
+		- "...schedule a time. Sometime next week."→"...schedule a time sometime next week"
+		- Preserve afterthought: "I'll call you. Maybe tomorrow." (deliberate pause/addition)
+	- FANBOYS (for/and/nor/but/because/or/yet/so) never sentence-initial; integrate via comma (if continuing thought) or semicolon (if contrasting/independent)
+		- "Sentence. And another."→"Sentence, and another." OR "Sentence; and another."
+		- "Sentence. Because reason."→"Sentence because reason."
 	- No terminal prepositions (restructure: "what for?"→"for what?")
 	- Comma splice repair
+	- Sentence-initial past participles: convert to imperative by removing -ed/-en suffix; likely transcription error
+		- "Provided a list"→"Provide a list"
+		- "Created a function"→"Create a function"
+		- Exceptions: valid passive constructions with subject ("Provided below is...")
 	- Fragments OK if pragmatic (introducer+colon: "What we need:")
 	- Forward-pointing demonstratives as introducers: when clause ends with cataphoric reference (this/these/following/here) pointing forward to upcoming content, terminate with colon
 		- Test: if removing everything after the demonstrative leaves incomplete thought requiring continuation, apply colon
@@ -61,15 +80,18 @@ Example with multiple stage changes:
 - `<int3>` Polish
 	- Discourse markers: sentence-initial frame-setters integrate via comma when followed by propositional content ("just in case, internally it...")
 	- Verbalized punctuation: "comma"→,
-	- Interrogatives→?
+	- Interrogatives: apply question mark when sentence exhibits interrogative syntax
+		- WH-word sentence-initial (what/where/when/why/who/how/which) with inversion: "why was this not flagged"→"Why was this not flagged?"
+		- Auxiliary-initial (is/are/was/were/do/does/did/can/could/will/would/should/have/has/had) before subject: "was this flagged"→"Was this flagged?"
+		- Embedded questions without inversion retain period: "I wonder what we can do."
 	- Restraint on exclamatives (prefer lexical intensity)
-	- Capitalize
+	- Capitalize: sentence-initial and proper nouns; convert all-caps to sentence case preserving acronyms/initialisms
 	- Numbers: zero-three spelled/4+ digits, 25%, $5, 3.14
 	- Code delimitation: backticks for executable/structural syntax (commands/functions/variables/paths/config-keys/operators/type-identifiers/environment-variables/glob-patterns), NOT technology-names/products/versions/protocols/acronyms/URLs (Docker/EL8/HTTP/API/github.com)
 	- Quotation marks: double quotes for metalinguistic mention (referring to a word itself rather than its referent), distancing usage (irony/euphemisms/questionable-claims/approximation)
 
 ## Priority
-Agreement violations > structural > FANBOYS > disfluencies > punctuation
+Agreement violations > structural > interrogatives > FANBOYS > disfluencies > punctuation
 
 ## Specifics
 - Quantifiers: fewer people/less water; more/most both; greater for magnitude/abstract
