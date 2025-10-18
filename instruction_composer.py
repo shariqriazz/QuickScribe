@@ -137,7 +137,7 @@ class InstructionComposer:
 
     def compose(self, mode: str, audio_source: Optional[str] = None, provider: Optional[str] = None) -> str:
         """
-        Compose instructions from core, mode, audio source, and provider files.
+        Compose instructions from all instruction files.
 
         Args:
             mode: Operation mode (dictate, edit, etc.)
@@ -147,38 +147,50 @@ class InstructionComposer:
         Returns:
             Composed instruction string
         """
-        parts = []
-
-        # Load core instructions (required)
-        core = self._load('core.md')
-        if core is None:
-            raise RuntimeError("Core instructions not found")
-
-        # Inject current mode and available modes (excluding current)
+        # Build template replacement dictionary
         all_modes = self.get_available_modes()
         other_modes = [m for m in all_modes if m != mode]
+        replacements = {
+            '{{CURRENT_MODE}}': mode,
+            '{{AVAILABLE_MODES}}': '|'.join(other_modes)
+        }
 
-        core = core.replace('{{CURRENT_MODE}}', mode)
-        core = core.replace('{{AVAILABLE_MODES}}', '|'.join(other_modes))
+        # Get base path for instructions
+        instruction_files = files('instructions')
+        if hasattr(instruction_files, '_path'):
+            base_path = Path(instruction_files._path)
+        else:
+            base_path = Path('instructions')
 
-        parts.append(core)
+        parts = []
 
-        # Load mode instructions (required)
-        mode_content = self._load(f'modes/{mode}.md')
-        if mode_content is None:
-            raise RuntimeError(f"Mode instructions not found for '{mode}'")
-        parts.append(mode_content)
+        # Load all instruction files recursively
+        for md_file in sorted(base_path.rglob('*.md')):
+            relative_path = md_file.relative_to(base_path)
 
-        # Load audio source instructions (optional)
-        if audio_source:
-            audio_content = self._load(f'audio_sources/{audio_source}.md')
-            if audio_content is not None:
-                parts.append(audio_content)
+            # Skip mode files that don't match current mode
+            if relative_path.parts[0] == 'modes' and relative_path.stem != mode:
+                continue
 
-        # Load provider instructions (optional)
-        if provider:
-            provider_content = self._load(f'providers/{provider}.md')
-            if provider_content is not None:
-                parts.append(provider_content)
+            # Skip audio source files if no audio source or doesn't match
+            if relative_path.parts[0] == 'audio_sources':
+                if audio_source is None or relative_path.stem != audio_source:
+                    continue
+
+            # Skip provider files if no provider or doesn't match
+            if relative_path.parts[0] == 'providers':
+                if provider is None or relative_path.stem != provider:
+                    continue
+
+            content = self._load(str(relative_path))
+            if content is not None:
+                # Apply template replacements
+                for template, value in replacements.items():
+                    content = content.replace(template, value)
+
+                parts.append(content)
+
+        if not parts:
+            raise RuntimeError("No instruction files found")
 
         return '\n\n'.join(parts)
