@@ -47,27 +47,25 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
         mock_file.__enter__ = Mock(return_value=mock_file)
         mock_file.__exit__ = Mock(return_value=None)
 
+        # Setup processor and model mocks
+        self.processor_mock = Mock()
+        self.processor_mock.tokenizer = Mock()
+        self.model_instance = Mock()
+
+        def mock_load_model(audio_source_self, model_path):
+            """Mock _load_model to avoid actual model loading."""
+            audio_source_self.processor = self.processor_mock
+            audio_source_self.model = self.model_instance
+
         self.patches = [
-            patch('transcription.implementations.huggingface_ctc.torch', self.torch_mock),
-            patch('transcription.implementations.huggingface_ctc.transformers', self.transformers_mock),
-            patch('transcription.implementations.huggingface_ctc.AutoFeatureExtractor', self.feature_extractor_mock),
-            patch('transcription.implementations.huggingface_ctc.AutoModelForCTC', self.model_mock),
-            patch('transcription.implementations.huggingface_ctc.is_offline_mode', Mock(return_value=False)),
-            patch('transcription.implementations.huggingface_ctc.HfApi', Mock()),
-            patch('huggingface_hub.hf_hub_download', Mock(return_value='/tmp/vocab.json')),
-            patch('builtins.open', Mock(return_value=mock_file)),
-            patch('json.load', Mock(return_value=self.mock_vocab))
+            patch('transcription.implementations.huggingface_ctc.audio_source.torch', self.torch_mock),
+            patch('transcription.implementations.huggingface_ctc.audio_source.transformers', self.transformers_mock),
+            patch('transcription.implementations.huggingface_ctc.audio_source.HuggingFaceCTCTranscriptionAudioSource._load_model', mock_load_model),
+            patch('transcription.implementations.huggingface_ctc.audio_source.pyrb', Mock())
         ]
 
         for patcher in self.patches:
             patcher.start()
-
-        # Set up feature extractor and model mocks
-        self.feature_extractor_instance = Mock()
-        self.model_instance = Mock()
-
-        self.feature_extractor_mock.from_pretrained.return_value = self.feature_extractor_instance
-        self.model_mock.from_pretrained.return_value = self.model_instance
 
     def tearDown(self):
         """Clean up patches."""
@@ -226,8 +224,8 @@ class TestErrorHandling(unittest.TestCase):
 
     def test_model_loading_error(self):
         """Test handling of model loading errors."""
-        with patch('transcription.implementations.huggingface_ctc.torch', None):
-            with patch('transcription.implementations.huggingface_ctc.transformers', None):
+        with patch('transcription.implementations.huggingface_ctc.audio_source.torch', None):
+            with patch('transcription.implementations.huggingface_ctc.audio_source.transformers', None):
                 from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
 
                 with self.assertRaises(ImportError):
@@ -235,22 +233,28 @@ class TestErrorHandling(unittest.TestCase):
 
     def test_audio_too_short(self):
         """Test handling of audio that's too short."""
-        with patch('transcription.implementations.huggingface_ctc.torch', Mock()):
-            with patch('transcription.implementations.huggingface_ctc.transformers', Mock()):
-                with patch('transcription.implementations.huggingface_ctc.AutoFeatureExtractor'):
-                    with patch('transcription.implementations.huggingface_ctc.AutoModelForCTC'):
-                        with patch('huggingface_hub.hf_hub_download'):
-                            with patch('builtins.open'):
-                                with patch('json.load', return_value={}):
-                                    from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        processor_mock = Mock()
+        processor_mock.tokenizer = Mock()
+        model_mock = Mock()
 
-                                    audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
+        def mock_load_model(audio_source_self, model_path):
+            """Mock _load_model to avoid actual model loading."""
+            audio_source_self.processor = processor_mock
+            audio_source_self.model = model_mock
 
-                                    # Test with very short audio
-                                    short_audio = np.array([0.1, 0.2], dtype=np.float32)
-                                    result = audio_source._process_audio(short_audio)
+        with patch('transcription.implementations.huggingface_ctc.audio_source.torch', Mock()):
+            with patch('transcription.implementations.huggingface_ctc.audio_source.transformers', Mock()):
+                with patch('transcription.implementations.huggingface_ctc.audio_source.HuggingFaceCTCTranscriptionAudioSource._load_model', mock_load_model):
+                    with patch('transcription.implementations.huggingface_ctc.audio_source.pyrb', Mock()):
+                        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
 
-                                    self.assertEqual(result, "")
+                        audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
+
+                        # Test with very short audio
+                        short_audio = np.array([0.1, 0.2], dtype=np.float32)
+                        result = audio_source._process_audio(short_audio)
+
+                        self.assertEqual(result, "")
 
 
 if __name__ == '__main__':

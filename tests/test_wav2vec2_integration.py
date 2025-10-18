@@ -92,10 +92,10 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
 
         # Mock all external dependencies
         self.patches = [
-            patch('transcription.implementations.huggingface_ctc.torch', mock_torch),
-            patch('transcription.implementations.huggingface_ctc.transformers', Mock()),
-            patch('transcription.implementations.huggingface_ctc.is_offline_mode', Mock(return_value=False)),
-            patch('transcription.implementations.huggingface_ctc.HfApi', Mock()),
+            patch('transcription.implementations.huggingface_ctc.audio_source.torch', mock_torch),
+            patch('transcription.implementations.huggingface_ctc.audio_source.transformers', Mock()),
+            patch('transcription.implementations.huggingface_ctc.audio_source.is_offline_mode', Mock(return_value=False)),
+            patch('transcription.implementations.huggingface_ctc.processor_loading.HfApi', Mock()),
             patch('huggingface_hub.hf_hub_download', Mock(return_value='/tmp/vocab.json')),
             patch('builtins.open', Mock(return_value=mock_file)),
             patch('json.load', Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})),
@@ -124,8 +124,8 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
         mock_transcription_service.return_value = mock_transcription
 
         # Mock Wav2Vec2 dependencies
-        with patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_processor, \
-             patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_model, \
+        with patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor') as mock_processor, \
+             patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC') as mock_model, \
              patch('transcription.implementations.huggingface_ctc.HuggingFaceCTCTranscriptionAudioSource.initialize', return_value=True), \
              patch('dictation_app.DictationApp.setup_trigger_key', return_value=True):
 
@@ -162,8 +162,8 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
         from audio_source import AudioTextResult, AudioDataResult
 
         # Mock dependencies
-        with patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_auto_processor, \
-             patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_auto_model, \
+        with patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor') as mock_auto_processor, \
+             patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC') as mock_auto_model, \
              patch('microphone_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
             # Setup processor and model mocks
@@ -213,8 +213,8 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
 
         with patch('dictation_app.BaseProvider') as mock_base_provider, \
              patch('dictation_app.TranscriptionService') as mock_transcription_service, \
-             patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_processor, \
-             patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_model, \
+             patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor') as mock_processor, \
+             patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC') as mock_model, \
              patch('transcription.implementations.huggingface_ctc.HuggingFaceCTCTranscriptionAudioSource.initialize', return_value=True), \
              patch('dictation_app.DictationApp.setup_trigger_key', return_value=True):
 
@@ -267,8 +267,8 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
         mock_transcription._build_xml_from_processor.return_value = "<conversation></conversation>"
         mock_transcription._build_current_text.return_value = "Previous text"
 
-        with patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_processor, \
-             patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_model:
+        with patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor') as mock_processor, \
+             patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC') as mock_model:
 
             mock_processor.from_pretrained.return_value = Mock()
             mock_model.from_pretrained.return_value = Mock()
@@ -301,11 +301,11 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
     def test_base_provider_phoneme_instructions(self):
         """Test that audio source provides phoneme processing instructions."""
         # Mock dependencies to create audio source
-        with patch('transcription.implementations.huggingface_ctc.torch'), \
-             patch('transcription.implementations.huggingface_ctc.transformers'), \
-             patch('transcription.implementations.huggingface_ctc.AutoProcessor'), \
-             patch('transcription.implementations.huggingface_ctc.AutoModelForCTC'), \
-             patch('transcription.implementations.huggingface_ctc.pyrb'), \
+        with patch('transcription.implementations.huggingface_ctc.audio_source.torch'), \
+             patch('transcription.implementations.huggingface_ctc.audio_source.transformers'), \
+             patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor'), \
+             patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC'), \
+             patch('transcription.implementations.huggingface_ctc.audio_source.pyrb'), \
              patch('microphone_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
             # Load wav2vec2 audio source instructions
@@ -321,11 +321,11 @@ class TestWav2Vec2ProviderInstructions(unittest.TestCase):
     def test_phoneme_instruction_examples(self):
         """Test that phoneme instructions include proper examples."""
         # Mock dependencies to create audio source
-        with patch('transcription.implementations.huggingface_ctc.torch'), \
-             patch('transcription.implementations.huggingface_ctc.transformers'), \
-             patch('transcription.implementations.huggingface_ctc.AutoProcessor'), \
-             patch('transcription.implementations.huggingface_ctc.AutoModelForCTC'), \
-             patch('transcription.implementations.huggingface_ctc.pyrb'), \
+        with patch('transcription.implementations.huggingface_ctc.audio_source.torch'), \
+             patch('transcription.implementations.huggingface_ctc.audio_source.transformers'), \
+             patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor'), \
+             patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC'), \
+             patch('transcription.implementations.huggingface_ctc.audio_source.pyrb'), \
              patch('microphone_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
             # Load wav2vec2 audio source instructions

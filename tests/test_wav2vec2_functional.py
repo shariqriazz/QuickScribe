@@ -39,11 +39,11 @@ def test_model_instructions():
     print("Testing HuggingFaceTranscriptionAudioSource phoneme instructions...")
 
     # Mock the dependencies
-    with mock.patch('transcription.implementations.huggingface_ctc.torch'), \
-         mock.patch('transcription.implementations.huggingface_ctc.transformers'), \
-         mock.patch('transcription.implementations.huggingface_ctc.AutoProcessor'), \
-         mock.patch('transcription.implementations.huggingface_ctc.AutoModelForCTC'), \
-         mock.patch('transcription.implementations.huggingface_ctc.pyrb'), \
+    with mock.patch('transcription.implementations.huggingface_ctc.audio_source.torch'), \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.transformers'), \
+         mock.patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor'), \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC'), \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.pyrb'), \
          mock.patch('microphone_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
         from instruction_composer import InstructionComposer
@@ -74,12 +74,12 @@ def test_audio_source_creation():
     config = MockConfig()
 
     # Mock all the heavy dependencies
-    with mock.patch('transcription.implementations.huggingface_ctc.torch', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface_ctc.transformers', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_processor, \
-         mock.patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_model, \
-         mock.patch('transcription.implementations.huggingface_ctc.is_offline_mode', mock.Mock(return_value=False)), \
-         mock.patch('transcription.implementations.huggingface_ctc.HfApi', mock.Mock()), \
+    with mock.patch('transcription.implementations.huggingface_ctc.audio_source.torch', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.transformers', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor') as mock_processor, \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC') as mock_model, \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.is_offline_mode', mock.Mock(return_value=False)), \
+         mock.patch('transcription.implementations.huggingface_ctc.processor_loading.HfApi', mock.Mock()), \
          mock.patch('huggingface_hub.hf_hub_download', mock.Mock(return_value='/tmp/vocab.json')), \
          mock.patch('builtins.open', mock.Mock(side_effect=lambda *args, **kwargs: mock.Mock(__enter__=mock.Mock(return_value=mock.Mock()), __exit__=mock.Mock()))), \
          mock.patch('json.load', mock.Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})):
@@ -122,12 +122,12 @@ def test_dictation_app_integration():
             self.top_p = 1.0
 
     # Mock dependencies
-    with mock.patch('transcription.implementations.huggingface_ctc.torch', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface_ctc.transformers', mock.Mock()), \
-         mock.patch('transcription.implementations.huggingface_ctc.AutoProcessor') as mock_processor, \
-         mock.patch('transcription.implementations.huggingface_ctc.AutoModelForCTC') as mock_model, \
-         mock.patch('transcription.implementations.huggingface_ctc.is_offline_mode', mock.Mock(return_value=False)), \
-         mock.patch('transcription.implementations.huggingface_ctc.HfApi', mock.Mock()), \
+    with mock.patch('transcription.implementations.huggingface_ctc.audio_source.torch', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.transformers', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface_ctc.processor_loading.AutoProcessor') as mock_processor, \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.AutoModelForCTC') as mock_model, \
+         mock.patch('transcription.implementations.huggingface_ctc.audio_source.is_offline_mode', mock.Mock(return_value=False)), \
+         mock.patch('transcription.implementations.huggingface_ctc.processor_loading.HfApi', mock.Mock()), \
          mock.patch('huggingface_hub.hf_hub_download', mock.Mock(return_value='/tmp/vocab.json')), \
          mock.patch('builtins.open', mock.Mock(side_effect=lambda *args, **kwargs: mock.Mock(__enter__=mock.Mock(return_value=mock.Mock()), __exit__=mock.Mock()))), \
          mock.patch('json.load', mock.Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})), \
