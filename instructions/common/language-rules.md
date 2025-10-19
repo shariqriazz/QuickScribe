@@ -60,6 +60,15 @@ Example with multiple stage changes:
 	- FANBOYS (for/and/nor/but/because/or/yet/so) never sentence-initial; integrate via comma (if continuing thought) or semicolon (if contrasting/independent)
 		- "Sentence. And another."→"Sentence, and another." OR "Sentence; and another."
 		- "Sentence. Because reason."→"Sentence because reason."
+	- Clause boundary detection via multiple signals:
+		- Semantic coherence: verb argument expectations violated by following word → separate clauses
+		- Finite verb sequences: multiple tensed verbs without coordination signal clause boundaries
+		- Independent predications: complete subject-predicate structures in sequence require separation
+	- Clause separation by illocutionary relationship:
+		- Different types (declarative/interrogative/imperative): semicolon
+		- Same type, independent clauses: semicolon unless semantically coordinated
+		- Related interrogatives sharing pragmatic goal: comma (see coordinate interrogatives)
+	- Exclude clause separation when subordinating conjunction present (if/whether/that/because introducing embedded clause)
 	- No terminal prepositions (restructure: "what for?"→"for what?")
 	- Comma splice repair
 	- Sentence-initial past participles: convert to imperative by removing -ed/-en suffix; likely transcription error
@@ -67,27 +76,31 @@ Example with multiple stage changes:
 		- "Created a function"→"Create a function"
 		- Exceptions: valid passive constructions with subject ("Provided below is...")
 	- Fragments OK if pragmatic (introducer+colon: "What we need:")
-	- Forward-pointing demonstratives as introducers: when clause ends with cataphoric reference (this/these/following/here) pointing forward to upcoming content, terminate with colon
-		- Test: if removing everything after the demonstrative leaves incomplete thought requiring continuation, apply colon
-		- "you can see this"→"you can see this:" (anticipates visual)
-		- "the following will show you"→"the following will show you:" (anticipates demonstration)
-		- "note the following"→"note the following:" (introduces list)
-		- "here is the problem"→"here is the problem:" (precedes description)
-		- Do NOT apply when referent is complete: "this works fine" / "the following day" (no forward reference)
+	- Forward-pointing demonstratives: terminate with colon when sentence ends with demonstrative creating incomplete reference requiring continuation
+		- Common ending patterns include: "of the following" / "like this" / "such as these" / "as follows" / "shown here" / "note these" / "see this" / "observe this" / "include these" / "consider these" / "the following" / "as shown here"
+		- Test: removing demonstrative-ending leaves incomplete thought requiring continuation
+		- Apply: append colon when test confirms forward reference
+		- Typically preserve when referent is complete: "this works" / "following day" / "like this one"
 	- Case assignment
 	- Parallel structure
 	- Negative polarity elimination
 - `<int3>` Polish
 	- Discourse markers: sentence-initial frame-setters integrate via comma when followed by propositional content ("just in case, internally it...")
 	- Verbalized punctuation: "comma"→,
-	- Interrogatives: apply question mark when sentence exhibits interrogative syntax
-		- WH-word sentence-initial (what/where/when/why/who/how/which) with inversion: "why was this not flagged"→"Why was this not flagged?"
-		- Auxiliary-initial (is/are/was/were/do/does/did/can/could/will/would/should/have/has/had) before subject: "was this flagged"→"Was this flagged?"
-		- Embedded questions without inversion retain period: "I wonder what we can do."
+	- Interrogatives: apply question mark to independent interrogative clauses identified via clause boundary detection; mark each independent interrogative clause terminus regardless of position
+		- Canonical WH-interrogatives (initial WH-word with or without subject-auxiliary inversion)
+		- Subject WH-interrogatives (WH-determiner modifying subject, no inversion)
+		- Auxiliary-initial interrogatives (inverted auxiliary before subject)
+		- Echo interrogatives (WH-word in non-initial position, typically final)
+		- Tag interrogatives (auxiliary + pronoun appended to declarative)
+		- Coordinate interrogatives (following semicolon/comma)
+		- Exclude embedded interrogatives functioning as complement clauses
 	- Restraint on exclamatives (prefer lexical intensity)
 	- Capitalize: sentence-initial and proper nouns; convert all-caps to sentence case preserving acronyms/initialisms
 	- Numbers: zero-three spelled/4+ digits, 25%, $5, 3.14
-	- Code delimitation: backticks for executable/structural syntax (commands/functions/variables/paths/config-keys/operators/type-identifiers/environment-variables/glob-patterns), NOT technology-names/products/versions/protocols/acronyms/URLs (Docker/EL8/HTTP/API/github.com)
+	- Code delimitation: backticks ONLY for executable/structural syntax requiring literal interpretation (commands/functions/variables/paths/config-keys/operators/type-identifiers/environment-variables/glob-patterns/file-extensions-in-technical-context); NEVER for technology-names/products/platforms/versions/protocols/acronyms/URLs/file-format-names
+		- Examples requiring backticks: `docker run`, `getUserId()`, `API_KEY`, `/etc/config`, `*.txt`, `ArrayBuffer`, `.vsix` (file extension pattern)
+		- Examples not requiring backticks: Docker, VS Code, VSIX, HTTP/2, API, github.com, JSON format, VSIX package
 	- Quotation marks: double quotes for metalinguistic mention (referring to a word itself rather than its referent), distancing usage (irony/euphemisms/questionable-claims/approximation)
 
 ## Priority
