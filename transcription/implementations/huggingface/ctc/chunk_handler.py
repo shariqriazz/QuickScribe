@@ -22,7 +22,7 @@ except ImportError:
 
 from audio_source import AudioChunkHandler
 from lib.pr_log import pr_err, pr_warn, pr_info
-from ..processor_utils import load_processor_with_fallback, is_phoneme_tokenizer, format_ctc_output
+from ..processor_utils import load_processor_with_fallback
 
 
 class CTCChunkHandler(AudioChunkHandler):
@@ -63,8 +63,7 @@ class CTCChunkHandler(AudioChunkHandler):
                 force_download=False,
                 local_files_only=offline_mode
             )
-            output_type = "phoneme" if is_phoneme_tokenizer(self.processor) else "character"
-            pr_info(f"Loaded as CTC model ({output_type} output)")
+            pr_info(f"Loaded as CTC model ({self.processor.output_format} output)")
             self.model.eval()
             pr_info(f"Successfully loaded CTC model: {model_path}")
 
@@ -134,7 +133,7 @@ class CTCChunkHandler(AudioChunkHandler):
                 predicted_ids = torch.argmax(logits, dim=-1)
 
                 raw_output = self.processor.batch_decode(predicted_ids)[0]
-                self.phoneme_text = format_ctc_output(raw_output, self.processor)
+                self.phoneme_text = f"\n    {self.processor.output_format}: {raw_output.strip()}"
 
             self.is_complete = True
             return self.phoneme_text.strip()

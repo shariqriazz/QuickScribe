@@ -3,21 +3,23 @@
 from .processor_utils import (
     SimpleTokenizerWrapper,
     ProcessorWrapper,
-    load_processor_with_fallback,
-    is_phoneme_tokenizer,
-    format_ctc_output
+    load_processor_with_fallback
 )
 from .ctc.chunk_handler import CTCChunkHandler
 from .ctc.audio_source import HuggingFaceCTCTranscriptionAudioSource
-from .seq2seq.audio_source import HuggingFaceSeq2SeqTranscriptionAudioSource
+from .seq2seq import (
+    HuggingFaceSeq2SeqTranscriptionAudioSource,
+    WhisperTranscriptionAudioSource,
+    Speech2TextTranscriptionAudioSource
+)
 
 __all__ = [
     'SimpleTokenizerWrapper',
     'ProcessorWrapper',
     'load_processor_with_fallback',
-    'is_phoneme_tokenizer',
-    'format_ctc_output',
     'CTCChunkHandler',
     'HuggingFaceCTCTranscriptionAudioSource',
-    'HuggingFaceSeq2SeqTranscriptionAudioSource'
+    'HuggingFaceSeq2SeqTranscriptionAudioSource',
+    'WhisperTranscriptionAudioSource',
+    'Speech2TextTranscriptionAudioSource'
 ]

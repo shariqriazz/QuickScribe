@@ -59,9 +59,18 @@ class SimpleTokenizerWrapper:
 class ProcessorWrapper:
     """Wrapper combining feature extractor and tokenizer when AutoProcessor fails."""
 
-    def __init__(self, feature_extractor, tokenizer):
+    def __init__(self, feature_extractor, tokenizer, config=None):
         self.feature_extractor = feature_extractor
         self.tokenizer = tokenizer
+        self.config = config or {}
+
+    @property
+    def output_format(self):
+        """Get output format from config (single point of truth)."""
+        if self.config.get('do_phonemize', False):
+            return "IPA"
+        else:
+            return "Text"
 
     def __call__(self, *args, **kwargs):
         return self.feature_extractor(*args, **kwargs)
@@ -84,12 +93,15 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
         Processor or ProcessorWrapper instance
     """
     try:
-        return AutoProcessor.from_pretrained(
+        processor = AutoProcessor.from_pretrained(
             model_path,
             cache_dir=cache_dir,
             force_download=force_download,
             local_files_only=local_files_only
         )
+        processor.config = {}
+        processor.output_format = "Text"
+        return processor
     except (TypeError, ValueError) as proc_error:
         pr_info(f"Loading processor components separately")
 
@@ -120,9 +132,10 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
             )
             with open(tokenizer_config_file, 'r') as f:
                 tokenizer_config = json.load(f)
-            tokenizer_class_name = tokenizer_config.get('tokenizer_class', '')
 
-            if 'Phoneme' in tokenizer_class_name:
+            has_phonemizer = tokenizer_config.get('do_phonemize', False)
+
+            if has_phonemizer:
                 vocab_file = hf_hub_download(
                     repo_id=model_path,
                     filename='vocab.json',
@@ -141,8 +154,11 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
                     force_download=force_download
                 )
                 pr_info(f"Loaded tokenizer: Wav2Vec2CTCTokenizer (from config)")
+
+            config = tokenizer_config
         except Exception as config_error:
             pr_warn(f"No tokenizer config found, trying direct loading: {config_error}")
+            config = {}
             for tokenizer_class in [Wav2Vec2PhonemeCTCTokenizer, Wav2Vec2CTCTokenizer]:
                 try:
                     loaded_tokenizer = tokenizer_class.from_pretrained(
@@ -173,24 +189,6 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
             )
 
         pr_info(f"Creating ProcessorWrapper with tokenizer type: {type(tokenizer).__name__}")
-        return ProcessorWrapper(feature_extractor, tokenizer)
+        return ProcessorWrapper(feature_extractor, tokenizer, config)
 
 
-def is_phoneme_tokenizer(processor) -> bool:
-    """Detect if processor uses phoneme tokenizer."""
-    tokenizer = processor.tokenizer
-    tokenizer_class = type(tokenizer).__name__
-
-    if 'Phoneme' in tokenizer_class:
-        return True
-
-    if hasattr(tokenizer, 'do_phonemize') or hasattr(tokenizer, 'phonemizer_backend'):
-        return True
-
-    return False
-
-
-def format_ctc_output(raw_text: str, processor) -> str:
-    """Format CTC output with appropriate label."""
-    prefix = "IPA: " if is_phoneme_tokenizer(processor) else "Text: "
-    return f"\n    {prefix}{raw_text.strip()}"

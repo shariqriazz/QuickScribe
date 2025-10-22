@@ -2,7 +2,10 @@
 
 from transcription.base import parse_transcription_model
 from transcription.implementations.huggingface.ctc import HuggingFaceCTCTranscriptionAudioSource
-from transcription.implementations.huggingface.seq2seq import HuggingFaceSeq2SeqTranscriptionAudioSource
+from transcription.implementations.huggingface.seq2seq import (
+    WhisperTranscriptionAudioSource,
+    Speech2TextTranscriptionAudioSource
+)
 from transcription.implementations.openai import OpenAITranscriptionAudioSource
 from transcription.implementations.vosk import VoskTranscriptionAudioSource
 
@@ -14,7 +17,8 @@ _TRANSCRIPTION_IMPLEMENTATIONS = {
 
 _HUGGINGFACE_IMPLEMENTATIONS = {
     'ctc': HuggingFaceCTCTranscriptionAudioSource,
-    'seq2seq': HuggingFaceSeq2SeqTranscriptionAudioSource,
+    'whisper': WhisperTranscriptionAudioSource,
+    'speech2text': Speech2TextTranscriptionAudioSource,
 }
 
 

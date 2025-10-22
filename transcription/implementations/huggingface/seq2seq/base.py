@@ -1,7 +1,8 @@
-"""HuggingFace Seq2Seq transcription implementation for QuickScribe."""
+"""HuggingFace Seq2Seq base transcription implementation for QuickScribe."""
 
 import sys
 import numpy as np
+from abc import abstractmethod
 
 sys.path.insert(0, 'lib')
 from pr_log import pr_err, pr_warn, pr_info
@@ -44,6 +45,22 @@ class HuggingFaceSeq2SeqTranscriptionAudioSource(TranscriptionAudioSource):
 
         pr_info(f"Initialized Seq2Seq model on device: {self.device}")
 
+    @abstractmethod
+    def _prepare_generate_kwargs(self, inputs):
+        """
+        Prepare model-specific generation kwargs.
+
+        Subclasses implement this to provide model-specific parameters
+        like task, language, max_length, etc.
+
+        Args:
+            inputs: Processor output containing input_features
+
+        Returns:
+            Dict of kwargs to pass to model.generate()
+        """
+        pass
+
     def _transcribe_audio(self, audio_data: np.ndarray) -> str:
         """
         Transcribe audio using Seq2Seq model.
@@ -69,22 +86,7 @@ class HuggingFaceSeq2SeqTranscriptionAudioSource(TranscriptionAudioSource):
                 return_attention_mask=True
             )
 
-            input_features = inputs.input_features.to(self.device, dtype=self.torch_dtype)
-
-            generate_kwargs = {"input_features": input_features}
-
-            if hasattr(inputs, 'attention_mask') and inputs.attention_mask is not None:
-                generate_kwargs["attention_mask"] = inputs.attention_mask.to(self.device)
-
-            model_type = self.model.config.model_type if hasattr(self.model.config, 'model_type') else None
-
-            if model_type == 'whisper':
-                generate_kwargs["task"] = "transcribe"
-
-                if hasattr(self.config, 'transcription_lang') and self.config.transcription_lang:
-                    lang_token = f"<|{self.config.transcription_lang}|>"
-                    generate_kwargs["language"] = lang_token
-                    pr_info(f"Using language: {self.config.transcription_lang}")
+            generate_kwargs = self._prepare_generate_kwargs(inputs)
 
             with torch.no_grad():
                 predicted_ids = self.model.generate(**generate_kwargs)

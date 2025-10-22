@@ -1,5 +1,11 @@
-"""HuggingFace Seq2Seq transcription implementation for QuickScribe."""
+"""HuggingFace Seq2Seq transcription implementations for QuickScribe."""
 
-from .audio_source import HuggingFaceSeq2SeqTranscriptionAudioSource
+from .base import HuggingFaceSeq2SeqTranscriptionAudioSource
+from .whisper import WhisperTranscriptionAudioSource
+from .speech2text import Speech2TextTranscriptionAudioSource
 
-__all__ = ['HuggingFaceSeq2SeqTranscriptionAudioSource']
+__all__ = [
+    'HuggingFaceSeq2SeqTranscriptionAudioSource',
+    'WhisperTranscriptionAudioSource',
+    'Speech2TextTranscriptionAudioSource'
+]

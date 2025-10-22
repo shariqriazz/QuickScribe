@@ -37,7 +37,7 @@ def load_huggingface_model(model_path: str, cache_dir=None, force_download=False
 
     Returns:
         Tuple of (model, processor, architecture_type)
-        where architecture_type is 'ctc' or 'seq2seq'
+        where architecture_type is 'ctc', 'whisper', or 'speech2text'
 
     Raises:
         ValueError: If model is not compatible with either CTC or Seq2Seq
@@ -99,8 +99,18 @@ def load_huggingface_model(model_path: str, cache_dir=None, force_download=False
         )
 
         model.eval()
-        pr_info(f"Successfully loaded as Seq2Seq model: {model_path}")
-        return model, processor, 'seq2seq'
+
+        model_type = model.config.model_type if hasattr(model.config, 'model_type') else 'seq2seq'
+
+        if model_type == 'whisper':
+            pr_info(f"Successfully loaded as Whisper model: {model_path}")
+            return model, processor, 'whisper'
+        elif model_type == 'speech_to_text':
+            pr_info(f"Successfully loaded as Speech2Text model: {model_path}")
+            return model, processor, 'speech2text'
+        else:
+            pr_info(f"Successfully loaded as Seq2Seq model ({model_type}): {model_path}")
+            return model, processor, 'speech2text'
 
     except Exception as seq2seq_error:
         error_msg = str(seq2seq_error)

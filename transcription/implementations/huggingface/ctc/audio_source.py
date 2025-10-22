@@ -25,7 +25,7 @@ except ImportError:
 
 from transcription.base import TranscriptionAudioSource, parse_transcription_model
 from lib.pr_log import pr_err, pr_warn, pr_info
-from ..processor_utils import load_processor_with_fallback, is_phoneme_tokenizer
+from ..processor_utils import load_processor_with_fallback
 
 
 class HuggingFaceCTCTranscriptionAudioSource(TranscriptionAudioSource):
@@ -162,15 +162,14 @@ class HuggingFaceCTCTranscriptionAudioSource(TranscriptionAudioSource):
                         pr_err(f"Error processing speed {speed_factor}: {e}")
                         speed_results[speed_factor] = ""
 
-            prefix = "IPA" if is_phoneme_tokenizer(self.processor) else "Text"
             for speed_factor in self.speed_factors:
                 raw_output = speed_results.get(speed_factor, "")
                 if raw_output:
                     if raw_output not in seen_phonemes:
                         seen_phonemes.add(raw_output)
                         speed_pct = int(speed_factor * 100)
-                        results.append(f"  {speed_pct}% speed:\n    {prefix}: {raw_output}")
-                        pr_info(f"{speed_pct}% speed - {prefix}: {raw_output}")
+                        results.append(f"  {speed_pct}% speed:\n    {self.processor.output_format}: {raw_output}")
+                        pr_info(f"{speed_pct}% speed - {self.processor.output_format}: {raw_output}")
                     else:
                         speed_pct = int(speed_factor * 100)
                         pr_info(f"{speed_pct}% speed - Skipped (duplicate of previous speed)")
