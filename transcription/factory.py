@@ -1,14 +1,20 @@
 """Factory for creating transcription audio sources."""
 
-from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
+from transcription.base import parse_transcription_model
+from transcription.implementations.huggingface.ctc import HuggingFaceCTCTranscriptionAudioSource
+from transcription.implementations.huggingface.seq2seq import HuggingFaceSeq2SeqTranscriptionAudioSource
 from transcription.implementations.openai import OpenAITranscriptionAudioSource
 from transcription.implementations.vosk import VoskTranscriptionAudioSource
 
 
 _TRANSCRIPTION_IMPLEMENTATIONS = {
-    'huggingface': HuggingFaceCTCTranscriptionAudioSource,
     'openai': OpenAITranscriptionAudioSource,
     'vosk': VoskTranscriptionAudioSource,
+}
+
+_HUGGINGFACE_IMPLEMENTATIONS = {
+    'ctc': HuggingFaceCTCTranscriptionAudioSource,
+    'seq2seq': HuggingFaceSeq2SeqTranscriptionAudioSource,
 }
 
 
@@ -34,12 +40,33 @@ def get_transcription_source(config):
         )
 
     provider = transcription_model.split('/', 1)[0].lower()
-    implementation_class = _TRANSCRIPTION_IMPLEMENTATIONS.get(provider)
 
-    if implementation_class is None:
-        raise ValueError(
-            f"Unsupported transcription provider: '{provider}'. "
-            f"Supported providers: {', '.join(_TRANSCRIPTION_IMPLEMENTATIONS.keys())}"
+    if provider == 'huggingface':
+        from transcription.implementations.huggingface.model_loader import load_huggingface_model
+
+        model_identifier = parse_transcription_model(transcription_model)
+        model, processor, architecture = load_huggingface_model(
+            model_identifier,
+            cache_dir=None,
+            force_download=False,
+            local_files_only=False
         )
 
-    return implementation_class(config, transcription_model)
+        implementation_class = _HUGGINGFACE_IMPLEMENTATIONS.get(architecture)
+        if implementation_class is None:
+            raise ValueError(
+                f"Unsupported HuggingFace architecture: '{architecture}'. "
+                f"Supported architectures: {', '.join(_HUGGINGFACE_IMPLEMENTATIONS.keys())}"
+            )
+
+        return implementation_class(config, model, processor)
+
+    else:
+        implementation_class = _TRANSCRIPTION_IMPLEMENTATIONS.get(provider)
+        if implementation_class is None:
+            raise ValueError(
+                f"Unsupported transcription provider: '{provider}'. "
+                f"Supported providers: {', '.join(list(_TRANSCRIPTION_IMPLEMENTATIONS.keys()) + ['huggingface'])}"
+            )
+
+        return implementation_class(config, transcription_model)

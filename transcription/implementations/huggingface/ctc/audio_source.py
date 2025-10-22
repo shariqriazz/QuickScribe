@@ -31,8 +31,25 @@ from ..processor_utils import load_processor_with_fallback, is_phoneme_tokenizer
 class HuggingFaceCTCTranscriptionAudioSource(TranscriptionAudioSource):
     """HuggingFace CTC transcription implementation."""
 
-    def __init__(self, config, transcription_model: str):
-        model_identifier = parse_transcription_model(transcription_model)
+    def __init__(self, config, transcription_model_or_model, processor=None):
+        """
+        Initialize CTC transcription audio source.
+
+        Supports two initialization modes:
+        1. Legacy: transcription_model_or_model is string, loads model internally
+        2. New: transcription_model_or_model is pre-loaded model, processor required
+
+        Args:
+            config: Configuration object
+            transcription_model_or_model: Either model path string or pre-loaded model
+            processor: Pre-loaded processor (required when passing model object)
+        """
+        if isinstance(transcription_model_or_model, str):
+            model_identifier = parse_transcription_model(transcription_model_or_model)
+        else:
+            model = transcription_model_or_model
+            model_identifier = model.name_or_path if hasattr(model, 'name_or_path') else str(model)
+
         super().__init__(config, model_identifier, supports_streaming=False, dtype='float32')
 
         self.speed_factors = [0.80, 0.85, 0.90, 0.95]
@@ -40,7 +57,15 @@ class HuggingFaceCTCTranscriptionAudioSource(TranscriptionAudioSource):
         if pyrb is None:
             raise ImportError("pyrubberband library not installed. Install with: pip install pyrubberband")
 
-        self._load_model(model_identifier)
+        if isinstance(transcription_model_or_model, str):
+            self._load_model(model_identifier)
+        else:
+            if processor is None:
+                raise ValueError("processor required when passing pre-loaded model")
+
+            self.model = model
+            self.processor = processor
+            pr_info(f"Using pre-loaded CTC model: {model_identifier}")
 
     def _load_model(self, model_path: str):
         """Load CTC model and processor."""

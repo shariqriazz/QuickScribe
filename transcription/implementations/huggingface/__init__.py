@@ -9,6 +9,7 @@ from .processor_utils import (
 )
 from .ctc.chunk_handler import CTCChunkHandler
 from .ctc.audio_source import HuggingFaceCTCTranscriptionAudioSource
+from .seq2seq.audio_source import HuggingFaceSeq2SeqTranscriptionAudioSource
 
 __all__ = [
     'SimpleTokenizerWrapper',
@@ -17,5 +18,6 @@ __all__ = [
     'is_phoneme_tokenizer',
     'format_ctc_output',
     'CTCChunkHandler',
-    'HuggingFaceCTCTranscriptionAudioSource'
+    'HuggingFaceCTCTranscriptionAudioSource',
+    'HuggingFaceSeq2SeqTranscriptionAudioSource'
 ]
