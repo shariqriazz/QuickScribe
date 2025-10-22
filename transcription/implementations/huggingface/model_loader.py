@@ -83,14 +83,13 @@ def load_huggingface_model(model_path: str, cache_dir=None, force_download=False
 
         model = AutoModelForSpeechSeq2Seq.from_pretrained(
             model_path,
-            torch_dtype=torch_dtype,
             low_cpu_mem_usage=True,
             cache_dir=cache_dir,
             force_download=force_download,
             local_files_only=offline_mode
         )
 
-        model = model.to(device)
+        model = model.to(device, dtype=torch_dtype)
 
         processor = AutoProcessor.from_pretrained(
             model_path,
@@ -104,7 +103,21 @@ def load_huggingface_model(model_path: str, cache_dir=None, force_download=False
         return model, processor, 'seq2seq'
 
     except Exception as seq2seq_error:
-        pr_err(f"Failed to load as Seq2Seq: {seq2seq_error}")
-        raise ValueError(
-            f"Model {model_path} not compatible with CTC or Seq2Seq architectures"
-        ) from None
+        error_msg = str(seq2seq_error)
+        pr_err(f"Failed to load as Seq2Seq: {error_msg}")
+
+        if "SentencePiece" in error_msg:
+            raise ImportError(
+                f"Model {model_path} requires SentencePiece library. "
+                "Install with: pip install sentencepiece"
+            ) from None
+        elif "protobuf" in error_msg:
+            raise ImportError(
+                f"Model {model_path} requires protobuf library. "
+                "Install with: pip install protobuf"
+            ) from None
+        else:
+            raise ValueError(
+                f"Model {model_path} not compatible with CTC or Seq2Seq architectures. "
+                f"Error: {error_msg}"
+            ) from None

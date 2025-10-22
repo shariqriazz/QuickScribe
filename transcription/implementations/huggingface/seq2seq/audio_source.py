@@ -71,18 +71,20 @@ class HuggingFaceSeq2SeqTranscriptionAudioSource(TranscriptionAudioSource):
 
             input_features = inputs.input_features.to(self.device, dtype=self.torch_dtype)
 
-            generate_kwargs = {
-                "input_features": input_features,
-                "task": "transcribe"
-            }
+            generate_kwargs = {"input_features": input_features}
 
             if hasattr(inputs, 'attention_mask') and inputs.attention_mask is not None:
                 generate_kwargs["attention_mask"] = inputs.attention_mask.to(self.device)
 
-            if hasattr(self.config, 'transcription_lang') and self.config.transcription_lang:
-                lang_token = f"<|{self.config.transcription_lang}|>"
-                generate_kwargs["language"] = lang_token
-                pr_info(f"Using language: {self.config.transcription_lang}")
+            model_type = self.model.config.model_type if hasattr(self.model.config, 'model_type') else None
+
+            if model_type == 'whisper':
+                generate_kwargs["task"] = "transcribe"
+
+                if hasattr(self.config, 'transcription_lang') and self.config.transcription_lang:
+                    lang_token = f"<|{self.config.transcription_lang}|>"
+                    generate_kwargs["language"] = lang_token
+                    pr_info(f"Using language: {self.config.transcription_lang}")
 
             with torch.no_grad():
                 predicted_ids = self.model.generate(**generate_kwargs)
