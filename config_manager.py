@@ -30,6 +30,7 @@ class ConfigManager:
 
         # Transcription model configuration
         self.transcription_model = "huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft"
+        self.transcription_lang = "en"
 
         # Operation mode
         self.mode = "dictate"  # Default to dictation mode
@@ -195,6 +196,12 @@ class ConfigManager:
             help="Transcription model specification in format 'provider/model'. Examples: 'huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft', 'openai/whisper-1', 'vosk/path/to/model'."
         )
         parser.add_argument(
+            "--transcription-lang", "-L",
+            type=str,
+            default="en",
+            help="Language for transcription (ISO 639-1 code). Examples: 'en', 'es', 'fr'. Only used with Seq2Seq models like Whisper. Defaults to 'en'."
+        )
+        parser.add_argument(
             "--enable-reasoning",
             type=str,
             choices=['none', 'low', 'medium', 'high'],
@@ -286,6 +293,7 @@ class ConfigManager:
 
         # Transcription model configuration
         self.transcription_model = getattr(args, 'transcription_model', self.transcription_model)
+        self.transcription_lang = getattr(args, 'transcription_lang', "en")
 
         # Provider performance controls
         self.enable_reasoning = getattr(args, 'enable_reasoning', 'low')

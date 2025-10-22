@@ -65,13 +65,27 @@ class HuggingFaceSeq2SeqTranscriptionAudioSource(TranscriptionAudioSource):
             inputs = self.processor(
                 audio_data,
                 sampling_rate=self.config.sample_rate,
-                return_tensors="pt"
+                return_tensors="pt",
+                return_attention_mask=True
             )
 
             input_features = inputs.input_features.to(self.device, dtype=self.torch_dtype)
 
+            generate_kwargs = {
+                "input_features": input_features,
+                "task": "transcribe"
+            }
+
+            if hasattr(inputs, 'attention_mask') and inputs.attention_mask is not None:
+                generate_kwargs["attention_mask"] = inputs.attention_mask.to(self.device)
+
+            if hasattr(self.config, 'transcription_lang') and self.config.transcription_lang:
+                lang_token = f"<|{self.config.transcription_lang}|>"
+                generate_kwargs["language"] = lang_token
+                pr_info(f"Using language: {self.config.transcription_lang}")
+
             with torch.no_grad():
-                predicted_ids = self.model.generate(input_features)
+                predicted_ids = self.model.generate(**generate_kwargs)
 
             transcription = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
 
