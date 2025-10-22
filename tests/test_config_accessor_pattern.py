@@ -176,7 +176,7 @@ class TestWav2Vec2Integration(unittest.TestCase):
     def test_wav2vec2_no_sample_rate_copy(self):
         """Test HuggingFaceCTCTranscriptionAudioSource does not copy sample_rate."""
         try:
-            from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+            from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
             # Create source
             source = HuggingFaceCTCTranscriptionAudioSource(

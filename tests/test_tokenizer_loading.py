@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from transcription.implementations.huggingface_ctc import load_processor_with_fallback
+from transcription.implementations.huggingface import load_processor_with_fallback
 
 
 def test_phoneme_model_tokenizer():

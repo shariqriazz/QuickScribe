@@ -1,6 +1,6 @@
 """Factory for creating transcription audio sources."""
 
-from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 from transcription.implementations.openai import OpenAITranscriptionAudioSource
 from transcription.implementations.vosk import VoskTranscriptionAudioSource
 

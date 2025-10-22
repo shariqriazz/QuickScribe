@@ -22,7 +22,7 @@ except ImportError:
 
 from audio_source import AudioChunkHandler
 from lib.pr_log import pr_err, pr_warn, pr_info
-from .processor_loading import load_processor_with_fallback, is_phoneme_tokenizer, format_ctc_output
+from ..processor_utils import load_processor_with_fallback, is_phoneme_tokenizer, format_ctc_output
 
 
 class CTCChunkHandler(AudioChunkHandler):

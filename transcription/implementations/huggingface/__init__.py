@@ -1,14 +1,14 @@
-"""HuggingFace CTC-based transcription implementation for QuickScribe."""
+"""HuggingFace transcription implementations for QuickScribe."""
 
-from .processor_loading import (
+from .processor_utils import (
     SimpleTokenizerWrapper,
     ProcessorWrapper,
     load_processor_with_fallback,
     is_phoneme_tokenizer,
     format_ctc_output
 )
-from .chunk_handler import CTCChunkHandler
-from .audio_source import HuggingFaceCTCTranscriptionAudioSource
+from .ctc.chunk_handler import CTCChunkHandler
+from .ctc.audio_source import HuggingFaceCTCTranscriptionAudioSource
 
 __all__ = [
     'SimpleTokenizerWrapper',

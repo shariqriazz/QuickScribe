@@ -58,10 +58,10 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
             audio_source_self.model = self.model_instance
 
         self.patches = [
-            patch('transcription.implementations.huggingface_ctc.audio_source.torch', self.torch_mock),
-            patch('transcription.implementations.huggingface_ctc.audio_source.transformers', self.transformers_mock),
-            patch('transcription.implementations.huggingface_ctc.audio_source.HuggingFaceCTCTranscriptionAudioSource._load_model', mock_load_model),
-            patch('transcription.implementations.huggingface_ctc.audio_source.pyrb', Mock())
+            patch('transcription.implementations.huggingface.ctc.audio_source.torch', self.torch_mock),
+            patch('transcription.implementations.huggingface.ctc.audio_source.transformers', self.transformers_mock),
+            patch('transcription.implementations.huggingface.ctc.audio_source.HuggingFaceCTCTranscriptionAudioSource._load_model', mock_load_model),
+            patch('transcription.implementations.huggingface.ctc.audio_source.pyrb', Mock())
         ]
 
         for patcher in self.patches:
@@ -74,7 +74,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
 
     def test_audio_source_initialization(self):
         """Test that HuggingFaceCTCTranscriptionAudioSource initializes correctly."""
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 
@@ -86,7 +86,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
 
     def test_phoneme_decoding(self):
         """Test phoneme decoding functionality."""
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 
@@ -102,7 +102,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
 
     def test_audio_processing(self):
         """Test audio processing functionality."""
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 
@@ -130,7 +130,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
 
     def test_stop_recording_with_audio(self):
         """Test stop_recording returns AudioTextResult with phonemes."""
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
         from audio_source import AudioDataResult, AudioTextResult
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
@@ -151,7 +151,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
 
     def test_reset_functionality(self):
         """Test that reset works (inherited from parent)."""
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 
@@ -164,7 +164,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
         """Test legacy chunk handler interface (backward compatibility)."""
         # This test ensures the old chunk handler tests don't break completely
         # In the new implementation, chunk handling is integrated into HuggingFaceCTCTranscriptionAudioSource
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 
@@ -174,7 +174,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
 
     def test_chunk_processing(self):
         """Test that audio processing works (replaces old chunk processing)."""
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 
@@ -188,7 +188,7 @@ class TestHuggingFaceTranscriptionAudioSourceMocked(unittest.TestCase):
 
     def test_finalize_with_mock_inference(self):
         """Test phoneme inference with mocked model."""
-        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 
@@ -224,9 +224,9 @@ class TestErrorHandling(unittest.TestCase):
 
     def test_model_loading_error(self):
         """Test handling of model loading errors."""
-        with patch('transcription.implementations.huggingface_ctc.audio_source.torch', None):
-            with patch('transcription.implementations.huggingface_ctc.audio_source.transformers', None):
-                from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        with patch('transcription.implementations.huggingface.ctc.audio_source.torch', None):
+            with patch('transcription.implementations.huggingface.ctc.audio_source.transformers', None):
+                from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
                 with self.assertRaises(ImportError):
                     HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
@@ -242,11 +242,11 @@ class TestErrorHandling(unittest.TestCase):
             audio_source_self.processor = processor_mock
             audio_source_self.model = model_mock
 
-        with patch('transcription.implementations.huggingface_ctc.audio_source.torch', Mock()):
-            with patch('transcription.implementations.huggingface_ctc.audio_source.transformers', Mock()):
-                with patch('transcription.implementations.huggingface_ctc.audio_source.HuggingFaceCTCTranscriptionAudioSource._load_model', mock_load_model):
-                    with patch('transcription.implementations.huggingface_ctc.audio_source.pyrb', Mock()):
-                        from transcription.implementations.huggingface_ctc import HuggingFaceCTCTranscriptionAudioSource
+        with patch('transcription.implementations.huggingface.ctc.audio_source.torch', Mock()):
+            with patch('transcription.implementations.huggingface.ctc.audio_source.transformers', Mock()):
+                with patch('transcription.implementations.huggingface.ctc.audio_source.HuggingFaceCTCTranscriptionAudioSource._load_model', mock_load_model):
+                    with patch('transcription.implementations.huggingface.ctc.audio_source.pyrb', Mock()):
+                        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
                         audio_source = HuggingFaceCTCTranscriptionAudioSource(self.config, "test_model")
 

@@ -11,7 +11,7 @@ from lib.keyboard_injector_xdotool import XdotoolKeyboardInjector
 from lib.keyboard_injector_macos import MacOSKeyboardInjector
 from lib.keyboard_injector_windows import WindowsKeyboardInjector
 from instruction_composer import InstructionComposer
-from lib.pr_log import pr_err, pr_warn, pr_notice, pr_debug
+from lib.pr_log import pr_err, pr_warn, pr_notice, pr_debug, pr_info
 
 
 class TranscriptionService:

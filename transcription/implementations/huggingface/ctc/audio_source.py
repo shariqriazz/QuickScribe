@@ -25,7 +25,7 @@ except ImportError:
 
 from transcription.base import TranscriptionAudioSource, parse_transcription_model
 from lib.pr_log import pr_err, pr_warn, pr_info
-from .processor_loading import load_processor_with_fallback, is_phoneme_tokenizer
+from ..processor_utils import load_processor_with_fallback, is_phoneme_tokenizer
 
 
 class HuggingFaceCTCTranscriptionAudioSource(TranscriptionAudioSource):
