@@ -60,6 +60,7 @@ Example with multiple stage changes:
 	- Sentence-initial conjunction prohibition: sentences must never begin with coordinating (and/but/or/nor/yet/so) or subordinating (because/if/when/although/while/unless/since) conjunction; integrate with preceding or following clause per rules below
 	- Coordinating conjunctions (and/but/or/nor/yet/so):
 		- Following period: integrate with preceding sentence using comma before conjunction
+		- Example: "...may. But if..."→"...may, but if..."
 		- Within-sentence punctuation: comma before conjunction when joining independent clauses (both with subject + predicate)
 		- No comma when coordinating non-clausal elements or when clauses share subject
 		- Never use conjunction after semicolon or colon (redundant)
@@ -203,6 +204,15 @@ Example with multiple stage changes:
 		- Examples not requiring backticks: Docker, VS Code, VSIX, HTTP/2, API, github.com, JSON format, VSIX package
 	- Quotation marks: double quotes for metalinguistic mention (referring to a word itself rather than its referent), distancing usage (irony/euphemisms/questionable-claims/approximation)
 
+## Validation
+
+Sequential stages (int→int1→int2→int3→update): apply all transformations per section; preserve all prior corrections
+
+Final verification before update:
+- Absent: sentence-initial conjunctions (coordinating/subordinating); {|}; disfluencies (um/uh/er/ah); unprocessed metapragmatics; unmarked interrogatives; code delimiters on non-code (lines 201-203)
+- Present: update content === int
+- Format: 3-8 word chunks; sequential numeric tags
+
 ## Priority
 Agreement violations > structural > interrogatives > FANBOYS > disfluencies > punctuation
 
@@ -213,6 +223,6 @@ Agreement violations > structural > interrogatives > FANBOYS > disfluencies > pu
 - Modifier attachment resolves scope ambiguity
 
 ## Algorithm
-Tokenize→parse for errors→classify→minimal correction→verify lexical invariance
+Tokenize→parse for errors→classify→minimal correction→validate→verify lexical invariance
 
 Constraint ranking: grammaticality>>coherence>>fidelity>>prosody

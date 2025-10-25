@@ -59,15 +59,15 @@ Reference shell elements not prose positions
 Use ID protocol for replacement, insertion, deletion
 
 EXAMPLES:
-"cd usr bin" → `cd /usr/bin`
-"ls later" → `ls -latr`
-"dollar of ls" → `$(ls)`
-"echo dollar of date" → `echo $(date)`
-"grep quote error" → `grep 'error'`
-"cd squiggly" → `cd ~`
-"while read a semi do echo dollar a done" → `while read a; do echo $a; done`
-"for i in ls etc" → `for i in $(ls /etc)`
-"ssh user at host ls etc semi cat etc group" → `ssh user@host "ls /etc; cat /etc/group"`
-"grep starts with x" → `grep '^x'`
+"cd usr bin" → cd /usr/bin
+"ls later" → ls -latr
+"dollar of ls" → $(ls)
+"echo dollar of date" → echo $(date)
+"grep quote error" → grep 'error'
+"cd squiggly" → cd ~
+"while read a semi do echo dollar a done" → while read a; do echo $a; done
+"for i in ls etc" → for i in $(ls /etc)
+"ssh user at host ls etc semi cat etc group" → ssh user@host "ls /etc; cat /etc/group"
+"grep starts with x" → grep '^x'
 
 These examples demonstrate verbalization patterns that apply to any similar command structure or syntax element. The interpretation principles shown here extend naturally to all shell commands, operators, and constructs following the same linguistic patterns.
