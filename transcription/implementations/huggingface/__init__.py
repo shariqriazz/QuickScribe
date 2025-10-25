@@ -1,7 +1,7 @@
 """HuggingFace transcription implementations for QuickScribe."""
 
 from .processor_utils import (
-    SimpleTokenizerWrapper,
+    CTCVocabDecoder,
     ProcessorWrapper,
     load_processor_with_fallback
 )
@@ -14,7 +14,7 @@ from .seq2seq import (
 )
 
 __all__ = [
-    'SimpleTokenizerWrapper',
+    'CTCVocabDecoder',
     'ProcessorWrapper',
     'load_processor_with_fallback',
     'CTCChunkHandler',

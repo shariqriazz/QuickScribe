@@ -33,8 +33,15 @@ except ImportError:
 from lib.pr_log import pr_err, pr_warn, pr_info
 
 
-class SimpleTokenizerWrapper:
-    """Minimal tokenizer wrapper for vocab-based decoding."""
+# Tokenizer class registry for config-based routing
+TOKENIZER_CLASS_MAP = {
+    'Wav2Vec2CTCTokenizer': Wav2Vec2CTCTokenizer,
+    'Wav2Vec2PhonemeCTCTokenizer': Wav2Vec2PhonemeCTCTokenizer,
+}
+
+
+class CTCVocabDecoder:
+    """CTC vocabulary-based decoder for systems without phonemizer dependencies."""
 
     def __init__(self, vocab_dict):
         self.vocab = vocab_dict
@@ -67,10 +74,11 @@ class ProcessorWrapper:
     @property
     def output_format(self):
         """Get output format from config (single point of truth)."""
-        if self.config.get('do_phonemize', False):
+        tokenizer_class = self.config.get('tokenizer_class', '')
+        if 'Phoneme' in tokenizer_class:
             return "IPA"
-        else:
-            return "Text"
+
+        return "Text"
 
     def __call__(self, *args, **kwargs):
         return self.feature_extractor(*args, **kwargs)
@@ -90,8 +98,24 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
         local_files_only: Only use local files
 
     Returns:
-        Processor or ProcessorWrapper instance
+        ProcessorWrapper instance with config
     """
+    from huggingface_hub import hf_hub_download
+    import json
+
+    tokenizer_config = {}
+    try:
+        tokenizer_config_file = hf_hub_download(
+            repo_id=model_path,
+            filename='tokenizer_config.json',
+            cache_dir=cache_dir,
+            local_files_only=local_files_only
+        )
+        with open(tokenizer_config_file, 'r') as f:
+            tokenizer_config = json.load(f)
+    except Exception:
+        pass
+
     try:
         processor = AutoProcessor.from_pretrained(
             model_path,
@@ -99,9 +123,7 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
             force_download=force_download,
             local_files_only=local_files_only
         )
-        processor.config = {}
-        processor.output_format = "Text"
-        return processor
+        return ProcessorWrapper(processor.feature_extractor, processor.tokenizer, tokenizer_config)
     except (TypeError, ValueError) as proc_error:
         pr_info(f"Loading processor components separately")
 
@@ -121,21 +143,38 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
 
         tokenizer = None
         try:
-            from huggingface_hub import hf_hub_download
-            import json
+            if not tokenizer_config:
+                from huggingface_hub import hf_hub_download
+                import json
 
-            tokenizer_config_file = hf_hub_download(
-                repo_id=model_path,
-                filename='tokenizer_config.json',
-                cache_dir=cache_dir,
-                local_files_only=local_files_only
-            )
-            with open(tokenizer_config_file, 'r') as f:
-                tokenizer_config = json.load(f)
+                tokenizer_config_file = hf_hub_download(
+                    repo_id=model_path,
+                    filename='tokenizer_config.json',
+                    cache_dir=cache_dir,
+                    local_files_only=local_files_only
+                )
+                with open(tokenizer_config_file, 'r') as f:
+                    tokenizer_config = json.load(f)
 
-            has_phonemizer = tokenizer_config.get('do_phonemize', False)
+            tokenizer_class_name = tokenizer_config.get('tokenizer_class')
 
-            if has_phonemizer:
+            if tokenizer_class_name and tokenizer_class_name in TOKENIZER_CLASS_MAP:
+                tokenizer_class = TOKENIZER_CLASS_MAP[tokenizer_class_name]
+                try:
+                    loaded_tokenizer = tokenizer_class.from_pretrained(
+                        model_path,
+                        cache_dir=cache_dir,
+                        force_download=force_download,
+                        local_files_only=local_files_only
+                    )
+
+                    if loaded_tokenizer and not isinstance(loaded_tokenizer, bool):
+                        tokenizer = loaded_tokenizer
+                        pr_info(f"Loaded tokenizer: {tokenizer_class_name}")
+                except Exception as e:
+                    pr_info(f"{tokenizer_class_name} failed to load (missing dependencies): {e}")
+
+            if tokenizer is None:
                 vocab_file = hf_hub_download(
                     repo_id=model_path,
                     filename='vocab.json',
@@ -145,41 +184,13 @@ def load_processor_with_fallback(model_path: str, cache_dir=None, force_download
                 with open(vocab_file, 'r') as f:
                     vocab_dict = json.load(f)
 
-                tokenizer = SimpleTokenizerWrapper(vocab_dict)
-                pr_info(f"Loaded tokenizer: SimpleTokenizerWrapper (phoneme vocab)")
-            else:
-                tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(
-                    model_path,
-                    cache_dir=cache_dir,
-                    force_download=force_download
-                )
-                pr_info(f"Loaded tokenizer: Wav2Vec2CTCTokenizer (from config)")
+                tokenizer = CTCVocabDecoder(vocab_dict)
+                pr_info(f"Loaded tokenizer: CTCVocabDecoder (fallback for {tokenizer_class_name or 'missing config'})")
 
             config = tokenizer_config
         except Exception as config_error:
-            pr_warn(f"No tokenizer config found, trying direct loading: {config_error}")
-            config = {}
-            for tokenizer_class in [Wav2Vec2PhonemeCTCTokenizer, Wav2Vec2CTCTokenizer]:
-                try:
-                    loaded_tokenizer = tokenizer_class.from_pretrained(
-                        model_path,
-                        cache_dir=cache_dir,
-                        force_download=force_download,
-                        local_files_only=local_files_only
-                    )
-
-                    if hasattr(loaded_tokenizer, 'get_vocab'):
-                        vocab = loaded_tokenizer.get_vocab()
-                        if vocab and len(vocab) > 0:
-                            tokenizer = loaded_tokenizer
-                            pr_info(f"Loaded tokenizer: {tokenizer_class.__name__}")
-                            break
-                        else:
-                            pr_warn(f"{tokenizer_class.__name__} loaded but has empty vocabulary")
-                    else:
-                        pr_warn(f"{tokenizer_class.__name__} has no get_vocab method")
-                except Exception:
-                    continue
+            pr_warn(f"Config/tokenizer loading failed, using CTCVocabDecoder: {config_error}")
+            config = tokenizer_config
 
         if tokenizer is None:
             raise RuntimeError(
