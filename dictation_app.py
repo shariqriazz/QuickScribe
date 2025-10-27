@@ -212,7 +212,9 @@ class DictationApp:
     def on_press(self, key):
         """Handle key press events."""
         try:
+            pr_debug(f"Key pressed: {key}")
             if key == self.trigger_key:
+                pr_debug(f"Trigger key pressed, starting recording")
                 self.start_recording()
         except Exception as e:
             pr_err(f"Error in on_press: {e}")
@@ -220,10 +222,10 @@ class DictationApp:
     def on_release(self, key):
         """Handle key release events."""
         try:
+            pr_debug(f"Key released: {key}")
             if key == self.trigger_key:
+                pr_debug(f"Trigger key released, stopping recording")
                 self.stop_recording()
-            elif key == keyboard.Key.esc:
-                return False  # Stop listener
         except Exception as e:
             pr_err(f"Error in on_release: {e}")
 
@@ -318,6 +320,7 @@ class DictationApp:
                 on_release=self.on_release
             )
             self.keyboard_listener.start()
+            pr_debug("Keyboard listener started")
             return self.keyboard_listener
         return None
 
@@ -511,6 +514,7 @@ class DictationApp:
         if self.signal_bridge:
             self.signal_bridge.cleanup()
         if self.keyboard_listener and self.keyboard_listener.is_alive():
+            pr_debug("Stopping keyboard listener")
             self.keyboard_listener.stop()
         if self.audio_source:
             self.audio_source._cleanup()
