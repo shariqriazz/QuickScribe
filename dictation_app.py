@@ -45,6 +45,11 @@ DEFAULT_SAMPLE_RATE = 16000
 DEFAULT_CHANNELS = 1
 
 
+class AbortRecording(Exception):
+    """Abort recording due to additional key press during recording."""
+    pass
+
+
 class DictationApp:
     """Main dictation application with provider abstraction."""
 
@@ -200,6 +205,18 @@ class DictationApp:
                 daemon=True
             ).start()
 
+    def abort_recording(self):
+        """Abort recording without processing audio."""
+        if not self._is_recording:
+            return
+        if not self.audio_source:
+            return
+
+        self._is_recording = False
+        self.audio_source.stop_recording()
+        self._update_tray_state(AppState.IDLE)
+        self._show_recording_prompt()
+
     def _process_audio_result_and_prompt(self, result):
         """Process result and always show prompt after."""
         try:
@@ -211,23 +228,24 @@ class DictationApp:
     # Input handling (moved from InputController)
     def on_press(self, key):
         """Handle key press events."""
-        try:
-            pr_debug(f"Key pressed: {key}")
-            if key == self.trigger_key:
-                pr_debug(f"Trigger key pressed, starting recording")
-                self.start_recording()
-        except Exception as e:
-            pr_err(f"Error in on_press: {e}")
+        if key == self.trigger_key:
+            pr_debug(f"Trigger key pressed, starting recording")
+            self.start_recording()
+            return
+
+        if not self._is_recording:
+            return
+
+        pr_debug("Non-trigger key pressed during recording, aborting")
+        raise AbortRecording("Additional key pressed during recording")
 
     def on_release(self, key):
         """Handle key release events."""
-        try:
-            pr_debug(f"Key released: {key}")
-            if key == self.trigger_key:
-                pr_debug(f"Trigger key released, stopping recording")
-                self.stop_recording()
-        except Exception as e:
-            pr_err(f"Error in on_release: {e}")
+        if key != self.trigger_key:
+            return
+
+        pr_debug(f"Trigger key released, stopping recording")
+        self.stop_recording()
 
     def _handle_signal_channel(self, channel_name: str):
         """Handle signal received via bridge channel."""
@@ -314,15 +332,30 @@ class DictationApp:
 
     def start_keyboard_listener(self):
         """Start the keyboard listener if trigger key is configured."""
-        if self.trigger_key is not None:
-            self.keyboard_listener = keyboard.Listener(
-                on_press=self.on_press,
-                on_release=self.on_release
-            )
-            self.keyboard_listener.start()
-            pr_debug("Keyboard listener started")
-            return self.keyboard_listener
-        return None
+        if self.trigger_key is None:
+            return None
+
+        def safe_on_press(key):
+            try:
+                self.on_press(key)
+            except AbortRecording:
+                self.abort_recording()
+            except Exception as e:
+                pr_err(f"Error in on_press: {e}")
+
+        def safe_on_release(key):
+            try:
+                self.on_release(key)
+            except Exception as e:
+                pr_err(f"Error in on_release: {e}")
+
+        self.keyboard_listener = keyboard.Listener(
+            on_press=safe_on_press,
+            on_release=safe_on_release
+        )
+        self.keyboard_listener.start()
+        pr_debug("Keyboard listener started")
+        return self.keyboard_listener
 
     def is_trigger_enabled(self):
         """Check if keyboard trigger is enabled."""
