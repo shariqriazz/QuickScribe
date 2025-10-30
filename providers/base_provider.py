@@ -17,6 +17,11 @@ from lib.pr_log import (
 )
 
 
+class TerminateStream(Exception):
+    """Signal to terminate streaming when </xml> tag is detected."""
+    pass
+
+
 class BaseProvider:
     """Unified provider using LiteLLM abstraction."""
 
@@ -386,38 +391,47 @@ class BaseProvider:
         thinking_header_shown = False
         output_header_shown = False
 
-        with get_streaming_handler() as stream:
-            for chunk in response:
-                last_chunk = chunk
-                delta = chunk.choices[0].delta
+        try:
+            with get_streaming_handler() as stream:
+                for chunk in response:
+                    last_chunk = chunk
+                    delta = chunk.choices[0].delta
 
-                if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
-                    if not reasoning_header_shown:
-                        pr_notice("[REASONING]")
-                        reasoning_header_shown = True
-                    stream.write(delta.reasoning_content)
+                    if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                        if not reasoning_header_shown:
+                            pr_notice("[REASONING]")
+                            reasoning_header_shown = True
+                        stream.write(delta.reasoning_content)
 
-                if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
-                    if not thinking_header_shown:
-                        pr_notice("[THINKING]")
-                        thinking_header_shown = True
-                    for block in delta.thinking_blocks:
-                        if 'thinking' in block:
-                            stream.write(block['thinking'])
+                    if hasattr(delta, 'thinking_blocks') and delta.thinking_blocks is not None:
+                        if not thinking_header_shown:
+                            pr_notice("[THINKING]")
+                            thinking_header_shown = True
+                        for block in delta.thinking_blocks:
+                            if 'thinking' in block:
+                                stream.write(block['thinking'])
 
-                if delta.content is not None:
-                    if not output_header_shown:
-                        pr_notice("[OUTPUT]")
-                        output_header_shown = True
-                    chunk_text = delta.content
-                    self.mark_first_response()
-                    stream.write(chunk_text)
-                    if streaming_callback:
-                        streaming_callback(chunk_text)
-                    accumulated_text += chunk_text
+                    if delta.content is not None:
+                        if not output_header_shown:
+                            pr_notice("[OUTPUT]")
+                            output_header_shown = True
+                        chunk_text = delta.content
+                        self.mark_first_response()
+                        stream.write(chunk_text)
+                        if streaming_callback:
+                            streaming_callback(chunk_text)
+                        accumulated_text += chunk_text
 
-                if hasattr(chunk, 'usage') and chunk.usage is not None:
-                    usage_data = chunk.usage
+                        if '</xml>' in accumulated_text:
+                            raise TerminateStream()
+
+                    if hasattr(chunk, 'usage') and chunk.usage is not None:
+                        usage_data = chunk.usage
+
+        except TerminateStream:
+            if hasattr(response, 'completion_stream') and hasattr(response.completion_stream, 'close'):
+                response.completion_stream.close()
+            pr_debug("Stream terminated: </xml> tag detected")
 
         self._print_timing_stats()
 
