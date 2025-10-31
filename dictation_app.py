@@ -38,6 +38,9 @@ from ui import PosixSignalBridge, SystemTrayUI, AppState
 # Logging
 from lib.pr_log import pr_emerg, pr_alert, pr_crit, pr_err, pr_warn, pr_notice, pr_info, pr_debug, get_streaming_handler
 
+# Event queue for sequential processing
+from lib.event_queue import EventQueue
+
 # --- Constants ---
 DTYPE = 'int16'
 DEFAULT_TRIGGER_KEY = 'alt_r'
@@ -73,6 +76,9 @@ class DictationApp:
         self.signal_bridge = None
         self.system_tray = None
         self._app_state = AppState.IDLE
+
+        # Recording processing queue
+        self.recording_queue = None
     
     def _get_conversation_context(self) -> ConversationContext:
         """Build conversation context from XMLStreamProcessor state."""
@@ -197,13 +203,9 @@ class DictationApp:
                 self._show_recording_prompt()
                 return
 
-            # Process non-empty result in thread
+            # Enqueue non-empty result for sequential processing
             self._update_tray_state(AppState.PROCESSING)
-            threading.Thread(
-                target=self._process_audio_result_and_prompt,
-                args=(result,),
-                daemon=True
-            ).start()
+            self.recording_queue.enqueue(result)
 
     def abort_recording(self):
         """Abort recording without processing audio."""
@@ -399,6 +401,13 @@ class DictationApp:
     def _initialize_services(self):
         """Initialize all service components."""
         self.transcription_service = TranscriptionService(self.config)
+
+        self.recording_queue = EventQueue(
+            self._process_audio_result_and_prompt,
+            name="RecordingProcessor"
+        )
+        self.recording_queue.start()
+
         return True
     
     
@@ -542,6 +551,8 @@ class DictationApp:
     def cleanup(self):
         """Clean up resources."""
         pr_info("Cleaning up...")
+        if self.recording_queue:
+            self.recording_queue.shutdown()
         if self.system_tray:
             self.system_tray.cleanup()
         if self.signal_bridge:
