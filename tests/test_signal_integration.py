@@ -3,15 +3,26 @@
 import sys
 import os
 import signal
-import time
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QTimer
-from ui import PosixSignalBridge
+def check_pyqt_available():
+    try:
+        from PyQt6.QtWidgets import QApplication as QApp
+        return hasattr(QApp, '__self__') and hasattr(QApp, '__func__')
+    except (ImportError, AttributeError):
+        return False
+
+PYQT_AVAILABLE = check_pyqt_available()
+
+if PYQT_AVAILABLE:
+    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtCore import QTimer
+    from ui import PosixSignalBridge
 
 
+@pytest.mark.skipif(not PYQT_AVAILABLE, reason="PyQt6 not available")
 def test_signal_delivery():
     """Test that POSIX signals are delivered through bridge."""
     app = QApplication.instance() or QApplication(sys.argv)
@@ -27,14 +38,12 @@ def test_signal_delivery():
     bridge.signal_received.connect(on_signal)
     bridge.register_signal(signal.SIGUSR1, "test_signal")
 
-    # Send signal to self after short delay
     def send_signal():
         print(f"Sending SIGUSR1 to PID {os.getpid()}")
         os.kill(os.getpid(), signal.SIGUSR1)
 
     QTimer.singleShot(100, send_signal)
 
-    # Timeout after 2 seconds
     QTimer.singleShot(2000, lambda: (print("TIMEOUT"), app.quit()))
 
     print("Starting Qt event loop...")
