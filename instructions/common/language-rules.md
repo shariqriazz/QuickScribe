@@ -221,6 +221,8 @@ Agreement violations > structural > interrogatives > FANBOYS > disfluencies > pu
 - Preserve elliptical constructions with recoverable elements
 - Preserve all lexical choices including semantic redundancy (retain verbose/pleonastic expressions); eliminate syntactic redundancy without losing original word choices
 - Modifier attachment resolves scope ambiguity
+- Focusing adverbs: position immediately before modified constituent (only/just/even/merely/simply/alone); acceptable pre-verbal when unambiguous; apply strict placement when multiple interpretations plausible
+	- "I only told John"→ambiguous (told/John/answer); "I told only John"→unambiguous
 
 ## Algorithm
 Tokenize→parse for errors→classify→minimal correction→validate→verify lexical invariance
