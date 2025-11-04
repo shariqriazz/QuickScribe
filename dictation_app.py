@@ -7,6 +7,7 @@ import signal
 import tempfile
 import os
 import io
+import queue
 import threading
 import numpy as np
 import soundfile as sf
@@ -53,6 +54,15 @@ class AbortRecording(Exception):
     pass
 
 
+class RecordingSession:
+    """Encapsulates per-session state for two-queue architecture."""
+
+    def __init__(self):
+        self.chunk_queue = queue.Queue()
+        self.chunks_complete = threading.Event()
+        self.context = None
+
+
 class DictationApp:
     """Main dictation application with provider abstraction."""
 
@@ -77,8 +87,8 @@ class DictationApp:
         self.system_tray = None
         self._app_state = AppState.IDLE
 
-        # Recording processing queue
-        self.recording_queue = None
+        # Session processing queue
+        self.session_queue = None
     
     def _get_conversation_context(self) -> ConversationContext:
         """Build conversation context from XMLStreamProcessor state."""
@@ -93,85 +103,64 @@ class DictationApp:
             compiled_text=compiled_text,
             sample_rate=self.config.sample_rate
         )
-    
-    def _process_audio_result(self, result: AudioResult):
-        """Process audio result from any audio source."""
-        if not self.transcription_service:
-            return
 
-        # Provider is required for both audio and text processing
+    def _record_to_session(self, result: AudioResult, session: RecordingSession):
+        """Route audio result to model invocation based on type."""
         if not self.provider:
+            session.chunks_complete.set()
             return
 
         try:
-            # Handle different result types
             if isinstance(result, AudioDataResult):
-                self._process_audio_data(result.audio_data)
+                self._invoke_model(session, audio_data=result.audio_data)
             elif isinstance(result, AudioTextResult):
-                # Handle pre-transcribed text from VOSK
-                self._process_transcribed_text(result.transcribed_text)
+                self._invoke_model(session, text_data=result.transcribed_text)
             else:
                 pr_err(f"Unsupported audio result type: {type(result)}")
+                session.chunks_complete.set()
         except Exception as e:
-            pr_err(f"Error in process_audio_result: {e}")
+            pr_err(f"Error in record_to_session: {e}")
+            session.chunks_complete.set()
 
-    def _process_audio_data(self, audio_np):
-        """Process raw audio data using provider."""
-        if not self.provider:
-            pr_err("No provider available for audio transcription")
-            return
+    def _invoke_model(self, session: RecordingSession, audio_data=None, text_data=None):
+        """Invoke model with streaming callback that collects chunks to session queue."""
+        def streaming_callback(chunk_text):
+            session.chunk_queue.put(chunk_text)
 
+        try:
+            self.provider.transcribe(
+                session.context,
+                audio_data=audio_data,
+                text_data=text_data,
+                streaming_callback=streaming_callback,
+                final_callback=None
+            )
+        finally:
+            session.chunks_complete.set()
+
+    def _process_session_output(self, session: RecordingSession):
+        """Process session chunks sequentially for keyboard output."""
         self.transcription_service.reset_streaming_state()
 
-        # Get conversation context
-        context = self._get_conversation_context()
+        while not session.chunks_complete.is_set() or not session.chunk_queue.empty():
+            try:
+                chunk = session.chunk_queue.get(timeout=0.1)
+                self.transcription_service.process_streaming_chunk(chunk)
+            except queue.Empty:
+                continue
+            except Exception as e:
+                pr_err(f"Error processing chunk: {e}")
 
-        # Define callbacks
-        def streaming_callback(chunk_text):
-            self.transcription_service.process_streaming_chunk(chunk_text)
-
-        # Use unified provider interface - streaming only, no final callback
-        self.provider.transcribe(context, audio_data=audio_np,
-                                streaming_callback=streaming_callback, final_callback=None)
-
-        # CRITICAL: Complete the stream to handle any remaining content
         self.transcription_service.complete_stream()
 
-        # Show final clean state when streaming is complete
         final_text = self.transcription_service._build_current_text()
         if final_text:
             pr_info(f"{final_text}\n")
         else:
             pr_info("")
 
-    def _process_transcribed_text(self, text):
-        """Process pre-transcribed text from VOSK through AI provider."""
-        if not text or not text.strip():
-            return
-
-        # Reset streaming state for fresh processing
-        self.transcription_service.reset_streaming_state()
-
-        # Get conversation context
-        context = self._get_conversation_context()
-
-        # Define callbacks (same as audio processing)
-        def streaming_callback(chunk_text):
-            self.transcription_service.process_streaming_chunk(chunk_text)
-
-        # Send text to AI provider for processing
-        self.provider.transcribe(context, text_data=text,
-                                streaming_callback=streaming_callback, final_callback=None)
-
-        # CRITICAL: Complete the stream to handle any remaining content
-        self.transcription_service.complete_stream()
-
-        # Show final clean state when streaming is complete
-        final_text = self.transcription_service._build_current_text()
-        if final_text:
-            pr_info(f"{final_text}\n")
-        else:
-            pr_info("")
+        if self.config.reset_state_each_response:
+            self.transcription_service.reset_all_state()
 
     # Recording control - single point of truth
     def start_recording(self):
@@ -205,7 +194,11 @@ class DictationApp:
 
             # Enqueue non-empty result for sequential processing
             self._update_tray_state(AppState.PROCESSING)
-            self.recording_queue.enqueue(result)
+            session = RecordingSession()
+            session.context = self._get_conversation_context()
+            self.session_queue.enqueue(session)
+            threading.Thread(target=self._record_to_session, args=(result, session), daemon=True).start()
+            self._show_recording_prompt()
 
     def abort_recording(self):
         """Abort recording without processing audio."""
@@ -218,14 +211,6 @@ class DictationApp:
         self.audio_source.stop_recording()
         self._update_tray_state(AppState.IDLE)
         self._show_recording_prompt()
-
-    def _process_audio_result_and_prompt(self, result):
-        """Process result and always show prompt after."""
-        try:
-            self._process_audio_result(result)
-        finally:
-            self._update_tray_state(AppState.IDLE)
-            self._show_recording_prompt()
 
     # Input handling (moved from InputController)
     def on_press(self, key):
@@ -402,11 +387,11 @@ class DictationApp:
         """Initialize all service components."""
         self.transcription_service = TranscriptionService(self.config)
 
-        self.recording_queue = EventQueue(
-            self._process_audio_result_and_prompt,
-            name="RecordingProcessor"
+        self.session_queue = EventQueue(
+            self._process_session_output,
+            name="SessionProcessor"
         )
-        self.recording_queue.start()
+        self.session_queue.start()
 
         return True
     
@@ -551,8 +536,8 @@ class DictationApp:
     def cleanup(self):
         """Clean up resources."""
         pr_info("Cleaning up...")
-        if self.recording_queue:
-            self.recording_queue.shutdown()
+        if self.session_queue:
+            self.session_queue.shutdown()
         if self.system_tray:
             self.system_tray.cleanup()
         if self.signal_bridge:

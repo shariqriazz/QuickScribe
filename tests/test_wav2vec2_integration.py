@@ -287,8 +287,11 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
                 audio_data=np.array([0.1, 0.2, 0.3])
             )
 
-            # Process the audio result
-            app._process_audio_result(phoneme_result)
+            # Process using new architecture: create session and invoke model directly
+            from dictation_app import RecordingSession
+            session = RecordingSession()
+            session.context = app._get_conversation_context()
+            app._record_to_session(phoneme_result, session)
 
             # Verify provider was called with phoneme text
             self.assertTrue(mock_provider.transcribe_called)
