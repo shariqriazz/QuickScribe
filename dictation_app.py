@@ -11,6 +11,8 @@ import queue
 import threading
 import numpy as np
 import soundfile as sf
+from enum import Enum
+from typing import Optional
 from pynput import keyboard
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
 from PyQt6.QtCore import QTimer
@@ -49,6 +51,13 @@ DEFAULT_SAMPLE_RATE = 16000
 DEFAULT_CHANNELS = 1
 
 
+class RecordingSource(Enum):
+    """Source that initiated the recording."""
+    KEYBOARD = "keyboard"
+    SIGNAL = "signal"
+    SYSTEM_TRAY = "system_tray"
+
+
 class AbortRecording(Exception):
     """Abort recording due to additional key press during recording."""
     pass
@@ -80,6 +89,7 @@ class DictationApp:
         self.trigger_key = None
         self.keyboard_listener = None
         self._is_recording = False
+        self._recording_source: Optional[RecordingSource] = None
 
         # Qt components
         self.qt_app = None
@@ -163,11 +173,12 @@ class DictationApp:
             self.transcription_service.reset_all_state()
 
     # Recording control - single point of truth
-    def start_recording(self):
+    def start_recording(self, source: RecordingSource):
         """Start recording if not already recording."""
-        pr_debug(f"start_recording called: _is_recording={self._is_recording}, audio_source={self.audio_source is not None}")
+        pr_debug(f"start_recording called: _is_recording={self._is_recording}, audio_source={self.audio_source is not None}, source={source.value}")
         if not self._is_recording and self.audio_source:
             self._is_recording = True
+            self._recording_source = source
             pr_debug("Setting state to RECORDING")
             self._update_tray_state(AppState.RECORDING)
             pr_debug("Calling audio_source.start_recording()")
@@ -183,6 +194,7 @@ class DictationApp:
         """Stop recording and process result."""
         if self._is_recording and self.audio_source:
             self._is_recording = False
+            self._recording_source = None
             time.sleep(self.config.mic_release_delay / 1000.0)
             result = self.audio_source.stop_recording()
 
@@ -208,6 +220,7 @@ class DictationApp:
             return
 
         self._is_recording = False
+        self._recording_source = None
         self.audio_source.stop_recording()
         self._update_tray_state(AppState.IDLE)
         self._show_recording_prompt()
@@ -217,14 +230,15 @@ class DictationApp:
         """Handle key press events."""
         if key == self.trigger_key:
             pr_debug(f"Trigger key pressed, starting recording")
-            self.start_recording()
+            self.start_recording(RecordingSource.KEYBOARD)
             return
 
         if not self._is_recording:
             return
 
-        pr_debug("Non-trigger key pressed during recording, aborting")
-        raise AbortRecording("Additional key pressed during recording")
+        if self._recording_source == RecordingSource.KEYBOARD:
+            pr_debug("Non-trigger key pressed during keyboard recording, aborting")
+            raise AbortRecording("Additional key pressed during recording")
 
     def on_release(self, key):
         """Handle key release events."""
@@ -243,13 +257,13 @@ class DictationApp:
                 if self.transcription_service:
                     self.transcription_service._handle_mode_change(self.config.sigusr1_mode)
                 pr_info("Starting recording...")
-                self.start_recording()
+                self.start_recording(RecordingSource.SIGNAL)
             elif channel_name == "mode_switch_2":
                 pr_notice(f"Mode switch to: {self.config.sigusr2_mode}")
                 if self.transcription_service:
                     self.transcription_service._handle_mode_change(self.config.sigusr2_mode)
                 pr_info("Starting recording...")
-                self.start_recording()
+                self.start_recording(RecordingSource.SIGNAL)
             elif channel_name == "stop_recording":
                 pr_info("Stopping recording...")
                 self.stop_recording()
@@ -305,7 +319,7 @@ class DictationApp:
                 return
 
             self.system_tray = SystemTrayUI()
-            self.system_tray.start_recording_requested.connect(self.start_recording)
+            self.system_tray.start_recording_requested.connect(lambda: self.start_recording(RecordingSource.SYSTEM_TRAY))
             self.system_tray.stop_recording_requested.connect(self.stop_recording)
             self.system_tray.quit_requested.connect(self.qt_app.quit)
             self._update_tray_state(AppState.IDLE)
