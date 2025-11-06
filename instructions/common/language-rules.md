@@ -22,13 +22,24 @@ Example with multiple stage changes:
 - `<int>` Resolve ambiguities
 	- Ambiguity notation: `<tx>` and `<amb>` tags use {option1|option2} literal format; first interpretation selects correct alternative, removes braces
 	- Apply domain knowledge to resolve underspecified technical references using surrounding context (e.g., "PR_star" with Linux→`pr_*`)
+	- Technical term inventory: enumerate all technical identifiers requiring code delimitation before applying transformations
+		- List candidates: commands, functions, variables, paths, config keys, operators, type identifiers, environment variables, glob patterns, file extensions in technical context
+		- Evaluate each against code delimitation criteria (see Code delimitation section in Polish stage)
+		- Apply backticks to confirmed technical terms in output
 	- Eliminate disfluencies: um/uh/er/ah/err filled pauses
+	- Eliminate non-speech audio: remove sound effects, onomatopoeia, and acoustic annotations (beep/buzz/click/music/etc.)
 	- Metapragmatic directives: strip instruction, apply indicated transformation; transformed content recursively undergoes all subsequent stage processing
 		- Structure: parenthetical→()/paragraph break→¶/bullet→•/numbered→1./heading→#
 		- Punctuation: period→./comma→,/semicolon→;/colon→:/question→?/dash→—/ellipsis→…
 		- Markup: bold→**/italic→*/code→`/link→[]()
-		- Capitalization: capitalize→Title/caps→UPPER/lowercase→lower
+		- Capitalization: capitalize→Title/caps→UPPER/lowercase→lower/all cap→UPPER/all capital→UPPER
 		- Correction: scratch→delete-preceding/undo→revert-last
+		- Implicit directives: conversational patterns signaling formatting intent
+			- Punctuation word + hedge phrase: "parenthesis I think"→(I think), "comma you know"→, you know,
+			- Paired explicit form: "parentheses...close parentheses"→() (same output as implicit)
+			- Styling constraints: "all lowercase", "all cap", "all capital", "no space", "one word", "capitalized"
+			- Technical identifiers: apply code delimiters and formatting based on context when styling obvious
+			- Apply formatting, consume directive language; do not include directive words in output
 	- Self-repairs: delete original utterance before repair marker
 		- Markers: "excuse me"/"I mean"/"actually"/"rather"/"no wait"/"err"
 		- "or" triggers deletion ONLY when clear context is modification of most recent statement:
@@ -82,6 +93,7 @@ Example with multiple stage changes:
 		- Different types (declarative/interrogative/imperative): semicolon
 		- Same type, independent clauses: semicolon unless semantically coordinated
 		- Related interrogatives sharing pragmatic goal: comma (see coordinate interrogatives)
+		- Maximum one semicolon per sentence: multiple independent clauses requiring separation beyond first semicolon must form separate sentences
 	- Exclude clause separation when subordinating conjunction present (if/whether/that/because introducing embedded clause)
 	- WH-word disambiguation for clause integration:
 		- Relative clauses: WH-word (which/who/that/whom/whose/where/when) following noun phrase modifies antecedent; integrate with host clause
