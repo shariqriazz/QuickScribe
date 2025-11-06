@@ -1,7 +1,18 @@
 """Tests for signal handler functionality."""
 import pytest
 import signal
+import sys
 from unittest.mock import Mock, patch, MagicMock
+
+sys.modules['pynput'] = Mock()
+sys.modules['pynput.keyboard'] = Mock()
+
+mock_qt = MagicMock()
+sys.modules['PyQt6'] = mock_qt
+sys.modules['PyQt6.QtWidgets'] = mock_qt.QtWidgets
+sys.modules['PyQt6.QtCore'] = mock_qt.QtCore
+sys.modules['PyQt6.QtGui'] = mock_qt.QtGui
+
 from dictation_app import DictationApp
 from config_manager import ConfigManager
 
@@ -44,12 +55,7 @@ class TestSignalHandlers:
 
         self.app.processing_coordinator.initialize()
 
-        self.app.input_coordinator = InputCoordinator(
-            self.config,
-            self.app.recording_coordinator,
-            self.app.processing_coordinator,
-            self.app
-        )
+        self.app.input_coordinator = InputCoordinator(self.config, self.app)
 
         self.app._update_tray_state = Mock()
         self.app._show_recording_prompt = Mock()

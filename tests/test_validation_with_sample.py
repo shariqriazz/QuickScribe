@@ -2,8 +2,22 @@
 """Test audio validation with sample audio file."""
 
 import time
+import os
+import sys
+import pytest
 import numpy as np
 import wave
+from unittest.mock import Mock, MagicMock
+
+sys.modules['pynput'] = Mock()
+sys.modules['pynput.keyboard'] = Mock()
+
+mock_qt = MagicMock()
+sys.modules['PyQt6'] = mock_qt
+sys.modules['PyQt6.QtWidgets'] = mock_qt.QtWidgets
+sys.modules['PyQt6.QtCore'] = mock_qt.QtCore
+sys.modules['PyQt6.QtGui'] = mock_qt.QtGui
+
 from processing_coordinator import ProcessingCoordinator
 from recording_session import RecordingSession, RecordingSource
 from audio_source import AudioDataResult
@@ -41,6 +55,13 @@ def load_wav_file(filepath):
         return audio_data, sample_rate
 
 
+@pytest.fixture
+def filepath():
+    """Provide path to sample audio file."""
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    return os.path.join(base_dir, "samples", "sumtest.wav")
+
+
 def test_sample_file(filepath):
     """Test validation on sample audio file."""
     print(f"\nTesting: {filepath}")
@@ -75,7 +96,7 @@ def test_sample_file(filepath):
     print(f"\nResult: {'PASS' if is_valid else 'FAIL'}")
     print("=" * 60)
 
-    return is_valid
+    assert is_valid, "Audio validation failed"
 
 
 if __name__ == "__main__":
