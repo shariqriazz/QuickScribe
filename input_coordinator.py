@@ -3,6 +3,7 @@ Input Coordinator - Handles keyboard, POSIX signals, and system tray input.
 """
 import sys
 import signal
+from typing import Optional
 from pynput import keyboard
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
 from recording_session import RecordingSource
@@ -18,10 +19,8 @@ class AbortRecording(Exception):
 class InputCoordinator:
     """Coordinates input from keyboard, POSIX signals, and system tray."""
 
-    def __init__(self, config, recording_coordinator, processing_coordinator, app):
+    def __init__(self, config, app):
         self.config = config
-        self.recording_coordinator = recording_coordinator
-        self.processing_coordinator = processing_coordinator
         self.app = app
 
         self.trigger_key = None
@@ -95,7 +94,7 @@ class InputCoordinator:
             try:
                 self.on_press(key)
             except AbortRecording:
-                self.recording_coordinator.abort_recording()
+                self.app.recording_coordinator.abort_recording()
                 self.app._return_to_idle()
             except Exception as e:
                 pr_err(f"Error in on_press: {e}")
@@ -122,10 +121,10 @@ class InputCoordinator:
         """Handle key press events."""
         if key == self.trigger_key:
             pr_debug(f"Trigger key pressed, starting recording")
-            self.recording_coordinator.start_recording(RecordingSource.KEYBOARD)
+            self.app.recording_coordinator.start_recording(RecordingSource.KEYBOARD)
             return
 
-        current_session = self.recording_coordinator.get_current_session()
+        current_session = self.app.recording_coordinator.get_current_session()
         if not current_session:
             return
 
@@ -138,32 +137,37 @@ class InputCoordinator:
         if key != self.trigger_key:
             return
 
-        current_session = self.recording_coordinator.get_current_session()
+        current_session = self.app.recording_coordinator.get_current_session()
         if not current_session:
             return
 
         pr_debug(f"Trigger key released, stopping recording")
-        session, result, context = self.recording_coordinator.stop_recording()
-        self.processing_coordinator.process_recording_result(session, result, context)
+        session, result, context = self.app.recording_coordinator.stop_recording()
+        self.app.processing_coordinator.process_recording_result(session, result, context)
 
     def _handle_signal_channel(self, channel_name: str):
         """Handle signal received via bridge channel."""
         pr_notice(f"Signal channel received: {channel_name}")
+
+        if not self.app.recording_coordinator or not self.app.processing_coordinator:
+            pr_warn(f"Signal {channel_name} received before coordinators initialized")
+            return
+
         try:
             if channel_name == "mode_switch_1":
                 pr_notice(f"Mode switch to: {self.config.sigusr1_mode}")
-                self.recording_coordinator.start_signal_recording(self.config.sigusr1_mode)
+                self.app.recording_coordinator.start_signal_recording(self.config.sigusr1_mode)
             elif channel_name == "mode_switch_2":
                 pr_notice(f"Mode switch to: {self.config.sigusr2_mode}")
-                self.recording_coordinator.start_signal_recording(self.config.sigusr2_mode)
+                self.app.recording_coordinator.start_signal_recording(self.config.sigusr2_mode)
             elif channel_name == "stop_recording":
                 pr_info("Stopping recording...")
-                current_session = self.recording_coordinator.get_current_session()
+                current_session = self.app.recording_coordinator.get_current_session()
                 if not current_session:
                     return
 
-                session, result, context = self.recording_coordinator.stop_recording()
-                self.processing_coordinator.process_recording_result(session, result, context)
+                session, result, context = self.app.recording_coordinator.stop_recording()
+                self.app.processing_coordinator.process_recording_result(session, result, context)
             elif channel_name == "interrupt":
                 pr_notice("Ctrl+C detected. Exiting.")
                 if self.qt_app:
@@ -175,16 +179,16 @@ class InputCoordinator:
 
     def _start_recording_from_tray(self):
         """Start recording from system tray."""
-        self.recording_coordinator.start_recording(RecordingSource.SYSTEM_TRAY)
+        self.app.recording_coordinator.start_recording(RecordingSource.SYSTEM_TRAY)
 
     def _stop_recording_from_tray(self):
         """Stop recording from system tray."""
-        current_session = self.recording_coordinator.get_current_session()
+        current_session = self.app.recording_coordinator.get_current_session()
         if not current_session:
             return
 
-        session, result, context = self.recording_coordinator.stop_recording()
-        self.processing_coordinator.process_recording_result(session, result, context)
+        session, result, context = self.app.recording_coordinator.stop_recording()
+        self.app.processing_coordinator.process_recording_result(session, result, context)
 
     def cleanup(self):
         """Clean up input handling resources."""

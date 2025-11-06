@@ -76,6 +76,11 @@ class DictationApp:
         self.transcription_service = TranscriptionService(self.config)
         return True
 
+    def _initialize_input_early(self):
+        """Initialize input coordinator and install signal handlers early."""
+        self.input_coordinator = InputCoordinator(self.config, self)
+        self.input_coordinator.setup_signal_handlers()
+
     def _initialize_coordinators(self):
         """Initialize coordinator components."""
         self.recording_coordinator = RecordingCoordinator(
@@ -94,17 +99,9 @@ class DictationApp:
         if not self.processing_coordinator.initialize():
             return False
 
-        self.input_coordinator = InputCoordinator(
-            self.config,
-            self.recording_coordinator,
-            self.processing_coordinator,
-            self
-        )
-
         if not self.input_coordinator.setup_trigger_key():
             return False
 
-        self.input_coordinator.setup_signal_handlers()
         return True
     
     
@@ -120,6 +117,8 @@ class DictationApp:
             set_log_level(PR_DEBUG)
         else:
             set_log_level(PR_INFO)
+
+        self._initialize_input_early()
 
         if self.config.audio_source in ['transcribe', 'trans']:
             from transcription.factory import get_transcription_source
