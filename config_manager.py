@@ -46,7 +46,13 @@ class ConfigManager:
 
         # Microphone release delay
         self.mic_release_delay = 350  # milliseconds
-        
+
+        # Audio validation thresholds
+        self.min_recording_duration = 0.7  # seconds
+        self.audio_amplitude_threshold = 0.03  # 3% of int16 range
+        self.min_peak_duration = 0.5  # seconds (also used as RMS window size)
+        self.min_peak_duration_amplitude_threshold = 0.01  # 1% of int16 range for RMS peaks
+
         # Load environment variables
         script_dir = os.path.dirname(__file__)
         dotenv_path = os.path.join(script_dir, '.env')
@@ -231,6 +237,34 @@ class ConfigManager:
             type=float,
             default=0.9,
             help="Nucleus sampling parameter (0.0-1.0)."
+        )
+        parser.add_argument(
+            "--audio-min-duration",
+            type=float,
+            default=0.7,
+            dest="min_recording_duration",
+            help="Minimum recording duration in seconds (default: 0.7)."
+        )
+        parser.add_argument(
+            "--audio-min-amplitude",
+            type=float,
+            default=0.03,
+            dest="audio_amplitude_threshold",
+            help="Minimum peak amplitude threshold as fraction of int16 range (default: 0.03 = 3%%)."
+        )
+        parser.add_argument(
+            "--audio-min-rms",
+            type=float,
+            default=0.01,
+            dest="min_peak_duration_amplitude_threshold",
+            help="Minimum RMS threshold as fraction of int16 range (default: 0.01 = 1%%). This is the maximum RMS value found across all sliding windows."
+        )
+        parser.add_argument(
+            "--audio-rms-window",
+            type=float,
+            default=0.5,
+            dest="min_peak_duration",
+            help="RMS sliding window size in seconds (default: 0.5). Window slides by 1/10th of window size (90%% overlap)."
         )
         parser.add_argument(
             "--key",

@@ -86,6 +86,7 @@ class TestParallelModelInvocation(unittest.TestCase):
         self.config = MockConfig()
 
     @patch('input_coordinator.signal', Mock())
+    @patch('ui.system_tray.SystemTrayUI', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_parallel_session_recording(self, mock_transcription_service):
         """Verify multiple sessions invoke models in parallel threads."""
