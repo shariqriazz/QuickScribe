@@ -99,7 +99,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             patch('huggingface_hub.hf_hub_download', Mock(return_value='/tmp/vocab.json')),
             patch('builtins.open', Mock(return_value=mock_file)),
             patch('json.load', Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})),
-            patch('dictation_app.signal', Mock())
+            patch('input_coordinator.signal', Mock())
         ]
 
         for patcher in self.patches:
@@ -110,7 +110,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
         for patcher in self.patches:
             patcher.stop()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.BaseProvider')
     @patch('dictation_app.TranscriptionService')
     def test_dictation_app_uses_wav2vec2_audio_source(self, mock_transcription_service, mock_base_provider):
@@ -127,7 +127,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
         with patch('transcription.implementations.huggingface.processor_utils.AutoProcessor') as mock_processor, \
              patch('transcription.implementations.huggingface.ctc.audio_source.AutoModelForCTC') as mock_model, \
              patch('transcription.implementations.huggingface.HuggingFaceCTCTranscriptionAudioSource.initialize', return_value=True), \
-             patch('dictation_app.DictationApp.setup_trigger_key', return_value=True):
+             patch('input_coordinator.InputCoordinator.setup_trigger_key', return_value=True):
 
             mock_processor.from_pretrained.return_value = Mock()
             mock_model.from_pretrained.return_value = Mock()
@@ -201,7 +201,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
                 # The mock will return empty string since no real processing
                 self.assertEqual(result.sample_rate, 16000)
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     def test_audio_source_selection_priority(self):
         """Test that Wav2Vec2 takes priority over VOSK when both are configured."""
         from dictation_app import DictationApp
@@ -216,7 +216,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
              patch('transcription.implementations.huggingface.processor_utils.AutoProcessor') as mock_processor, \
              patch('transcription.implementations.huggingface.ctc.audio_source.AutoModelForCTC') as mock_model, \
              patch('transcription.implementations.huggingface.HuggingFaceCTCTranscriptionAudioSource.initialize', return_value=True), \
-             patch('dictation_app.DictationApp.setup_trigger_key', return_value=True):
+             patch('input_coordinator.InputCoordinator.setup_trigger_key', return_value=True):
 
             # Setup mocks
             mock_provider = MockProvider()
@@ -249,7 +249,7 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
             self.assertIsInstance(app.audio_source, HuggingFaceCTCTranscriptionAudioSource)
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.BaseProvider')
     @patch('dictation_app.TranscriptionService')
     def test_wav2vec2_phoneme_processing_workflow(self, mock_transcription_service, mock_base_provider):
@@ -274,10 +274,20 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             mock_model.from_pretrained.return_value = Mock()
 
             # Create app and set up components manually (skip full initialize)
+            from recording_coordinator import RecordingCoordinator
+            from processing_coordinator import ProcessingCoordinator
+
             app = DictationApp()
             app.config = self.config
             app.transcription_service = mock_transcription
             app.provider = mock_provider
+
+            app.recording_coordinator = RecordingCoordinator(
+                None,
+                mock_transcription,
+                self.config,
+                app
+            )
 
             # Create mock audio result with phonemes
             from audio_source import AudioTextResult
@@ -288,10 +298,15 @@ class TestWav2Vec2DictationAppIntegration(unittest.TestCase):
             )
 
             # Process using new architecture: create session and invoke model directly
-            from dictation_app import RecordingSession
-            session = RecordingSession()
-            session.context = app._get_conversation_context()
-            app._record_to_session(phoneme_result, session)
+            from recording_session import RecordingSession, RecordingSource
+            from processing_session import ProcessingSession
+
+            recording_session = RecordingSession(RecordingSource.KEYBOARD)
+            context = app.recording_coordinator._get_conversation_context()
+            processing_session = ProcessingSession(recording_session, context, phoneme_result)
+
+            from model_invocation_worker import invoke_model_for_session
+            invoke_model_for_session(mock_provider, processing_session, phoneme_result)
 
             # Verify provider was called with phoneme text
             self.assertTrue(mock_provider.transcribe_called)

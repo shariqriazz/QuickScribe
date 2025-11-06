@@ -27,9 +27,13 @@ sys.modules['PyQt6.QtWidgets'] = mock_qt.QtWidgets
 sys.modules['PyQt6.QtCore'] = mock_qt.QtCore
 sys.modules['PyQt6.QtGui'] = mock_qt.QtGui
 
-from dictation_app import DictationApp, RecordingSession
+from dictation_app import DictationApp
+from recording_session import RecordingSession, RecordingSource
+from processing_session import ProcessingSession
 from audio_source import AudioDataResult, AudioTextResult
 from providers.conversation_context import ConversationContext
+from model_invocation_worker import invoke_model_for_session
+from session_output_worker import process_session_output
 
 
 class MockConfig:
@@ -81,7 +85,7 @@ class TestParallelModelInvocation(unittest.TestCase):
         """Set up test fixtures."""
         self.config = MockConfig()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_parallel_session_recording(self, mock_transcription_service):
         """Verify multiple sessions invoke models in parallel threads."""
@@ -93,23 +97,25 @@ class TestParallelModelInvocation(unittest.TestCase):
         app.provider = mock_provider
 
         app._initialize_services()
+        app._initialize_coordinators()
 
         recording_threads = []
 
         for i in range(3):
-            session = RecordingSession()
-            session.context = ConversationContext(
+            recording_session = RecordingSession(RecordingSource.KEYBOARD)
+            context = ConversationContext(
                 xml_markup=f"<session{i}/>",
                 compiled_text=f"text{i}",
                 sample_rate=16000
             )
-
             result = AudioTextResult(f"input{i}", 16000)
+            processing_session = ProcessingSession(recording_session, context, result)
+
             thread = threading.Thread(
-                target=app._record_to_session,
-                args=(result, session)
+                target=invoke_model_for_session,
+                args=(mock_provider, processing_session, result)
             )
-            recording_threads.append((thread, session))
+            recording_threads.append((thread, processing_session))
 
         for thread, _ in recording_threads:
             thread.start()
@@ -126,9 +132,9 @@ class TestParallelModelInvocation(unittest.TestCase):
         call_thread_ids = [call['thread_id'] for call in mock_provider.transcribe_calls]
         self.assertGreaterEqual(len(set(call_thread_ids)), 1)
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_session_context_isolation(self, mock_transcription_service):
         """Verify each session has frozen conversation context."""
@@ -144,22 +150,25 @@ class TestParallelModelInvocation(unittest.TestCase):
         app.provider = mock_provider
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session1 = RecordingSession()
-        session1.context = app._get_conversation_context()
+        recording_session1 = RecordingSession(RecordingSource.KEYBOARD)
+        context1 = app.recording_coordinator._get_conversation_context()
+        result1 = AudioTextResult("input1", 16000)
+        session1 = ProcessingSession(recording_session1, context1, result1)
 
         mock_transcription._build_xml_from_processor.return_value = "<context_b/>"
         mock_transcription._build_current_text.return_value = "text_b"
 
-        session2 = RecordingSession()
-        session2.context = app._get_conversation_context()
+        recording_session2 = RecordingSession(RecordingSource.KEYBOARD)
+        context2 = app.recording_coordinator._get_conversation_context()
+        result2 = AudioTextResult("input2", 16000)
+        session2 = ProcessingSession(recording_session2, context2, result2)
 
-        result1 = AudioTextResult("input1", 16000)
-        thread1 = threading.Thread(target=app._record_to_session, args=(result1, session1))
+        thread1 = threading.Thread(target=invoke_model_for_session, args=(mock_provider, session1, result1))
         thread1.start()
 
-        result2 = AudioTextResult("input2", 16000)
-        thread2 = threading.Thread(target=app._record_to_session, args=(result2, session2))
+        thread2 = threading.Thread(target=invoke_model_for_session, args=(mock_provider, session2, result2))
         thread2.start()
 
         thread1.join(timeout=1.0)
@@ -175,7 +184,7 @@ class TestParallelModelInvocation(unittest.TestCase):
         self.assertEqual(context2.xml_markup, "<context_b/>")
         self.assertEqual(context2.compiled_text, "text_b")
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
 
 class TestSequentialOutput(unittest.TestCase):
@@ -185,7 +194,7 @@ class TestSequentialOutput(unittest.TestCase):
         """Set up test fixtures."""
         self.config = MockConfig()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_sequential_keyboard_output(self, mock_transcription_service):
         """Verify keyboard output is serialized (no chunk interleaving)."""
@@ -208,44 +217,54 @@ class TestSequentialOutput(unittest.TestCase):
         mock_transcription.process_streaming_chunk = track_chunks
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session1 = RecordingSession()
+        recording_session1 = RecordingSession(RecordingSource.KEYBOARD)
+        context1 = ConversationContext("", "", 16000)
+        result1 = AudioTextResult("input1", 16000)
+        session1 = ProcessingSession(recording_session1, context1, result1)
         session1.chunk_queue.put("A1")
         session1.chunk_queue.put("A2")
         session1.chunks_complete.set()
 
-        session2 = RecordingSession()
+        recording_session2 = RecordingSession(RecordingSource.KEYBOARD)
+        context2 = ConversationContext("", "", 16000)
+        result2 = AudioTextResult("input2", 16000)
+        session2 = ProcessingSession(recording_session2, context2, result2)
         session2.chunk_queue.put("B1")
         session2.chunk_queue.put("B2")
         session2.chunks_complete.set()
 
-        session3 = RecordingSession()
+        recording_session3 = RecordingSession(RecordingSource.KEYBOARD)
+        context3 = ConversationContext("", "", 16000)
+        result3 = AudioTextResult("input3", 16000)
+        session3 = ProcessingSession(recording_session3, context3, result3)
         session3.chunk_queue.put("C1")
         session3.chunk_queue.put("C2")
         session3.chunks_complete.set()
 
-        app.session_queue.enqueue(session1)
-        app.session_queue.enqueue(session2)
-        app.session_queue.enqueue(session3)
+        app.processing_coordinator.session_queue.enqueue(session1)
+        app.processing_coordinator.session_queue.enqueue(session2)
+        app.processing_coordinator.session_queue.enqueue(session3)
 
         completed = threading.Event()
-        original_processor = app.session_queue._processor
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def track_completion(session):
             original_processor(session)
             if session == session3:
                 completed.set()
 
-        app.session_queue._processor = track_completion
+        app.processing_coordinator.session_queue._processor =track_completion
 
         completed.wait(timeout=2.0)
         self.assertTrue(completed.is_set())
 
         self.assertEqual(chunk_order, ["A1", "A2", "B1", "B2", "C1", "C2"])
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_blocking_chunk_consumption(self, mock_transcription_service):
         """Verify real-time streaming within session (no bulk processing)."""
@@ -265,8 +284,12 @@ class TestSequentialOutput(unittest.TestCase):
         app.transcription_service = mock_transcription
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session = RecordingSession()
+        recording_session = RecordingSession(RecordingSource.KEYBOARD)
+        context = ConversationContext("", "", 16000)
+        result = AudioTextResult("input", 16000)
+        session = ProcessingSession(recording_session, context, result)
         chunk1_queued = threading.Event()
         chunk2_queued = threading.Event()
         chunk3_queued = threading.Event()
@@ -283,7 +306,7 @@ class TestSequentialOutput(unittest.TestCase):
         chunk_thread = threading.Thread(target=queue_chunks)
         chunk_thread.start()
 
-        app.session_queue.enqueue(session)
+        app.processing_coordinator.session_queue.enqueue(session)
 
         chunk1_queued.wait(timeout=1.0)
         if "chunk1" in chunk_events:
@@ -296,13 +319,13 @@ class TestSequentialOutput(unittest.TestCase):
         chunk_thread.join(timeout=1.0)
 
         processing_complete = threading.Event()
-        original_processor = app.session_queue._processor
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def signal_completion(session_arg):
             original_processor(session_arg)
             processing_complete.set()
 
-        app.session_queue._processor = signal_completion
+        app.processing_coordinator.session_queue._processor =signal_completion
         processing_complete.wait(timeout=1.0)
 
         self.assertEqual(len(chunk_events), 3)
@@ -310,7 +333,7 @@ class TestSequentialOutput(unittest.TestCase):
         self.assertIn("chunk2", chunk_events)
         self.assertIn("chunk3", chunk_events)
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
 
 class TestStateManagement(unittest.TestCase):
@@ -320,7 +343,7 @@ class TestStateManagement(unittest.TestCase):
         """Set up test fixtures."""
         self.config = MockConfig()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_reset_state_each_response(self, mock_transcription_service):
         """Verify --once flag resets processor state after each session."""
@@ -336,36 +359,43 @@ class TestStateManagement(unittest.TestCase):
         app.transcription_service = mock_transcription
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session1 = RecordingSession()
+        recording_session1 = RecordingSession(RecordingSource.KEYBOARD)
+        context1 = ConversationContext("", "", 16000)
+        result1 = AudioTextResult("input1", 16000)
+        session1 = ProcessingSession(recording_session1, context1, result1)
         session1.chunk_queue.put("chunk1")
         session1.chunks_complete.set()
 
-        session2 = RecordingSession()
+        recording_session2 = RecordingSession(RecordingSource.KEYBOARD)
+        context2 = ConversationContext("", "", 16000)
+        result2 = AudioTextResult("input2", 16000)
+        session2 = ProcessingSession(recording_session2, context2, result2)
         session2.chunk_queue.put("chunk2")
         session2.chunks_complete.set()
 
-        app.session_queue.enqueue(session1)
-        app.session_queue.enqueue(session2)
+        app.processing_coordinator.session_queue.enqueue(session1)
+        app.processing_coordinator.session_queue.enqueue(session2)
 
         completed = threading.Event()
-        original_processor = app.session_queue._processor
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def track_completion(session):
             original_processor(session)
             if session == session2:
                 completed.set()
 
-        app.session_queue._processor = track_completion
+        app.processing_coordinator.session_queue._processor =track_completion
 
         completed.wait(timeout=2.0)
         self.assertTrue(completed.is_set())
 
         self.assertEqual(mock_transcription.reset_all_state.call_count, 2)
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_persistent_state_across_sessions(self, mock_transcription_service):
         """Verify default behavior preserves state across sessions."""
@@ -382,23 +412,26 @@ class TestStateManagement(unittest.TestCase):
         app.transcription_service = mock_transcription
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session1 = RecordingSession()
-        session1.context = app._get_conversation_context()
+        recording_session1 = RecordingSession(RecordingSource.KEYBOARD)
+        context1 = app.recording_coordinator._get_conversation_context()
+        result1 = AudioTextResult("input1", 16000)
+        session1 = ProcessingSession(recording_session1, context1, result1)
         session1.chunk_queue.put("chunk1")
         session1.chunks_complete.set()
 
         session1_complete = threading.Event()
-        original_processor = app.session_queue._processor
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def track_session1(session):
             original_processor(session)
             if session == session1:
                 session1_complete.set()
 
-        app.session_queue._processor = track_session1
+        app.processing_coordinator.session_queue._processor = track_session1
 
-        app.session_queue.enqueue(session1)
+        app.processing_coordinator.session_queue.enqueue(session1)
 
         session1_complete.wait(timeout=1.0)
         self.assertTrue(session1_complete.is_set())
@@ -406,15 +439,17 @@ class TestStateManagement(unittest.TestCase):
         mock_transcription._build_xml_from_processor.return_value = "<prev/><session1/>"
         mock_transcription._build_current_text.return_value = "previous text session1"
 
-        session2 = RecordingSession()
-        session2.context = app._get_conversation_context()
+        recording_session2 = RecordingSession(RecordingSource.KEYBOARD)
+        context2 = app.recording_coordinator._get_conversation_context()
+        result2 = AudioTextResult("input2", 16000)
+        session2 = ProcessingSession(recording_session2, context2, result2)
 
-        self.assertIn("<session1/>", session2.context.xml_markup)
-        self.assertIn("session1", session2.context.compiled_text)
+        self.assertIn("<session1/>", context2.xml_markup)
+        self.assertIn("session1", context2.compiled_text)
 
         self.assertEqual(mock_transcription.reset_all_state.call_count, 0)
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
 
 class TestErrorHandling(unittest.TestCase):
@@ -424,7 +459,7 @@ class TestErrorHandling(unittest.TestCase):
         """Set up test fixtures."""
         self.config = MockConfig()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_session_error_does_not_block_queue(self, mock_transcription_service):
         """Verify exception in one session doesn't halt processing."""
@@ -442,12 +477,14 @@ class TestErrorHandling(unittest.TestCase):
         app.provider = failing_provider
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session1 = RecordingSession()
-        session1.context = ConversationContext("", "", 16000)
+        recording_session1 = RecordingSession(RecordingSource.KEYBOARD)
+        context1 = ConversationContext("", "", 16000)
         result1 = AudioTextResult("input1", 16000)
+        session1 = ProcessingSession(recording_session1, context1, result1)
 
-        thread1 = threading.Thread(target=app._record_to_session, args=(result1, session1))
+        thread1 = threading.Thread(target=invoke_model_for_session, args=(failing_provider, session1, result1))
         thread1.start()
         thread1.join(timeout=1.0)
 
@@ -457,20 +494,21 @@ class TestErrorHandling(unittest.TestCase):
         working_provider.streaming_chunks = ["chunk2"]
         app.provider = working_provider
 
-        session2 = RecordingSession()
-        session2.context = ConversationContext("", "", 16000)
+        recording_session2 = RecordingSession(RecordingSource.KEYBOARD)
+        context2 = ConversationContext("", "", 16000)
         result2 = AudioTextResult("input2", 16000)
+        session2 = ProcessingSession(recording_session2, context2, result2)
 
-        thread2 = threading.Thread(target=app._record_to_session, args=(result2, session2))
+        thread2 = threading.Thread(target=invoke_model_for_session, args=(app.provider, session2, result2))
         thread2.start()
         thread2.join(timeout=1.0)
 
         self.assertTrue(session2.chunks_complete.is_set())
         self.assertEqual(len(working_provider.transcribe_calls), 1)
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_empty_chunk_queue_handling(self, mock_transcription_service):
         """Verify queue.Empty exception handling during processing."""
@@ -489,8 +527,12 @@ class TestErrorHandling(unittest.TestCase):
         app.transcription_service = mock_transcription
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session = RecordingSession()
+        recording_session = RecordingSession(RecordingSource.KEYBOARD)
+        context = ConversationContext("", "", 16000)
+        result = AudioTextResult("input", 16000)
+        session = ProcessingSession(recording_session, context, result)
         chunk_ready = threading.Event()
 
         def delayed_completion():
@@ -502,23 +544,23 @@ class TestErrorHandling(unittest.TestCase):
         completion_thread.start()
 
         processing_complete = threading.Event()
-        original_processor = app.session_queue._processor
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def track_processing(session_arg):
             chunk_ready.set()
             original_processor(session_arg)
             processing_complete.set()
 
-        app.session_queue._processor = track_processing
+        app.processing_coordinator.session_queue._processor =track_processing
 
-        app.session_queue.enqueue(session)
+        app.processing_coordinator.session_queue.enqueue(session)
 
         processing_complete.wait(timeout=1.0)
         completion_thread.join(timeout=1.0)
 
         self.assertIn("delayed_chunk", chunks_processed)
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
 
 class TestSynchronization(unittest.TestCase):
@@ -528,7 +570,7 @@ class TestSynchronization(unittest.TestCase):
         """Set up test fixtures."""
         self.config = MockConfig()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_chunks_complete_event(self, mock_transcription_service):
         """Verify chunks_complete event synchronization."""
@@ -547,8 +589,12 @@ class TestSynchronization(unittest.TestCase):
         app.transcription_service = mock_transcription
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session = RecordingSession()
+        recording_session = RecordingSession(RecordingSource.KEYBOARD)
+        context = ConversationContext("", "", 16000)
+        result = AudioTextResult("input", 16000)
+        session = ProcessingSession(recording_session, context, result)
         chunk1_ready = threading.Event()
         chunk2_ready = threading.Event()
 
@@ -563,7 +609,7 @@ class TestSynchronization(unittest.TestCase):
         stream_thread.start()
 
         processing_complete = threading.Event()
-        original_processor = app.session_queue._processor
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def track_processing(session_arg):
             chunk1_ready.set()
@@ -571,18 +617,18 @@ class TestSynchronization(unittest.TestCase):
             original_processor(session_arg)
             processing_complete.set()
 
-        app.session_queue._processor = track_processing
+        app.processing_coordinator.session_queue._processor =track_processing
 
-        app.session_queue.enqueue(session)
+        app.processing_coordinator.session_queue.enqueue(session)
 
         processing_complete.wait(timeout=1.0)
         stream_thread.join(timeout=1.0)
 
         self.assertEqual(chunks_processed, ["chunk1", "chunk2"])
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_session_queue_ordering(self, mock_transcription_service):
         """Verify FIFO session processing order."""
@@ -596,23 +642,33 @@ class TestSynchronization(unittest.TestCase):
         app.transcription_service = mock_transcription
 
         app._initialize_services()
+        app._initialize_coordinators()
 
         execution_order = []
 
-        session_a = RecordingSession()
+        recording_session_a = RecordingSession(RecordingSource.KEYBOARD)
+        context_a = ConversationContext("", "", 16000)
+        result_a = AudioTextResult("input_a", 16000)
+        session_a = ProcessingSession(recording_session_a, context_a, result_a)
         session_a.name = "A"
         session_a.chunks_complete.set()
 
-        session_b = RecordingSession()
+        recording_session_b = RecordingSession(RecordingSource.KEYBOARD)
+        context_b = ConversationContext("", "", 16000)
+        result_b = AudioTextResult("input_b", 16000)
+        session_b = ProcessingSession(recording_session_b, context_b, result_b)
         session_b.name = "B"
         session_b.chunks_complete.set()
 
-        session_c = RecordingSession()
+        recording_session_c = RecordingSession(RecordingSource.KEYBOARD)
+        context_c = ConversationContext("", "", 16000)
+        result_c = AudioTextResult("input_c", 16000)
+        session_c = ProcessingSession(recording_session_c, context_c, result_c)
         session_c.name = "C"
         session_c.chunks_complete.set()
 
         all_complete = threading.Event()
-        original_processor = app._process_session_output
+        original_processor = lambda s: process_session_output(app.transcription_service, app.config, s)
 
         def track_execution(session):
             execution_order.append(session.name)
@@ -620,18 +676,18 @@ class TestSynchronization(unittest.TestCase):
             if session == session_c:
                 all_complete.set()
 
-        app.session_queue._processor = track_execution
+        app.processing_coordinator.session_queue._processor = track_execution
 
-        app.session_queue.enqueue(session_a)
-        app.session_queue.enqueue(session_b)
-        app.session_queue.enqueue(session_c)
+        app.processing_coordinator.session_queue.enqueue(session_a)
+        app.processing_coordinator.session_queue.enqueue(session_b)
+        app.processing_coordinator.session_queue.enqueue(session_c)
 
         all_complete.wait(timeout=2.0)
         self.assertTrue(all_complete.is_set())
 
         self.assertEqual(execution_order, ["A", "B", "C"])
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
 
 class TestEndToEndIntegration(unittest.TestCase):
@@ -641,7 +697,7 @@ class TestEndToEndIntegration(unittest.TestCase):
         """Set up test fixtures."""
         self.config = MockConfig()
 
-    @patch('dictation_app.signal', Mock())
+    @patch('input_coordinator.signal', Mock())
     @patch('dictation_app.TranscriptionService')
     def test_end_to_end_parallel_flow(self, mock_transcription_service):
         """Complete workflow: parallel model invocation, sequential output."""
@@ -664,17 +720,20 @@ class TestEndToEndIntegration(unittest.TestCase):
         app.provider = mock_provider
 
         app._initialize_services()
+        app._initialize_coordinators()
 
-        session1 = RecordingSession()
-        session1.context = ConversationContext("", "", 16000)
+        recording_session1 = RecordingSession(RecordingSource.KEYBOARD)
+        context1 = ConversationContext("", "", 16000)
         result1 = AudioTextResult("input1", 16000)
+        session1 = ProcessingSession(recording_session1, context1, result1)
 
-        session2 = RecordingSession()
-        session2.context = ConversationContext("", "", 16000)
+        recording_session2 = RecordingSession(RecordingSource.KEYBOARD)
+        context2 = ConversationContext("", "", 16000)
         result2 = AudioTextResult("input2", 16000)
+        session2 = ProcessingSession(recording_session2, context2, result2)
 
-        thread1 = threading.Thread(target=app._record_to_session, args=(result1, session1))
-        thread2 = threading.Thread(target=app._record_to_session, args=(result2, session2))
+        thread1 = threading.Thread(target=invoke_model_for_session, args=(mock_provider, session1, result1))
+        thread2 = threading.Thread(target=invoke_model_for_session, args=(mock_provider, session2, result2))
 
         thread1.start()
         thread2.start()
@@ -686,17 +745,17 @@ class TestEndToEndIntegration(unittest.TestCase):
         self.assertTrue(session2.chunks_complete.is_set())
 
         all_processed = threading.Event()
-        original_processor = app.session_queue._processor
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def track_completion(session):
             original_processor(session)
             if session == session2:
                 all_processed.set()
 
-        app.session_queue._processor = track_completion
+        app.processing_coordinator.session_queue._processor = track_completion
 
-        app.session_queue.enqueue(session1)
-        app.session_queue.enqueue(session2)
+        app.processing_coordinator.session_queue.enqueue(session1)
+        app.processing_coordinator.session_queue.enqueue(session2)
 
         all_processed.wait(timeout=2.0)
         self.assertTrue(all_processed.is_set())
@@ -704,7 +763,7 @@ class TestEndToEndIntegration(unittest.TestCase):
         self.assertGreaterEqual(len(output_order), 5)
         self.assertTrue(all(chunk in ["1A", "1B", "1C", "2A", "2B"] for chunk in output_order))
 
-        app.session_queue.shutdown()
+        app.processing_coordinator.shutdown()
 
 
 def run_parallel_queue_tests():

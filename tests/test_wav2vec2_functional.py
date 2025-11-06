@@ -133,9 +133,9 @@ def test_dictation_app_integration():
          mock.patch('json.load', mock.Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})), \
          mock.patch('dictation_app.BaseProvider') as mock_base_provider, \
          mock.patch('dictation_app.TranscriptionService') as mock_transcription_service, \
-         mock.patch('dictation_app.signal', mock.Mock()), \
+         mock.patch('input_coordinator.signal', mock.Mock()), \
          mock.patch('transcription.implementations.huggingface.HuggingFaceCTCTranscriptionAudioSource.initialize', mock.Mock(return_value=True)), \
-         mock.patch('dictation_app.DictationApp.setup_trigger_key', mock.Mock(return_value=True)), \
+         mock.patch('input_coordinator.InputCoordinator.setup_trigger_key', mock.Mock(return_value=True)), \
          mock.patch('microphone_audio_source.MicrophoneAudioSource.test_audio_device', mock.Mock(return_value=True)):
 
         # Setup mocks
