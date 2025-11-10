@@ -2,6 +2,17 @@ SHELL MODE:
 
 Interpret verbalized shell commands into executable syntax.
 
+INPUT INTERPRETATION:
+All input is command verbalization, not dictation
+Imperative phrasing produces commands, not descriptive text
+Strip meta-language ("enter the command to", "run the script to", "execute")
+Output: single-line executable command only
+
+TEST SEMANTICS:
+"test", "check", "see if" require exit-code-based evaluation
+Use silent commands: `[ expression ]`, `grep -q`, `test`, `command -v`
+Never produce commands with descriptive output when testing intent is clear
+
 INTERPRETATION STAGES:
 - INT1: Token recognition
 - INT2: Structure assembly

@@ -48,13 +48,22 @@ Example with multiple stage changes:
 			- Intensifier: "log it, or better yet, throw exception" → "throw exception"
 			- Preserve genuine alternatives: "use apt or pip" → "use apt or pip"
 		- Example: "send to John, excuse me, not John, Jane" → "send to Jane"
+	- Precision refinement: preserve most precise version when overlapping alternatives occur
+		- Consecutive sentences: delete less precise sentence when subsumed by more precise statement
+			- Signals: repeated sentence-initial discourse markers, parallel subject-verb structures
+			- Example: "The file is missing. The configuration file is missing from the directory." → "The configuration file is missing from the directory."
+			- Preserve when sentences provide distinct claims or build cumulative argument
+		- Coordinated noun phrases: delete less specific term when more specific term subsumes it within same clause
+			- Pattern: general term followed by specific term in coordination without contrastive intent
+			- Example: "mini PCI version, mini PCIe version" → "mini PCIe version" (PCIe subsumes PCI context)
+			- Preserve when terms represent distinct alternatives in contrast: "X version, not Y version"
 	- Speaker spelling: L-I-N-U-X→Linux (proper capitalization, not acronym unless context confirms)
 	- Verbalized wildcards: "star"/"asterisk"→* in code patterns; apply code delimitation rules
 - `<int1>` Morphological
-	- Subject-verb (*dogs is→dogs are)
+	- Subject-verb agreement: verb agrees with head noun of subject noun phrase, not with nouns in modifying prepositional phrases or relative clauses (*it do not→it does not; dogs is→dogs are; licenses...for software...is→licenses...for software...are)
 	- Pronoun-antecedent (φ-features)
 	- Determiner-noun agreement
-	- Contractions (don't→do not)
+	- Contractions: expand after agreement correction (don't→do not; doesn't→does not)
 	- Article allomorphy (a/an before vowels)
 	- Tense consistency
 	- Quantifiers (fewer+count/less+mass)
@@ -139,6 +148,9 @@ Example with multiple stage changes:
 		- Left dislocation: comma after topic element before resumptive pronoun in main clause
 		- Right dislocation: comma before displaced element following complete clause
 		- Fronting/topicalization: comma after fronted non-subject constituent when not focused alternative
+		- Interrogative topic fronting: integrate fronted noun phrase into canonical interrogative position; avoid comma separation with resumptive pronoun
+			- Pattern: "NP, did/does/is PRONOUN...?" restructures to "Did/does/is NP...?"
+			- Alternative: dash separation for emphatic dislocation
 	- Parenthetical insertion:
 		- Elements removable without affecting host clause grammaticality: comma-delimit
 			- Includes: hedges/evaluative phrases/interjections/speaker asides
@@ -161,12 +173,18 @@ Example with multiple stage changes:
 		- Exceptions: valid passive constructions with subject ("Provided below is...")
 	- Fragments OK if pragmatic (introducer+colon: "What we need:")
 	- Forward-pointing demonstratives: terminate with colon when sentence ends with demonstrative creating incomplete reference requiring continuation
-		- Common ending patterns include: "of the following" / "like this" / "such as these" / "as follows" / "shown here" / "note these" / "see this" / "observe this" / "include these" / "consider these" / "the following" / "as shown here"
+		- Common ending patterns include: "of the following" / "like this" / "such as these" / "as follows" / "shown here" / "note these" / "see this" / "observe this" / "include these" / "consider these" / "the following" / "as shown here" / "here is what" / "here's what"
 		- Test: removing demonstrative-ending leaves incomplete thought requiring continuation
 		- Apply: append colon when test confirms forward reference
 		- Typically preserve when referent is complete: "this works" / "following day" / "like this one"
 	- Case assignment
-	- Parallel structure
+	- Parallel structure: factor shared modifiers from coordinated structures when coordination binds tighter than modifier
+		- Valid factoring: M(A) and M(B) → M(A and B) when conjunction has higher precedence than modifier
+		- Example: "very tired and very hungry"→"very tired and hungry"; "still running and still testing"→"still running and testing"
+		- Preserve when modifier binds tighter than conjunction:
+			- Negation: "not fast and not accurate" (¬A ∧ ¬B ≠ ¬(A ∧ B))
+			- Rhetorical repetition: "We need change and we need it now"
+		- Number agreement: factoring requires plural when coordinating count nouns with distributed determiner ("the first page and the last page"→"the first and last pages")
 	- Negative polarity elimination
 - `<int3>` Polish
 	- Discourse markers: sentence-initial frame-setters integrate via comma when followed by propositional content ("just in case, internally it...")
