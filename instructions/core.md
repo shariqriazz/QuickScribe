@@ -9,7 +9,7 @@ The ONE AND ONLY <xml> block contains:
 
 <xml>
 <n>[MUST list ALL silence-separated audio segment times separated by more than one second: [1,3,5,12,30,45,...] ]</n>
-<req>Terse list max 2-words each of only relevant mode requirements for interpretation stages to follow</req>
+<req>Mode-specific requirements (defined by active mode)</req>
 <amb>[MUST briefly list ALL possibly ambiguous terms using {brace|markup}, omit if none]</amb>
 <grm>[MUST briefly list ALL [instructed-changes] from system instructions, omit if none]</grm>
 <tx>[

@@ -2,51 +2,54 @@ SHELL MODE:
 
 Interpret verbalized shell commands into executable syntax.
 
-INPUT INTERPRETATION:
-All input is command verbalization, not dictation
-Imperative phrasing produces commands, not descriptive text
-Strip meta-language ("enter the command to", "run the script to", "execute")
-Output: single-line executable command only
+REQ FIELD:
+Write "shell mode"
 
-TEST SEMANTICS:
-"test", "check", "see if" require exit-code-based evaluation
-Use silent commands: `[ expression ]`, `grep -q`, `test`, `command -v`
-Never produce commands with descriptive output when testing intent is clear
+CORE RULES:
+- Map verbalization literally to command tokens
+- Never substitute semantically equivalent commands
+- Directives extract intent then map to verbalized command form
+- Quotes signal literal text output, not command interpretation
+- Output: single-line executable command only
 
-INTERPRETATION STAGES:
-- INT1: Token recognition
-- INT2: Structure assembly
-- INT3: Final executable form
-- INT: Complete executable command with all transformations applied
+STAGES:
+Omit stage if unchanged from prior
+UPDATE always required
 
-STAGE DEFINITIONS:
-INT1: Identify semantic units from natural verbalization
-- Recognize command verbs as atomic units
-- Parse directory names as whole tokens not individual letters
-- Detect compressed flag verbalizations
-- Mark operator boundaries
+INT1: Command intent extraction
+- Detect directive patterns (terminate all processes named X, list files in X, find X matching Y)
+- Extract command intent from directives
+- Map intent to verbalized command form (terminate all processes → kill all)
+- Strip meta-language (enter, run, execute, the command, that will)
+- Apply literal token mapping (kill all → killall, TCP dump → tcpdump, list → ls)
+- Test semantics: test/check/see if → silent exit-code commands
+- Result: bare executable command with mapped tokens
 
-INT2: Apply syntactic structure and resolve paths using Linux FHS knowledge
-- Construct filesystem paths: apply Filesystem Hierarchy Standard to recognize system directories and build absolute paths
-- Expand compressed flags to proper syntax
-- Determine command substitution requirements from context
-- Establish command relationships and dependencies
+INT2: Structure completion
+- Construct filesystem paths using FHS knowledge (usr bin → /usr/bin)
+- Expand compressed flags (later → -latr)
+- Apply verbalization mappings (symbols, quotes, regex, logic, redirects, command substitution)
+- Complete control structures (while/for/if with proper delimiters)
+- Result: complete executable syntax
 
-INT3: Produce final executable form
-- Enforce single-line format with proper delimiters
-- Complete all unclosed syntactic elements
-- Ensure shell-executable syntax
+INT3: Final validation
+- Single-line format
+- Shell-executable syntax
+- No descriptive text, no markup
+
+UPDATE: Command output
+- Bare executable syntax
+- No backticks except command substitution $(cmd)
+- No markup, no code delimiters around arguments
 
 VERBALIZATION MAPPINGS:
 Symbols: squiggly→~, whack→\, bang→!, dollar→$, at→@, pipe→|, semi→;, amp→&, percent→%
-Quotes: quote/single quote/half quote→' (auto-close), double quote→" (auto-close), backtick→` (command substitution only)
+Quotes: quote/single quote/half quote→' (auto-close), double quote→" (auto-close)
 Regex: starts with→^, ends with→$, dot star→.*, star→*, plus→+, question→?
 Logic: and→&& (command chain), or→|| (alternate), amp/ampersand→& (background)
 Redirects: into/greater→>, one into→1>, two into→2>, less than→<, two greater and one→2>&1, append/double greater→>>
 Flags: dash/minus→-
-
-CRITICAL - BACKTICKS:
-Never use backticks in UPDATE tags (would execute!)
+Command substitution: dollar of command→$(command)
 
 CASE CONVENTIONS:
 Default lowercase except: SQL keywords (uppercase), user directories (Documents, Downloads)
