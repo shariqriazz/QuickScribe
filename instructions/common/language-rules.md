@@ -22,16 +22,9 @@ Example with multiple stage changes:
 
 ### Stage Transformations
 
-- `<int>` Resolve ambiguities; apply domain knowledge; delimit code; remove disfluencies/non-speech; delete self-repairs; refine precision; process metapragmatic directives; expand speaker spelling; convert verbalized wildcards
+- `<int>` Resolve ambiguities; apply domain knowledge; remove disfluencies/non-speech; delete self-repairs; refine precision; process metapragmatic directives; expand speaker spelling; convert verbalized wildcards
 	- Ambiguity notation: Select correct alternative from {option1|option2}, remove braces
-	- Apply domain knowledge to resolve underspecified technical references using surrounding context (e.g., "PR_star" with Linux→`pr_*`)
-	- Apply backticks ONLY for executable/structural syntax requiring literal interpretation (commands/functions/variables/paths/config-keys/operators/type-identifiers/environment-variables/glob-patterns/file-extensions-in-technical-context); NEVER for technology-names/products/platforms/versions/protocols/acronyms/URLs/file-format-names
-		- Examples requiring backticks: `docker run`, `getUserId()`, `API_KEY`, `/etc/config`, `*.txt`, `ArrayBuffer`, `.vsix` (file extension pattern)
-		- Examples not requiring backticks: Docker, VS Code, VSIX, HTTP/2, API, github.com, JSON format, VSIX package
-	- Enumerate all technical identifiers requiring code delimitation before applying transformations
-		- List candidates: commands, functions, variables, paths, config keys, operators, type identifiers, environment variables, glob patterns, file extensions in technical context
-		- Evaluate each against code delimitation criteria above
-		- Apply backticks to confirmed technical terms in output
+	- Apply domain knowledge to resolve underspecified technical references using surrounding context (e.g., "PR_star" with Linux→pr_*)
 	- Remove disfluencies: um/uh/er/ah/err filled pauses
 	- Remove non-speech audio: sound effects, onomatopoeia, acoustic annotations (beep/buzz/click/music/etc.)
 	- Delete original utterance before repair marker
@@ -203,7 +196,20 @@ Example with multiple stage changes:
 	- Apply plural when factoring parallel structure: coordinating count nouns with distributed determiner requires plural ("the first page and the last page"→"the first and last pages")
 	- Revalidate subject-verb agreement after clause combining
 	- Revalidate quantifiers after coordination changes
-- `<int3>` Apply polish
+- `<int3>` Enumerate code delimiters; apply polish
+	- Apply two-stage gate filtering for backtick application
+		- Stage 1 EXCLUSION GATE: Scan term for descriptive usage; if match found, skip term, proceed to next
+			- Category nouns: command, function, variable, script, program, tool, utility, file, directory
+			- Technology identifiers: product names, platform names, protocol names, acronyms, version numbers, file format names
+			- Non-executable references: URLs, general concepts, metalinguistic mention
+			- Examples: Docker, VLAN, IP, API, DOM, HTTP/2, JSON, Linux, VS Code, disk image, command, function, VSIX package
+		- Stage 2 INCLUSION GATE: Apply to terms passing exclusion; if term matches literal syntax, apply backticks
+			- Command invocations: `docker run`, `getUserId()`, `cd /etc`, `grep 'pattern'`
+			- Configuration identifiers: `vlan_id`, `API_KEY`, `IP_ADDRESS`, environment variables
+			- Filesystem references: paths, config keys, operators
+			- Patterns and wildcards: `*.txt`, `.vsix` (as pattern not format name)
+			- Programming language types in code context: `ArrayBuffer`, `Promise`, `struct` (not general terms like "array" or "buffer")
+	- Metalinguistic mention uses double quotes not backticks
 	- Integrate sentence-initial frame-setters via comma when followed by propositional content ("just in case, internally it...")
 	- Convert verbalized punctuation: "comma"→,
 	- Mark interrogatives: apply question mark to independent interrogative clauses identified via clause boundary detection; mark each independent interrogative clause terminus regardless of position
@@ -246,7 +252,6 @@ Example with multiple stage changes:
 	- Limit exclamatives (prefer lexical intensity)
 	- Capitalize sentence-initial and proper nouns; convert all-caps to sentence case preserving acronyms/initialisms
 	- Format numbers: zero-three spelled/4+ digits, 25%, $5, 3.14
-	- Apply code delimitation: backticks to technical terms identified in int stage per criteria established there
 	- Apply quotation marks: double quotes for metalinguistic mention (referring to a word itself rather than its referent), distancing usage (irony/euphemisms/questionable-claims/approximation)
 
 ## Validation
@@ -256,8 +261,9 @@ Apply all transformations per section in sequential stages (int→int1→int2→
 Apply whole-text simultaneous processing with full lookahead/lookbehind; validate prior stage invariants preserved at each stage
 
 Perform final verification before update:
-- Verify absent: sentence-initial conjunctions (coordinating/subordinating); {|}; disfluencies (um/uh/er/ah); unprocessed metapragmatics; unmarked interrogatives; code delimiters on non-code
-- Verify present: update content === int
+- Verify absent: sentence-initial conjunctions (coordinating/subordinating); {|}; disfluencies (um/uh/er/ah); unprocessed metapragmatics; unmarked interrogatives; backticks in tx/int1/int2/int1b/int stages; backticks on descriptive usage (category nouns, technology names, products, platforms, versions, protocols, acronyms, URLs, file format names)
+- Verify present: update content === int; backticks only on literal syntax requiring exact interpretation and passing both exclusion gate and inclusion gate at int3
+- Verify two-gate validation: exclusion checked first; if excluded term skipped regardless of technical context; inclusion applied only to non-excluded terms; category terms (command, function, variable) and acronyms (VLAN, IP, API) never backticked when used descriptively
 - Verify morphological agreement: preserved after all syntactic operations (int1b recalculates as needed)
 - Verify format: 3-8 word chunks; sequential numeric tags
 
