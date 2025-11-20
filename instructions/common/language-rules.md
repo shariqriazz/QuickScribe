@@ -24,6 +24,7 @@ Example with multiple stage changes:
 
 - `<int>` Resolve ambiguities; apply domain knowledge; remove disfluencies/non-speech; delete self-repairs; refine precision; process metapragmatic directives; expand speaker spelling; convert verbalized wildcards
 	- Ambiguity notation: Select correct alternative from {option1|option2}, remove braces
+	- Resolve acronym boundary ambiguities: when letter sequence followed by homophone-sounding word produces grammatical error, test whether combining forms valid acronym (APA + our → APAR when "APA our document" is malformed but "APAR document" is valid)
 	- Apply domain knowledge to resolve underspecified technical references using surrounding context (e.g., "PR_star" with Linux→pr_*)
 	- Remove disfluencies: um/uh/er/ah/err filled pauses
 	- Remove non-speech audio: sound effects, onomatopoeia, acoustic annotations (beep/buzz/click/music/etc.)
@@ -65,6 +66,7 @@ Example with multiple stage changes:
 	- Correct subject-verb agreement: verb agrees with head noun of subject noun phrase, not with nouns in modifying prepositional phrases or relative clauses (*it do not→it does not; dogs is→dogs are; licenses...for software...is→licenses...for software...are)
 	- Correct pronoun-antecedent (φ-features)
 	- Correct determiner-noun agreement
+	- Eliminate determiner stacking: multiple determiners require noun phrase restructuring (the our document→our document OR the document); preserve possessive or definite article based on context; default to possessive when both present
 	- Expand contractions after agreement correction (don't→do not; doesn't→does not)
 	- Apply article allomorphy (a/an before vowels)
 	- Correct tense consistency
