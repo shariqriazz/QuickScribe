@@ -669,7 +669,7 @@ class TestSynchronization(unittest.TestCase):
         session_c.chunks_complete.set()
 
         all_complete = threading.Event()
-        original_processor = lambda s: process_session_output(app.transcription_service, app.config, s)
+        original_processor = app.processing_coordinator.session_queue._processor
 
         def track_execution(session):
             execution_order.append(session.name)
