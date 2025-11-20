@@ -549,6 +549,11 @@ class BaseProvider:
 
             self._process_streaming_response(response, streaming_callback, final_callback)
 
+        except self.litellm_exceptions.InternalServerError as e:
+            pr_err(f"Dictation API error: Internal error encountered")
+            pr_err(f"This is a transient error from the API provider")
+            pr_err(f"Error details: {str(e)}")
+            raise
         except Exception as e:
             operation = "audio transcription" if audio_data is not None else "text processing"
             self._handle_provider_error(e, operation)

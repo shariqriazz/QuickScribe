@@ -6,6 +6,7 @@ from typing import Optional
 from processing_session import ProcessingSession
 from audio_source import AudioResult, AudioDataResult, AudioTextResult
 from lib.pr_log import pr_err
+from litellm import exceptions as litellm_exceptions
 
 
 def invoke_model_for_session(provider, session: ProcessingSession, result: AudioResult):
@@ -45,5 +46,13 @@ def _invoke_model(provider, session: ProcessingSession, audio_data=None, text_da
             streaming_callback=streaming_callback,
             final_callback=None
         )
+    except litellm_exceptions.InternalServerError as e:
+        error_msg = "Internal error encountered"
+        session.error_message = error_msg
+        pr_err(f"Dictation API error: {error_msg}")
+    except Exception as e:
+        error_msg = str(e)
+        session.error_message = error_msg
+        pr_err(f"Model invocation error: {error_msg}")
     finally:
         session.chunks_complete.set()

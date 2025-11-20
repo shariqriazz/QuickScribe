@@ -49,6 +49,12 @@ class DictationApp:
         if self.input_coordinator and self.input_coordinator.system_tray:
             self.input_coordinator.system_tray.set_state(new_state)
 
+    def show_error_notification(self, error_message: str):
+        """Display error notification in system tray and show toast."""
+        if self.input_coordinator and self.input_coordinator.system_tray:
+            self.input_coordinator.system_tray.show_error(error_message)
+        self._return_to_idle()
+
     def _initialize_provider_client(self):
         """Initialize the provider client based on the selected provider."""
         try:

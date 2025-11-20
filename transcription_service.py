@@ -85,27 +85,13 @@ class TranscriptionService:
     def complete_stream(self):
         """Complete streaming by processing any remaining content and calling end_stream."""
         try:
-            # Process any remaining content within update boundaries
-            if self.streaming_buffer and self.update_seen:
-                # Find update end boundary
-                update_end_pos = self.streaming_buffer.find('</update>')
-
-                if update_end_pos == -1:
-                    # No closing tag found, process remaining content
-                    if self.last_update_position < len(self.streaming_buffer):
-                        remaining_content = self.streaming_buffer[self.last_update_position:]
-                        if remaining_content.strip():
-                            if self.config.debug_enabled:
-                                pr_debug(f"complete_stream: processing remaining content: '{remaining_content}'")
-                            self.processor.process_chunk(remaining_content)
-                else:
-                    # Process content up to closing tag
-                    if self.last_update_position < update_end_pos:
-                        remaining_content = self.streaming_buffer[self.last_update_position:update_end_pos]
-                        if remaining_content.strip():
-                            if self.config.debug_enabled:
-                                pr_debug(f"complete_stream: processing remaining content to </update>: '{remaining_content}'")
-                            self.processor.process_chunk(remaining_content)
+            # Process any remaining content in buffer, regardless of update boundaries
+            if self.streaming_buffer and self.last_update_position < len(self.streaming_buffer):
+                remaining_content = self.streaming_buffer[self.last_update_position:]
+                if remaining_content.strip():
+                    if self.config.debug_enabled:
+                        pr_debug(f"complete_stream: processing final content: '{remaining_content}'")
+                    self.processor.process_chunk(remaining_content)
 
             # Always call end_stream to flush XMLStreamProcessor state
             self.processor.end_stream()
@@ -115,6 +101,8 @@ class TranscriptionService:
 
         except Exception as e:
             pr_err(f"Error in complete_stream: {e}")
+            self.processor._flush_debug_buffer()
+            raise
     
     def _handle_mode_change(self, new_mode: str):
         """Reset state for new mode."""

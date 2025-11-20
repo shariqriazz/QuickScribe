@@ -29,7 +29,7 @@ class ProcessingCoordinator:
         from session_output_worker import process_session_output
 
         self.session_queue = EventQueue(
-            lambda s: process_session_output(self.transcription_service, self.config, s),
+            lambda s: process_session_output(self.app, s),
             name="SessionProcessor"
         )
         self.session_queue.start()

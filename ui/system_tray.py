@@ -119,6 +119,16 @@ class SystemTrayUI(QObject):
         """
         self._tray_icon.showMessage(title, message)
 
+    def show_error(self, error_message: str):
+        """
+        Display error state and show toast notification.
+
+        Args:
+            error_message: Error message to display in toast
+        """
+        self.set_state(AppState.ERROR)
+        self._tray_icon.showMessage("Dictation API error", error_message, QSystemTrayIcon.MessageIcon.Critical, 3000)
+
     def cleanup(self):
         """Clean up tray icon resources."""
         self._tray_icon.hide()
