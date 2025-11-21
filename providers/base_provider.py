@@ -46,8 +46,17 @@ class BaseProvider:
         # Instruction composition
         self.instruction_composer = InstructionComposer()
 
+        # Route extraction (format: provider/model@route)
+        if '@' in config.model_id:
+            model_parts = config.model_id.split('@', 1)
+            self.model_without_route: str = model_parts[0]
+            self.route: Optional[str] = model_parts[1]
+        else:
+            self.model_without_route: str = config.model_id
+            self.route: Optional[str] = None
+
         # Provider extraction (single point of truth)
-        self.provider = self._extract_provider(config.model_id)
+        self.provider = self._extract_provider(self.model_without_route)
 
         # Provider-specific configuration mapper
         self.mapper = MapperFactory.get_mapper(self.provider)
@@ -55,10 +64,10 @@ class BaseProvider:
         # Validation results (populated after initialize)
         self._validation_results = None
 
-    def _extract_provider(self, model_id: str) -> str:
-        """Extract provider from model_id (format: provider/model)."""
-        if '/' in model_id:
-            return model_id.split('/', 1)[0].lower()
+    def _extract_provider(self, model_without_route: str) -> str:
+        """Extract provider from model (format: provider/model)."""
+        if '/' in model_without_route:
+            return model_without_route.split('/', 1)[0].lower()
         return ''
 
     def _run_validation_tests(self, test_audio_silence_b64: str, sumtest_audio_b64: str):
@@ -88,11 +97,13 @@ class BaseProvider:
 
         def test_text():
             completion_params = {
-                "model": self.config.model_id,
+                "model": self.model_without_route,
                 "messages": [{"role": "user", "content": "1 + 1 compute exactly only provide answer"}],
                 "max_tokens": 512,
                 "stream": False
             }
+            if self.route:
+                completion_params["route"] = self.route
             if self.config.api_key:
                 completion_params["api_key"] = self.config.api_key
             return self.litellm.completion(**completion_params)
@@ -100,11 +111,13 @@ class BaseProvider:
         def test_audio():
             audio_content = self.mapper.map_audio_params(sumtest_audio_b64, "wav")
             completion_params = {
-                "model": self.config.model_id,
+                "model": self.model_without_route,
                 "messages": [{"role": "user", "content": [audio_content]}],
                 "max_tokens": 512,
                 "stream": False
             }
+            if self.route:
+                completion_params["route"] = self.route
             if self.config.api_key:
                 completion_params["api_key"] = self.config.api_key
             return self.litellm.completion(**completion_params)
@@ -112,7 +125,7 @@ class BaseProvider:
         def test_combined1_text_with_silence():
             audio_content = self.mapper.map_audio_params(test_audio_silence_b64, "wav")
             completion_params = {
-                "model": self.config.model_id,
+                "model": self.model_without_route,
                 "messages": [{"role": "user", "content": [
                     {"type": "text", "text": "1 + 1 compute exactly only provide answer"},
                     audio_content
@@ -120,6 +133,8 @@ class BaseProvider:
                 "max_tokens": 512,
                 "stream": False
             }
+            if self.route:
+                completion_params["route"] = self.route
             if self.config.api_key:
                 completion_params["api_key"] = self.config.api_key
             return self.litellm.completion(**completion_params)
@@ -127,7 +142,7 @@ class BaseProvider:
         def test_combined2_audio_with_prompt():
             audio_content = self.mapper.map_audio_params(sumtest_audio_b64, "wav")
             completion_params = {
-                "model": self.config.model_id,
+                "model": self.model_without_route,
                 "messages": [{"role": "user", "content": [
                     {"type": "text", "text": "compute value"},
                     audio_content
@@ -135,6 +150,8 @@ class BaseProvider:
                 "max_tokens": 512,
                 "stream": False
             }
+            if self.route:
+                completion_params["route"] = self.route
             if self.config.api_key:
                 completion_params["api_key"] = self.config.api_key
             return self.litellm.completion(**completion_params)
@@ -304,7 +321,7 @@ class BaseProvider:
             pr_info(f"LiteLLM initialized with model: {self.config.model_id}")
 
             # Skip validation for transcription-only models
-            if self.mapper.uses_transcription_endpoint(self.config.model_id):
+            if self.mapper.uses_transcription_endpoint(self.model_without_route):
                 pr_info("Skipping validation for transcription-only model")
                 self._initialized = True
                 return True
@@ -524,12 +541,15 @@ class BaseProvider:
 
             # Call LiteLLM
             completion_params = {
-                "model": self.config.model_id,
+                "model": self.model_without_route,
                 "messages": messages,
                 "stream": True,
                 "stream_options": {"include_usage": True},
                 "temperature": self.config.temperature
             }
+
+            if self.route:
+                completion_params["route"] = self.route
 
             if self.config.max_tokens is not None:
                 completion_params["max_tokens"] = self.config.max_tokens
@@ -538,7 +558,7 @@ class BaseProvider:
                 completion_params["api_key"] = self.config.api_key
 
             # Map reasoning parameters via provider-specific mapper
-            if self.mapper.supports_reasoning(self.config.model_id):
+            if self.mapper.supports_reasoning(self.model_without_route):
                 reasoning_params = self.mapper.map_reasoning_params(
                     self.config.enable_reasoning,
                     self.config.thinking_budget

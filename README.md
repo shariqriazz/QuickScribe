@@ -75,6 +75,11 @@ Both `--model` and `--transcription-model` use format: `provider/identifier`
 **LLM providers**: `groq`, `gemini`, `openai`, `anthropic`, `openrouter`
 **Transcription providers**: `huggingface`, `openai`, `groq`, `vosk`
 
+**Routing syntax**: `provider/model@routing_provider` (provider-specific feature)
+- Example: `openrouter/google/gemini-2.5-flash@vertex`
+- The `@routing_provider` suffix is passed to the provider for custom routing
+- Supported by providers with routing capabilities (e.g., OpenRouter)
+
 ### Other Options
 
 | Option | Default | Description |

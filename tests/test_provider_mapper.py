@@ -64,3 +64,24 @@ def test_base_provider_integration():
 
     assert provider.provider == 'openrouter'
     assert provider.mapper is not None
+
+
+def test_routing_provider_extraction():
+    """Test @routing_provider suffix handling in model_id."""
+    config = ConfigManager()
+    config.model_id = 'openrouter/google/gemini-2.5-flash@vertex'
+    config.enable_reasoning = 'low'
+    config.thinking_budget = 0
+    config.litellm_debug = False
+    config.api_key = None
+    config.audio_source = 'raw'
+    config.mode = 'dictate'
+
+    class MockAudio:
+        pass
+
+    provider = BaseProvider(config, MockAudio())
+
+    assert provider.provider == 'openrouter'
+    assert provider.mapper is not None
+    assert config.model_id == 'openrouter/google/gemini-2.5-flash@vertex'
