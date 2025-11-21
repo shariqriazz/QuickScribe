@@ -654,6 +654,7 @@ class BaseProvider:
         # Print stack trace for debugging
         pr_debug(f"Stack trace:")
         traceback.print_exc(file=sys.stderr)
+        raise
 
     def _display_cache_stats(self, usage_data, completion_response=None) -> None:
         """Display cache statistics and cost from usage data."""
