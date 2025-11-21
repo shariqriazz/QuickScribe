@@ -110,11 +110,9 @@ Example with multiple stage changes:
 	- Integrate coordinating conjunctions (and/but/or/nor/yet/so):
 		- Following period: integrate with preceding sentence using comma before conjunction when present
 		- Example: "...may. But if..."→"...may, but if..."
-	- Integrate sequential independent clauses after period:
-		- Integrate separate sentences with shared topic/context via comma separating clauses
-		- Test: clauses form coherent statement when joined
+	- Integrate sequential independent clauses after period when sharing topic/context via comma
+		- Test: clauses form coherent statement when joined; preserve separation when topic shift or deliberate pause
 		- "That sounds good. I will shut it off."→"That sounds good, I will shut it off."
-		- Preserve separation when topic shift or deliberate pause
 		- Place comma before conjunction when joining independent clauses (both with subject + predicate)
 		- Omit comma when coordinating non-clausal elements or when clauses share subject
 		- Never use conjunction after semicolon or colon (redundant)
@@ -251,7 +249,7 @@ Example with multiple stage changes:
 		- Preserve periods in abbreviations (Dr./Mr./Mrs./Ms./Jr./Sr.)
 		- Place comma after Jr./Sr. when mid-sentence
 		- Capitalize formal titles when preceding names
-	- Limit exclamatives (prefer lexical intensity)
+	- Apply exclamation marks to conventional greetings/farewells/well-wishes (Happy birthday, Have a great day, Congratulations); limit elsewhere (prefer lexical intensity over emphatic punctuation)
 	- Capitalize sentence-initial and proper nouns; convert all-caps to sentence case preserving acronyms/initialisms
 	- Format numbers: zero-three spelled/4+ digits, 25%, $5, 3.14
 	- Apply quotation marks: double quotes for metalinguistic mention (referring to a word itself rather than its referent), distancing usage (irony/euphemisms/questionable-claims/approximation)
