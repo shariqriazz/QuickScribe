@@ -326,6 +326,12 @@ class BaseProvider:
                 self._initialized = True
                 return True
 
+            # Skip validation when using local transcription
+            if self.config.audio_source in ['transcribe', 'trans']:
+                pr_info("Skipping validation when using local transcription")
+                self._initialized = True
+                return True
+
             # Generate minimal test audio (0.1 second silence)
             test_audio_silence = np.zeros(int(0.1 * self.config.sample_rate), dtype=np.int16)
             test_audio_silence_b64 = self._encode_audio_to_base64(test_audio_silence, self.config.sample_rate)
