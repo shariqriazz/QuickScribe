@@ -91,7 +91,7 @@ def test_sample_file(filepath):
     print(f"  min_peak_duration_amplitude_threshold: {config.min_peak_duration_amplitude_threshold} ({int(config.min_peak_duration_amplitude_threshold * 32767)})")
 
     print(f"\nRunning validation...")
-    is_valid = coordinator._validate_audio_recording(session, result)
+    is_valid = coordinator._validate_audio_recording(result)
 
     print(f"\nResult: {'PASS' if is_valid else 'FAIL'}")
     print("=" * 60)
