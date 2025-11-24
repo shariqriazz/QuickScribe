@@ -24,9 +24,7 @@ class ProviderConfigMapper(ABC):
         """
         params = {}
 
-        if enable_reasoning == 'none':
-            params['thinking'] = {'type': 'disabled'}
-        elif thinking_budget > 0:
+        if enable_reasoning != 'none' and thinking_budget > 0:
             params['thinking'] = {
                 'type': 'enabled',
                 'budget_tokens': thinking_budget
