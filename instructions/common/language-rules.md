@@ -8,7 +8,7 @@ List applicable stage transformations (2 words max each): morphological, syntact
 ## Stages
 
 - `<tx>`: Transcribe verbatim with no edits
-- `<int1>`, `<int2>`, `<int1b>`, `<int3>`: Show changes only with 2-3 word context (`...old→new...`); omit if unchanged from prior
+- `<int1>`, `<int2>`, `<int1b>`, `<int2b>`, `<int3>`: Show changes only with 2-3 word context (`...old→new...`); omit if unchanged from prior
 - `<int>`: Apply all transformations to produce full interpretation baseline
 - `<update>`: Render phrase chunks (3-8 words) with numbered tags as final cumulative result
 
@@ -22,7 +22,14 @@ Example with multiple stage changes:
 
 ### Stage Transformations
 
-- `<int>` Resolve ambiguities; apply domain knowledge; remove disfluencies/non-speech; delete self-repairs; refine precision; process metapragmatic directives; expand speaker spelling; convert verbalized wildcards
+- `<int>` Resolve ambiguities
+	- Apply domain knowledge
+	- Remove disfluencies/non-speech
+	- Delete self-repairs
+	- Refine precision
+	- Process metapragmatic directives
+	- Expand speaker spelling
+	- Convert verbalized wildcards
 	- Ambiguity notation: Select correct alternative from {option1|option2}, remove braces
 	- Resolve acronym boundary ambiguities: when letter sequence followed by homophone-sounding word produces grammatical error, test whether combining forms valid acronym (APA + our → APAR when "APA our document" is malformed but "APAR document" is valid)
 	- Apply domain knowledge to resolve underspecified technical references using surrounding context (e.g., "PR_star" with Linux→pr_*)
@@ -63,10 +70,15 @@ Example with multiple stage changes:
 	- Expand speaker spelling: L-I-N-U-X→Linux (proper capitalization, not acronym unless context confirms)
 	- Convert verbalized wildcards: "star"/"asterisk"→* in code patterns; apply code delimitation rules
 - `<int1>` Correct morphological agreement
-	- Correct subject-verb agreement: verb agrees with head noun of subject noun phrase, not with nouns in modifying prepositional phrases or relative clauses (*it do not→it does not; dogs is→dogs are; licenses...for software...is→licenses...for software...are)
+	- Correct subject-verb agreement: verb agrees with head noun of subject noun phrase, not with nouns in modifying prepositional phrases or relative clauses
+		- *it do not→it does not
+		- dogs is→dogs are
+		- licenses...for software...is→licenses...for software...are
 	- Correct pronoun-antecedent (φ-features)
 	- Correct determiner-noun agreement
-	- Eliminate determiner stacking: multiple determiners require noun phrase restructuring (the our document→our document OR the document); preserve possessive or definite article based on context; default to possessive when both present
+	- Eliminate determiner stacking: multiple determiners require noun phrase restructuring (the our document→our document OR the document)
+		- Preserve possessive or definite article based on context
+		- Default to possessive when both present
 	- Expand contractions after agreement correction (don't→do not; doesn't→does not)
 	- Apply article allomorphy (a/an before vowels)
 	- Correct tense consistency
@@ -80,11 +92,17 @@ Example with multiple stage changes:
 			- When non-licensing verb precedes WH-clause → separate clauses
 		- Finite verb sequences: multiple tensed verbs without coordination signal clause boundaries
 		- Independent predications: complete subject-predicate structures in sequence require separation
-	- Separate clauses by illocutionary relationship:
-		- Different types (declarative/interrogative/imperative): semicolon
-		- Same type, independent clauses: semicolon unless semantically coordinated
-		- Related interrogatives sharing pragmatic goal: comma (see coordinate interrogatives)
-		- Maximum one semicolon per sentence: multiple independent clauses requiring separation beyond first semicolon must form separate sentences
+		- Exclude: verbs licensing clausal complements (verify/ensure/confirm/check) followed by noun phrase + tensed verb form embedded clause, not boundary
+	- Apply clause separation by relationship (prefer options in order):
+		- Use subordination for causal/temporal/conditional relationships (because/when/if/since/unless)
+		- Use coordination without comma for purpose/result with short clauses (so/and/but)
+		- Place comma before conjunction for longer coordinated clauses
+		- Use semicolon before conjunctive adverb for contrast/emphasis (however/nevertheless/indeed/meanwhile)
+		- Use semicolon for closely related independent thoughts without connector
+		- Use period for different illocutionary types or topic shifts
+		- Use comma for related interrogatives sharing pragmatic goal
+		- Use semicolon to separate list items containing internal commas
+		- Limit to one semicolon per sentence except in lists
 	- Exclude clause separation when subordinating conjunction present (if/whether/that/because introducing embedded clause)
 	- Disambiguate WH-words for clause integration:
 		- Integrate relative clauses: WH-word (which/who/that/whom/whose/where/when) following noun phrase modifies antecedent
@@ -115,7 +133,11 @@ Example with multiple stage changes:
 		- "That sounds good. I will shut it off."→"That sounds good, I will shut it off."
 		- Place comma before conjunction when joining independent clauses (both with subject + predicate)
 		- Omit comma when coordinating non-clausal elements or when clauses share subject
-		- Never use conjunction after semicolon or colon (redundant)
+		- Prohibit coordinating conjunction (and/but/or/nor/yet/so/for) after semicolon or colon
+			- Remove semicolon, use coordination: "; so"→"so"
+			- Convert to separate sentences: "; and"→". "
+		- Convert causal conjunctive adverbs to subordination by reversing clause order
+			- "; therefore/thus/consequently/hence"→"because"
 		- Disambiguate:
 			- "for" as conjunction (meaning "because"): comma before; "for" as preposition: no comma
 			- "so" as conjunction (result): comma before; "so" as discourse marker (therefore): see Polish section
@@ -196,20 +218,35 @@ Example with multiple stage changes:
 	- Apply plural when factoring parallel structure: coordinating count nouns with distributed determiner requires plural ("the first page and the last page"→"the first and last pages")
 	- Revalidate subject-verb agreement after clause combining
 	- Revalidate quantifiers after coordination changes
-- `<int3>` Enumerate code delimiters; apply polish
-	- Apply two-stage gate filtering for backtick application
-		- Stage 1 EXCLUSION GATE: Scan term for descriptive usage; if match found, skip term, proceed to next
-			- Category nouns: command, function, variable, script, program, tool, utility, file, directory
-			- Technology identifiers: product names, platform names, protocol names, acronyms, version numbers, file format names
-			- Non-executable references: URLs, general concepts, metalinguistic mention
-			- Examples: Docker, VLAN, IP, API, DOM, HTTP/2, JSON, Linux, VS Code, disk image, command, function, VSIX package
-		- Stage 2 INCLUSION GATE: Apply to terms passing exclusion; if term matches literal syntax, apply backticks
-			- Command invocations: `docker run`, `getUserId()`, `cd /etc`, `grep 'pattern'`
-			- Configuration identifiers: `vlan_id`, `API_KEY`, `IP_ADDRESS`, environment variables
-			- Filesystem references: paths, config keys, operators
-			- Patterns and wildcards: `*.txt`, `.vsix` (as pattern not format name)
-			- Programming language types in code context: `ArrayBuffer`, `Promise`, `struct` (not general terms like "array" or "buffer")
-	- Metalinguistic mention uses double quotes not backticks
+- `<int2b>` Apply backticks only to literal executable or typed syntax
+	- Apply backticks to literal syntax requiring exact interpretation:
+		- Commands typed at prompt (e.g., `ls -la`, `docker run`)
+		- Code identifiers in programming context (e.g., `getUserId()`, `Promise`)
+		- Configuration keys and values as typed (e.g., `vlan_id=10`, `API_KEY`)
+		- Filesystem paths (e.g., `/etc/nginx/conf.d`, `~/.bashrc`)
+		- Patterns and wildcards as typed (e.g., `*.txt`, `[a-z]+`)
+		- Variable references in shell/code (e.g., `$HOME`, `${USER}`)
+	- Never apply backticks to descriptive or proper noun usage:
+		- Product names (e.g., Linux, Windows, Docker, Thunderbird, Team Pass)
+		- Platform names (e.g., Azure, AWS, Kubernetes)
+		- Protocol names (e.g., SMTP, HTTP, FTP, SSH, BGP, DNS)
+		- Acronyms are never literal syntax
+			- Acronyms are abbreviations used descriptively in prose
+			- Acronyms are not commands, paths, or code identifiers
+			- No acronym receives backticks regardless of length, case, or technical context
+			- All caps examples: API, BGP, HTTP
+			- Mixed case examples: OAuth, gRPC, IPv6
+		- File format names when discussing format not file pattern (e.g., VSIX, JSON, XML)
+		- Category nouns (e.g., command, function, variable, script, program)
+		- Proper nouns and application names regardless of technical context
+		- Discussion of syntax elements (e.g., use "backticks" not `backticks`, add "semicolon" not `semicolon`)
+	- Critical distinction: discussing technology vs typing literal syntax
+		- Descriptive discussion: "connected over BGP" → BGP (no backticks)
+		- Descriptive discussion: "send via SMTP" → SMTP (no backticks)
+		- Literal command string: "`bgpctl show`" → entire command gets backticks
+		- Configuration as typed: "`protocol=bgp`" → literal syntax gets backticks
+	- Use double quotes for metalinguistic mention (referring to word itself): "backticks", "function", "array"
+- `<int3>` Apply polish
 	- Integrate sentence-initial frame-setters via comma when followed by propositional content ("just in case, internally it...")
 	- Convert verbalized punctuation: "comma"→,
 	- Mark interrogatives: apply question mark to independent interrogative clauses identified via clause boundary detection; mark each independent interrogative clause terminus regardless of position
@@ -244,7 +281,10 @@ Example with multiple stage changes:
 		- Comma-delimit prepositional phrases modifying noun if non-restrictive/parenthetical
 		- Test: removal does not alter referent identification
 	- Hyphenate compound modifiers: multi-word modifiers in pre-nominal position; no hyphenation when predicative or when first element is adverb ending in -ly
-	- Punctuate Latin abbreviations: comma before e.g./i.e. when introducing examples or restatements; comma after etc. when mid-sentence; period after all standard abbreviations
+	- Punctuate Latin abbreviations
+		- Comma before e.g./i.e. when introducing examples or restatements
+		- Comma after etc. when mid-sentence
+		- Period after all standard abbreviations
 	- Format titles and honorifics:
 		- Preserve periods in abbreviations (Dr./Mr./Mrs./Ms./Jr./Sr.)
 		- Place comma after Jr./Sr. when mid-sentence
@@ -256,14 +296,14 @@ Example with multiple stage changes:
 
 ## Validation
 
-Apply all transformations per section in sequential stages (int→int1→int2→int1b→int3→update); preserve all prior corrections
+Apply all transformations per section in sequential stages (int→int1→int2→int1b→int2b→int3→update); preserve all prior corrections
 
 Apply whole-text simultaneous processing with full lookahead/lookbehind; validate prior stage invariants preserved at each stage
 
 Perform final verification before update:
-- Verify absent: sentence-initial conjunctions (coordinating/subordinating); {|}; disfluencies (um/uh/er/ah); unprocessed metapragmatics; unmarked interrogatives; backticks in tx/int1/int2/int1b/int stages; backticks on descriptive usage (category nouns, technology names, products, platforms, versions, protocols, acronyms, URLs, file format names)
-- Verify present: update content === int; backticks only on literal syntax requiring exact interpretation and passing both exclusion gate and inclusion gate at int3
-- Verify two-gate validation: exclusion checked first; if excluded term skipped regardless of technical context; inclusion applied only to non-excluded terms; category terms (command, function, variable) and acronyms (VLAN, IP, API) never backticked when used descriptively
+- Verify absent: sentence-initial conjunctions (coordinating/subordinating); {|}; disfluencies (um/uh/er/ah); unprocessed metapragmatics; unmarked interrogatives; backticks in tx/int1/int2/int1b stages; backticks on product names, platforms, protocols, technology acronyms, proper nouns, category nouns, syntax element discussion
+- Verify present: update content === int; backticks applied at int2b stage carry through int3/int/update unchanged
+- Verify backtick usage: applied only to commands, code identifiers, paths, patterns, variables; never on descriptive references to products, protocols (including BGP, SMTP, HTTP), acronyms, proper nouns
 - Verify morphological agreement: preserved after all syntactic operations (int1b recalculates as needed)
 - Verify format: 3-8 word chunks; sequential numeric tags
 

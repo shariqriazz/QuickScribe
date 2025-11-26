@@ -144,17 +144,75 @@ LLM corrects: homophones, grammar, punctuation, technical terms
 
 ### Transcription Models
 
-**HuggingFace Wav2Vec2** (local, phoneme-based)
-```bash
-python dictate.py -a transcribe -T huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft --model groq/llama-3.3-70b-versatile
-```
+#### OpenAI Whisper (Cloud API)
 
-**OpenAI Whisper** (cloud API)
+Cloud-based transcription with best quality and ease of use.
+
+**Model:** `whisper-1`
+
+**Features:**
+- No local model download
+- Requires API key
+- Best transcription quality
+
 ```bash
 python dictate.py -a transcribe -T openai/whisper-1 --model anthropic/claude-3-5-sonnet-20241022
 ```
 
-**VOSK** (local, offline)
+#### HuggingFace Seq2Seq Models (Local)
+
+Local Whisper and Speech2Text models with GPU acceleration.
+
+**Supported architectures:**
+- Whisper (all variants)
+- Speech2Text
+
+**Features:**
+- Plain text output
+- GPU acceleration when available
+- No streaming support
+
+**Whisper models:**
+
+```bash
+# Standard Whisper
+-T huggingface/openai/whisper-tiny        # ~39 MB, fastest, quick testing
+-T huggingface/openai/whisper-base        # ~74 MB, fast, low-resource
+-T huggingface/openai/whisper-small       # ~244 MB, balanced
+-T huggingface/openai/whisper-medium      # ~769 MB, high accuracy
+-T huggingface/openai/whisper-large-v3    # ~1.5 GB, best accuracy
+-T huggingface/openai/whisper-large-v3-turbo
+
+# Distil-Whisper (6x faster)
+-T huggingface/distil-whisper/distil-large-v2  # ~756 MB, production use
+-T huggingface/distil-whisper/distil-medium.en
+```
+
+**Speech2Text models (requires: pip install sentencepiece):**
+
+```bash
+-T huggingface/facebook/s2t-small-librispeech-asr
+-T huggingface/facebook/s2t-large-librispeech-asr
+```
+
+**Example:**
+
+```bash
+python dictate.py -a transcribe -T huggingface/openai/whisper-small --model groq/llama-3.3-70b-versatile
+```
+
+#### VOSK Models (Local, Offline)
+
+Lightweight offline speech recognition with streaming support.
+
+**Features:**
+- Offline processing
+- Streaming support
+- Language-specific models
+- Fast setup
+
+**Usage:**
+
 ```bash
 # Model name (auto-downloads to ~/.cache/vosk/)
 python dictate.py -a transcribe -T vosk/vosk-model-small-en-us-0.15 --model groq/llama-3.3-70b-versatile
@@ -166,9 +224,103 @@ python dictate.py -a transcribe -T vosk//usr/share/vosk/model --model groq/llama
 python dictate.py -a transcribe -T vosk/./models/vosk-model --model groq/llama-3.3-70b-versatile
 ```
 
-Available models: https://alphacephei.com/vosk/models
+**Model downloads:** https://alphacephei.com/vosk/models
 
-**VOSK Model Loading**: Accepts either model name (downloads automatically with progress bar) or local path. Path formats supported: relative (`models/vosk`), absolute (`/usr/share/vosk/model`), home directory (`~/models/vosk`). Downloaded models cache to `~/.cache/vosk/`. Override cache location with `VOSK_MODEL_PATH` environment variable.
+**Model loading:** Accepts model name (downloads automatically with progress bar) or local path. Path formats: relative (`models/vosk`), absolute (`/usr/share/vosk/model`), home directory (`~/models/vosk`). Downloaded models cache to `~/.cache/vosk/`. Override cache location with `VOSK_MODEL_PATH` environment variable.
+
+#### HuggingFace CTC Models (Local, Advanced)
+
+Connectionist Temporal Classification models for specialized use cases.
+
+**Supported architectures:**
+- Wav2Vec2
+- HuBERT
+- Data2VecAudio
+- UniSpeech
+- UniSpeechSat
+- SEW
+- SEWD
+- MCTCT
+
+**Features:**
+- Multi-speed processing (0.80x, 0.85x, 0.90x, 0.95x)
+- Phoneme (IPA) or character output
+- Streaming support
+
+**Phoneme-based models (IPA output):**
+
+```bash
+-T huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft
+```
+
+**Character-based models (text output):**
+
+```bash
+-T huggingface/facebook/wav2vec2-base-960h
+-T huggingface/facebook/hubert-large-ls960-ft
+-T huggingface/facebook/data2vec-audio-base-960h
+```
+
+**Example:**
+
+```bash
+python dictate.py -a transcribe -T huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft --model groq/llama-3.3-70b-versatile
+```
+
+#### Model Comparison
+
+| Model | Size | Speed | Use Case |
+|-------|------|-------|----------|
+| whisper-tiny | ~39 MB | Fastest | Quick testing |
+| whisper-base | ~74 MB | Fast | Low-resource environments |
+| whisper-small | ~244 MB | Medium | Balanced accuracy/speed |
+| whisper-medium | ~769 MB | Slow | High accuracy needed |
+| whisper-large-v3 | ~1.5 GB | Slowest | Best accuracy |
+| distil-whisper/distil-large-v2 | ~756 MB | 6x faster | Production (faster alternative to large) |
+
+#### Architecture Detection (HuggingFace)
+
+HuggingFace provider automatically detects model architecture:
+
+1. Attempts to load as CTC model
+2. If CTC fails, attempts to load as Seq2Seq model
+3. If both fail, returns error with supported architecture types
+
+You do not need to specify the architecture type - just use `huggingface/<model-id>`.
+
+#### Testing Model Compatibility
+
+To test if a HuggingFace model is supported:
+
+```bash
+python dictate.py --audio-source transcribe -T huggingface/<model-id>
+```
+
+Watch for log messages:
+- "Successfully loaded as CTC model" → Multi-speed + phoneme/text output
+- "Successfully loaded as Seq2Seq model" → GPU-accelerated text output
+- "not compatible with CTC or Seq2Seq" → Model not supported
+
+#### Requirements
+
+**HuggingFace Models:**
+```bash
+# Core dependencies
+pip install torch transformers huggingface_hub pyrubberband
+
+# Optional (for specific models)
+pip install sentencepiece  # Required for Speech2Text models
+```
+
+**OpenAI Models:**
+```bash
+pip install litellm soundfile
+```
+
+**Vosk Models:**
+```bash
+pip install vosk
+```
 
 ## Troubleshooting
 
