@@ -37,10 +37,11 @@ INT3: Final validation
 - Shell-executable syntax
 - No descriptive text, no markup
 
-UPDATE: Command output
-- Bare executable syntax
+UPDATE: Command output with numbered tags
+- Apply numbered tags per core.md requirements
+- Bare executable syntax inside tags
 - No backticks except command substitution $(cmd)
-- No markup, no code delimiters around arguments
+- No code delimiters around arguments
 
 VERBALIZATION MAPPINGS:
 Symbols: squiggly→~, whack→\, bang→!, dollar→$, at→@, pipe→|, semi→;, amp→&, percent→%

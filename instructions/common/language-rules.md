@@ -94,15 +94,15 @@ Example with multiple stage changes:
 		- Independent predications: complete subject-predicate structures in sequence require separation
 		- Exclude: verbs licensing clausal complements (verify/ensure/confirm/check) followed by noun phrase + tensed verb form embedded clause, not boundary
 	- Apply clause separation by relationship (prefer options in order):
-		- Use subordination for causal/temporal/conditional relationships (because/when/if/since/unless)
-		- Use coordination without comma for purpose/result with short clauses (so/and/but)
-		- Place comma before conjunction for longer coordinated clauses
-		- Use semicolon before conjunctive adverb for contrast/emphasis (however/nevertheless/indeed/meanwhile)
-		- Use semicolon for closely related independent thoughts without connector
+		- Synthesize into single sentence via subordination for causal/temporal/conditional relationships (because/when/if/since/unless)
+		- Synthesize into single sentence via coordination for purpose/result (so/and/but); omit comma for short clauses
+		- Place comma before conjunction when coordinating longer independent clauses
 		- Use period for different illocutionary types or topic shifts
 		- Use comma for related interrogatives sharing pragmatic goal
+		- Use semicolon before conjunctive adverb only when sentence synthesis impossible (however/nevertheless/indeed/meanwhile)
 		- Use semicolon to separate list items containing internal commas
-		- Limit to one semicolon per sentence except in lists
+		- Maximum one semicolon per sentence; semicolons in lists are the only exception
+		- Prohibit semicolon without connector; synthesize via subordination or coordination instead
 	- Exclude clause separation when subordinating conjunction present (if/whether/that/because introducing embedded clause)
 	- Disambiguate WH-words for clause integration:
 		- Integrate relative clauses: WH-word (which/who/that/whom/whose/where/when) following noun phrase modifies antecedent
@@ -301,7 +301,16 @@ Apply all transformations per section in sequential stages (int→int1→int2→
 Apply whole-text simultaneous processing with full lookahead/lookbehind; validate prior stage invariants preserved at each stage
 
 Perform final verification before update:
-- Verify absent: sentence-initial conjunctions (coordinating/subordinating); {|}; disfluencies (um/uh/er/ah); unprocessed metapragmatics; unmarked interrogatives; backticks in tx/int1/int2/int1b stages; backticks on product names, platforms, protocols, technology acronyms, proper nouns, category nouns, syntax element discussion
+- Verify absent:
+	- Sentence-initial conjunctions (coordinating/subordinating)
+	- {|}
+	- Disfluencies (um/uh/er/ah)
+	- Unprocessed metapragmatics
+	- Unmarked interrogatives
+	- Multiple semicolons per sentence (except list separators)
+	- Semicolons without conjunctive adverb
+	- Backticks in tx/int1/int2/int1b stages
+	- Backticks on product names, platforms, protocols, technology acronyms, proper nouns, category nouns, syntax element discussion
 - Verify present: update content === int; backticks applied at int2b stage carry through int3/int/update unchanged
 - Verify backtick usage: applied only to commands, code identifiers, paths, patterns, variables; never on descriptive references to products, protocols (including BGP, SMTP, HTTP), acronyms, proper nouns
 - Verify morphological agreement: preserved after all syntactic operations (int1b recalculates as needed)
@@ -311,11 +320,16 @@ Perform final verification before update:
 Detect/correct errors in priority order (not processing stage order): Agreement violations > structural > interrogatives > FANBOYS > disfluencies > punctuation
 
 ## Specifics
-- Apply quantifiers: fewer people/less water; more/most both; greater for magnitude/abstract
+- Apply quantifiers:
+	- fewer people/less water
+	- more/most both
+	- greater for magnitude/abstract
 - Preserve elliptical constructions with recoverable elements
 - Preserve all lexical choices including semantic redundancy (retain verbose/pleonastic expressions); eliminate syntactic redundancy without losing original word choices
 - Resolve scope ambiguity via modifier attachment
-- Position focusing adverbs immediately before modified constituent (only/just/even/merely/simply/alone); acceptable pre-verbal when unambiguous; apply strict placement when multiple interpretations plausible
+- Position focusing adverbs immediately before modified constituent (only/just/even/merely/simply/alone)
+	- Acceptable pre-verbal when unambiguous
+	- Apply strict placement when multiple interpretations plausible
 	- "I only told John"→ambiguous (told/John/answer); "I told only John"→unambiguous
 
 ## Algorithm
