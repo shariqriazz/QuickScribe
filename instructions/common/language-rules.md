@@ -249,18 +249,16 @@ Example with multiple stage changes:
 - `<int3>` Apply polish
 	- Integrate sentence-initial frame-setters via comma when followed by propositional content ("just in case, internally it...")
 	- Convert verbalized punctuation: "comma"→,
-	- Mark interrogatives: apply question mark to independent interrogative clauses identified via clause boundary detection; mark each independent interrogative clause terminus regardless of position
-		- Canonical WH-interrogatives (initial WH-word with or without subject-auxiliary inversion)
-		- Subject WH-interrogatives (WH-determiner modifying subject, no inversion)
-		- Auxiliary-initial interrogatives (inverted auxiliary before subject)
-		- Echo interrogatives (WH-word in non-initial position, typically final)
-		- Tag interrogatives (auxiliary + pronoun appended to declarative)
-		- Coordinate interrogatives (following semicolon/comma)
-		- Alternative interrogatives: apply single question mark at clause terminus for disjunctive options within single question
-		- Exclude embedded interrogatives functioning as complement clauses
-	- Distinguish WH-exclamatives: apply period not question mark to degree/quantity evaluations without information gap
-		- Pattern: WH-degree word (what/how/such) + noun phrase expressing evaluation
-		- Test: paraphraseable as degree statement without loss of force
+	- Mark interrogatives: test patterns in order; apply first match
+		- Embedded interrogative as complement clause → no mark (integrate with host)
+		- Auxiliary-initial with subject-auxiliary inversion → ?
+		- WH-word clause-initial → ?
+		- Subject WH-word (WH-determiner modifying subject) → ?
+		- Echo WH-word (non-initial position) → ?
+		- Tag (auxiliary + pronoun appended) → ?
+		- Coordinate (following semicolon/comma) → ?
+		- Alternative (disjunctive options, single question) → ? at terminus
+		- WH-exclamative (what/how + noun phrase, evaluative not information-seeking, no inversion) → .
 	- Punctuate response particles: comma after affirmative/negative particles (yes/no/yeah/nope/yep/nah) when followed by explanatory clause
 	- Comma-separate vocatives: directly addressed entities
 		- Initial position: comma after vocative
