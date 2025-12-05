@@ -358,8 +358,8 @@ class ConfigManager:
             # Apply all other args in interactive mode
             self._apply_parsed_args(args)
         else:
-            # Non-interactive mode: get model from args
-            self.model_id = args.model
+            # Non-interactive mode: get model from args or environment
+            self.model_id = args.model or os.environ.get('QUICKSCRIBE_MODEL')
 
             # Extract provider from model_id (format: "provider/model")
             if self.model_id and '/' in self.model_id:
@@ -375,6 +375,7 @@ class ConfigManager:
             if not self.model_id:
                 parser.print_help()
                 pr_err("--model is required. Format: provider/model (e.g., gemini/gemini-2.5-flash)")
+                pr_err("Or set QUICKSCRIBE_MODEL environment variable in .env")
                 return False
 
             # Validate model format
