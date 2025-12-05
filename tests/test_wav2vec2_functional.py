@@ -24,43 +24,44 @@ def test_config_integration():
 
     # Test default configuration
     config = ConfigManager()
-    assert config.wav2vec2_model_path == "facebook/wav2vec2-lv-60-espeak-cv-ft"
+    assert config.transcription_model == "huggingface/facebook/wav2vec2-lv-60-espeak-cv-ft"
     print("✓ Default Wav2Vec2 model configured correctly")
 
     # Test argument parsing
     parser = config.setup_argument_parser()
-    args = parser.parse_args(['--wav2vec2-model', 'custom/model'])
-    assert args.wav2vec2_model == 'custom/model'
+    args = parser.parse_args(['--transcription-model', 'huggingface/custom/model'])
+    assert args.transcription_model == 'huggingface/custom/model'
     print("✓ Custom Wav2Vec2 model argument parsing works")
 
 
 def test_model_instructions():
-    """Test that model instructions include phoneme processing."""
-    print("Testing BaseProvider phoneme instructions...")
+    """Test that audio processor provides phoneme instructions."""
+    print("Testing HuggingFaceTranscriptionAudioSource phoneme instructions...")
 
-    from providers.base_provider import BaseProvider
+    # Mock the dependencies
+    with mock.patch('transcription.implementations.huggingface.ctc.audio_source.torch'), \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.transformers'), \
+         mock.patch('transcription.implementations.huggingface.processor_utils.AutoProcessor'), \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.AutoModelForCTC'), \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.pyrb'), \
+         mock.patch('microphone_audio_source.MicrophoneAudioSource.__init__', return_value=None):
 
-    # Create mock provider to test instructions
-    class TestProvider(BaseProvider):
-        def initialize(self): return True
-        def is_initialized(self): return True
-        def transcribe_audio(self, *args, **kwargs): pass
-        def transcribe_text(self, *args, **kwargs): pass
+        from instruction_composer import InstructionComposer
 
-    provider = TestProvider("test_model")
-    instructions = provider.get_xml_instructions()
+        # Load wav2vec2 audio source instructions
+        composer = InstructionComposer()
+        instructions = composer.compose('dictate', 'wav2vec2')
 
-    # Check for phoneme-specific content
-    assert "PHONETIC TRANSCRIPTION ASSISTANCE" in instructions
-    assert "phoneme sequences" in instructions
-    assert "HH EH L OW" in instructions
-    assert "homophone disambiguation" in instructions
-    print("✓ Model instructions include phoneme processing guidance")
+        # Check for phoneme-specific content
+        assert "IPA PHONEME INPUT" in instructions
+        assert "phoneme sequences" in instructions
+        assert "MULTI-SPEED ENSEMBLE" in instructions
+        print("✓ Audio source provides phoneme processing guidance")
 
 
 def test_audio_source_creation():
-    """Test that Wav2Vec2AudioSource can be created with mocked dependencies."""
-    print("Testing Wav2Vec2AudioSource creation...")
+    """Test that HuggingFaceTranscriptionAudioSource can be created with mocked dependencies."""
+    print("Testing HuggingFaceTranscriptionAudioSource creation...")
 
     # Mock the dependencies that aren't available
     import unittest.mock as mock
@@ -73,35 +74,34 @@ def test_audio_source_creation():
     config = MockConfig()
 
     # Mock all the heavy dependencies
-    with mock.patch('wav2vec2_audio_source.torch', mock.Mock()), \
-         mock.patch('wav2vec2_audio_source.transformers', mock.Mock()), \
-         mock.patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor') as mock_feature_extractor, \
-         mock.patch('wav2vec2_audio_source.Wav2Vec2ForCTC') as mock_model, \
-         mock.patch('wav2vec2_audio_source.is_offline_mode', mock.Mock(return_value=False)), \
-         mock.patch('wav2vec2_audio_source.HfApi', mock.Mock()), \
+    with mock.patch('transcription.implementations.huggingface.ctc.audio_source.torch', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.transformers', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface.processor_utils.AutoProcessor') as mock_processor, \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.AutoModelForCTC') as mock_model, \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.is_offline_mode', mock.Mock(return_value=False)), \
+         mock.patch('transcription.implementations.huggingface.processor_utils.HfApi', mock.Mock()), \
          mock.patch('huggingface_hub.hf_hub_download', mock.Mock(return_value='/tmp/vocab.json')), \
          mock.patch('builtins.open', mock.Mock(side_effect=lambda *args, **kwargs: mock.Mock(__enter__=mock.Mock(return_value=mock.Mock()), __exit__=mock.Mock()))), \
          mock.patch('json.load', mock.Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})):
 
-        # Setup feature extractor and model mocks
-        mock_feature_extractor.from_pretrained.return_value = mock.Mock()
+        # Setup processor and model mocks
+        mock_processor.from_pretrained.return_value = mock.Mock()
         mock_model.from_pretrained.return_value = mock.Mock()
 
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         # Create audio source
-        audio_source = Wav2Vec2AudioSource(config, "test_model")
+        audio_source = HuggingFaceCTCTranscriptionAudioSource(config, "test_model")
 
         # Verify basic properties
-        assert audio_source.model_path == "test_model"
-        assert hasattr(audio_source, 'feature_extractor')
+        assert audio_source.model_identifier == "test_model"
+        assert hasattr(audio_source, 'processor')
         assert hasattr(audio_source, 'model')
-        assert hasattr(audio_source, 'id_to_phoneme')
-        print("✓ Wav2Vec2AudioSource created successfully")
+        print("✓ HuggingFaceCTCTranscriptionAudioSource created successfully")
 
 
 def test_dictation_app_integration():
-    """Test that DictationApp can use Wav2Vec2AudioSource."""
+    """Test that DictationApp can use HuggingFaceTranscriptionAudioSource."""
     print("Testing DictationApp Wav2Vec2 integration...")
 
     import unittest.mock as mock
@@ -122,24 +122,24 @@ def test_dictation_app_integration():
             self.top_p = 1.0
 
     # Mock dependencies
-    with mock.patch('wav2vec2_audio_source.torch', mock.Mock()), \
-         mock.patch('wav2vec2_audio_source.transformers', mock.Mock()), \
-         mock.patch('wav2vec2_audio_source.Wav2Vec2FeatureExtractor') as mock_feature_extractor, \
-         mock.patch('wav2vec2_audio_source.Wav2Vec2ForCTC') as mock_model, \
-         mock.patch('wav2vec2_audio_source.is_offline_mode', mock.Mock(return_value=False)), \
-         mock.patch('wav2vec2_audio_source.HfApi', mock.Mock()), \
+    with mock.patch('transcription.implementations.huggingface.ctc.audio_source.torch', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.transformers', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface.processor_utils.AutoProcessor') as mock_processor, \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.AutoModelForCTC') as mock_model, \
+         mock.patch('transcription.implementations.huggingface.ctc.audio_source.is_offline_mode', mock.Mock(return_value=False)), \
+         mock.patch('transcription.implementations.huggingface.processor_utils.HfApi', mock.Mock()), \
          mock.patch('huggingface_hub.hf_hub_download', mock.Mock(return_value='/tmp/vocab.json')), \
          mock.patch('builtins.open', mock.Mock(side_effect=lambda *args, **kwargs: mock.Mock(__enter__=mock.Mock(return_value=mock.Mock()), __exit__=mock.Mock()))), \
          mock.patch('json.load', mock.Mock(return_value={'t': 1, 'ɛ': 2, 's': 3})), \
          mock.patch('dictation_app.BaseProvider') as mock_base_provider, \
          mock.patch('dictation_app.TranscriptionService') as mock_transcription_service, \
-         mock.patch('dictation_app.signal', mock.Mock()), \
-         mock.patch('wav2vec2_audio_source.Wav2Vec2AudioSource.initialize', mock.Mock(return_value=True)), \
-         mock.patch('dictation_app.DictationApp.setup_trigger_key', mock.Mock(return_value=True)), \
+         mock.patch('input_coordinator.signal', mock.Mock()), \
+         mock.patch('transcription.implementations.huggingface.HuggingFaceCTCTranscriptionAudioSource.initialize', mock.Mock(return_value=True)), \
+         mock.patch('input_coordinator.InputCoordinator.setup_trigger_key', mock.Mock(return_value=True)), \
          mock.patch('microphone_audio_source.MicrophoneAudioSource.test_audio_device', mock.Mock(return_value=True)):
 
         # Setup mocks
-        mock_feature_extractor.from_pretrained.return_value = mock.Mock()
+        mock_processor.from_pretrained.return_value = mock.Mock()
         mock_model.from_pretrained.return_value = mock.Mock()
         mock_provider = mock.Mock()
         mock_provider.is_initialized.return_value = True
@@ -147,7 +147,7 @@ def test_dictation_app_integration():
         mock_transcription_service.return_value = mock.Mock()
 
         from dictation_app import DictationApp
-        from wav2vec2_audio_source import Wav2Vec2AudioSource
+        from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
 
         # Create app and bypass config parsing
         app = DictationApp()
@@ -161,16 +161,15 @@ def test_dictation_app_integration():
 
         # Test audio source creation logic directly
         if app.config.audio_source in ['phoneme', 'wav2vec']:
-            from wav2vec2_audio_source import Wav2Vec2AudioSource
-            app.audio_source = Wav2Vec2AudioSource(
+            from transcription.implementations.huggingface import HuggingFaceCTCTranscriptionAudioSource
+            app.audio_source = HuggingFaceCTCTranscriptionAudioSource(
                 app.config,
-                model_path=app.config.wav2vec2_model_path,
-                dtype='float32'
+                app.config.wav2vec2_model_path
             )
 
         # Verify the correct audio source was created
-        assert isinstance(app.audio_source, Wav2Vec2AudioSource)
-        print("✓ DictationApp correctly uses Wav2Vec2AudioSource")
+        assert isinstance(app.audio_source, HuggingFaceCTCTranscriptionAudioSource)
+        print("✓ DictationApp correctly uses HuggingFaceCTCTranscriptionAudioSource")
 
 
 def demonstrate_phoneme_conversion():

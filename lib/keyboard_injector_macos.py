@@ -5,6 +5,8 @@ import os
 import time
 sys.path.append(os.path.join(os.path.dirname(__file__), 'xml-stream'))
 from keyboard_injector import KeyboardInjector
+sys.path.insert(0, os.path.dirname(__file__))
+from pr_log import pr_err, pr_alert, pr_debug
 
 try:
     from Quartz.CoreGraphics import (
@@ -42,11 +44,11 @@ class MacOSKeyboardInjector(KeyboardInjector):
             # Convert Hz to milliseconds delay: delay = 1000 / rate
             self.typing_delay = int(1000 / xdotool_rate)
             if getattr(config, 'debug_enabled', False):
-                print(f"[DEBUG] MacOSKeyboardInjector: typing_rate={xdotool_rate}Hz -> delay={self.typing_delay}ms", file=sys.stderr)
+                pr_debug(f"MacOSKeyboardInjector: typing_rate={xdotool_rate}Hz -> delay={self.typing_delay}ms")
         else:
             self.typing_delay = typing_delay
             if config and getattr(config, 'debug_enabled', False):
-                print(f"[DEBUG] MacOSKeyboardInjector: using default typing_delay={self.typing_delay}ms", file=sys.stderr)
+                pr_debug(f"MacOSKeyboardInjector: using default typing_delay={self.typing_delay}ms")
 
         self.debug_enabled = getattr(config, 'debug_enabled', False) if config else False
 
@@ -73,20 +75,20 @@ class MacOSKeyboardInjector(KeyboardInjector):
         if self.permission_warning_shown:
             return
 
-        print("\n" + "="*80, file=sys.stderr)
-        print("❌ ACCESSIBILITY PERMISSION REQUIRED", file=sys.stderr)
-        print("="*80, file=sys.stderr)
-        print("QuickScribe needs accessibility permissions to inject keyboard events.", file=sys.stderr)
-        print("\nTo grant permissions:", file=sys.stderr)
-        print("1. Open System Settings → Privacy & Security → Accessibility", file=sys.stderr)
-        print("2. Click the lock icon and enter your password", file=sys.stderr)
-        print("3. Find and enable one of these apps:", file=sys.stderr)
-        print("   • Terminal (if running from Terminal)", file=sys.stderr)
-        print("   • Python (if running directly with python command)", file=sys.stderr)
-        print("   • Your IDE (VS Code, PyCharm, etc. if running from IDE)", file=sys.stderr)
-        print("4. Restart QuickScribe after granting permissions", file=sys.stderr)
-        print("\nAlternatively, you can use clipboard mode by running with --no-injection", file=sys.stderr)
-        print("="*80, file=sys.stderr)
+        pr_alert("="*80)
+        pr_alert("ACCESSIBILITY PERMISSION REQUIRED")
+        pr_alert("="*80)
+        pr_alert("QuickScribe needs accessibility permissions to inject keyboard events.")
+        pr_alert("To grant permissions:")
+        pr_alert("1. Open System Settings → Privacy & Security → Accessibility")
+        pr_alert("2. Click the lock icon and enter your password")
+        pr_alert("3. Find and enable one of these apps:")
+        pr_alert("   • Terminal (if running from Terminal)")
+        pr_alert("   • Python (if running directly with python command)")
+        pr_alert("   • Your IDE (VS Code, PyCharm, etc. if running from IDE)")
+        pr_alert("4. Restart QuickScribe after granting permissions")
+        pr_alert("Alternatively, you can use clipboard mode by running with --no-injection")
+        pr_alert("="*80)
 
         self.permission_warning_shown = True
 
@@ -125,10 +127,10 @@ class MacOSKeyboardInjector(KeyboardInjector):
                     time.sleep(self.typing_delay / 1000.0)
 
             if self.debug_enabled:
-                print(f"[DEBUG] MacOSKeyboardInjector: backspaced {count} characters", file=sys.stderr)
+                pr_debug(f"MacOSKeyboardInjector: backspaced {count} characters")
 
         except Exception as e:
-            print(f"macOS backspace command failed: {str(e)}", file=sys.stderr)
+            pr_err(f"macOS backspace command failed: {str(e)}")
             if "accessibility" in str(e).lower() or "permission" in str(e).lower():
                 self._show_permission_instructions()
 
@@ -157,7 +159,7 @@ class MacOSKeyboardInjector(KeyboardInjector):
                         raise RuntimeError(f"Failed to post keyboard event (error code: {result})")
 
                     if self.debug_enabled:
-                        print(f"[DEBUG] MacOSKeyboardInjector: emitted text: {repr(line)}", file=sys.stderr)
+                        pr_debug(f"MacOSKeyboardInjector: emitted text: {repr(line)}")
 
                 # If it's not the last line, press Enter
                 if i < len(lines) - 1:
@@ -178,13 +180,13 @@ class MacOSKeyboardInjector(KeyboardInjector):
                         raise RuntimeError(f"Failed to post return key event (error code: {result})")
 
                     if self.debug_enabled:
-                        print(f"[DEBUG] MacOSKeyboardInjector: pressed Return key", file=sys.stderr)
+                        pr_debug("MacOSKeyboardInjector: pressed Return key")
 
                 # Apply typing delay
                 if self.typing_delay > 0:
                     time.sleep(self.typing_delay / 1000.0)
 
         except Exception as e:
-            print(f"macOS text emission failed: {str(e)}", file=sys.stderr)
+            pr_err(f"macOS text emission failed: {str(e)}")
             if "accessibility" in str(e).lower() or "permission" in str(e).lower():
                 self._show_permission_instructions()

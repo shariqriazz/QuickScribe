@@ -4,9 +4,11 @@ import pytest
 import sys
 import os
 
-# Add parent directory to path
-parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, parent_dir)
+# Add parent directory to path for imports
+xml_stream_dir = os.path.dirname(os.path.dirname(__file__))
+project_root = os.path.dirname(os.path.dirname(xml_stream_dir))
+sys.path.insert(0, xml_stream_dir)
+sys.path.insert(0, project_root)
 
 from transcription_service import TranscriptionService
 from keyboard_injector import MockKeyboardInjector
@@ -19,6 +21,7 @@ class TestStreamClosure:
         """Set up test fixtures."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         self.service = TranscriptionService(MockConfig())
         # Replace with MockKeyboardInjector for testing
         self.keyboard = MockKeyboardInjector()
@@ -81,7 +84,7 @@ class TestStreamClosure:
         print(f"Final output: '{final_output}'")
 
         # With the fix, this should now work correctly
-        expected_complete_output = initial_output + "Sounds great. I will give it a shot."
+        expected_complete_output = initial_output + "Sounds great. I will give it a shot. "
 
         # This assertion should now PASS with the fix
         assert final_output == expected_complete_output, f"Expected complete text but got: '{final_output}'"
@@ -90,7 +93,7 @@ class TestStreamClosure:
         """Compare complete stream (working) vs premature closure (broken)."""
 
         # Test 1: Complete stream (should work)
-        service1 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        service1 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False, 'xml_stream_debug': False})())
         keyboard1 = MockKeyboardInjector()
         service1.keyboard = keyboard1
         service1.processor.keyboard = keyboard1
@@ -101,12 +104,12 @@ class TestStreamClosure:
                        '<110>it a shot.</110></update>')
         service1.process_streaming_chunk(complete_xml)
 
-        # This should work fine - all content processed
+        # This should work fine - all content processed (no trailing space without end_stream call)
         complete_output = keyboard1.output
         assert complete_output == "Sounds great. I will give it a shot."
 
         # Test 2: Premature closure (broken)
-        service2 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        service2 = TranscriptionService(type('MockConfig', (), {'debug_enabled': False, 'xml_stream_debug': False})())
         keyboard2 = MockKeyboardInjector()
         service2.keyboard = keyboard2
         service2.processor.keyboard = keyboard2
@@ -124,11 +127,11 @@ class TestStreamClosure:
         fixed_output = keyboard2.output
 
         # This assertion should now PASS with the fix
-        assert fixed_output == "Sounds great. I will give it a shot.", f"Expected complete text but got: '{fixed_output}'"
+        assert fixed_output == "Sounds great. I will give it a shot. ", f"Expected complete text but got: '{fixed_output}'"
 
     def test_incomplete_tag_handling(self):
         """Test handling of truly incomplete tags that can't be recovered."""
-        service = TranscriptionService(type('MockConfig', (), {'debug_enabled': False})())
+        service = TranscriptionService(type('MockConfig', (), {'debug_enabled': False, 'xml_stream_debug': False})())
         keyboard = MockKeyboardInjector()
         service.keyboard = keyboard
         service.processor.keyboard = keyboard

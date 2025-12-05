@@ -144,3 +144,5 @@ cython_debug/
 .vscode/
 
 run.sh
+
+.*.sw?

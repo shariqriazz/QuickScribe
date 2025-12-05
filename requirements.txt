@@ -6,6 +6,7 @@ pynput
 python-dotenv
 pyperclip
 litellm
+colorama
 
 # Development and testing
 pytest
@@ -14,12 +15,15 @@ pytest-asyncio
 # VOSK dependencies (optional - for local speech recognition)
 vosk
 
-# Wav2Vec2 dependencies (optional - for phoneme recognition)
+# HuggingFace transcription dependencies (optional - for local transcription models)
 torch
 transformers
 huggingface_hub
 phonemizer
 pyrubberband
+
+# Optional dependencies for specific HuggingFace models
+sentencepiece  # Required for Speech2Text models (facebook/s2t-*)
 
 # macOS dependencies for keyboard injection
 pyobjc-core>=11.1; sys_platform == "darwin"
@@ -36,7 +40,10 @@ pywin32; sys_platform == "win32"
 
 # Installation Notes:
 # - Core functionality requires only the first 8 packages
-# - VOSK is optional for local speech recognition with --vosk-model
-# - Wav2Vec2 deps are optional for phoneme recognition with --wav2vec2-model
+# - VOSK is optional for local speech recognition (--transcription-model vosk/...)
+# - HuggingFace deps are optional for local models (--transcription-model huggingface/...)
+#   - Supports CTC models: Wav2Vec2, HuBERT (phoneme/text output)
+#   - Supports Seq2Seq models: Whisper, Speech2Text (text output)
+# - SentencePiece only needed for Speech2Text models (facebook/s2t-*)
 # - PyTorch installation varies by platform, see: https://pytorch.org/get-started/
 # - For CPU-only PyTorch: pip install torch --index-url https://download.pytorch.org/whl/cpu

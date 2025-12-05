@@ -7,6 +7,8 @@ import ctypes
 from ctypes import wintypes
 sys.path.append(os.path.join(os.path.dirname(__file__), 'xml-stream'))
 from keyboard_injector import KeyboardInjector
+sys.path.insert(0, os.path.dirname(__file__))
+from pr_log import pr_err, pr_debug
 
 
 try:
@@ -61,11 +63,11 @@ class WindowsKeyboardInjector(KeyboardInjector):
         if xdotool_rate:
             self.typing_delay = int(1000 / xdotool_rate)
             if getattr(config, 'debug_enabled', False):
-                print(f"[DEBUG] WindowsKeyboardInjector: typing_rate={xdotool_rate}Hz -> delay={self.typing_delay}ms", file=sys.stderr)
+                pr_debug(f"WindowsKeyboardInjector: typing_rate={xdotool_rate}Hz -> delay={self.typing_delay}ms")
         else:
             self.typing_delay = typing_delay
             if config and getattr(config, 'debug_enabled', False):
-                print(f"[DEBUG] WindowsKeyboardInjector: using default typing_delay={self.typing_delay}ms", file=sys.stderr)
+                pr_debug(f"WindowsKeyboardInjector: using default typing_delay={self.typing_delay}ms")
 
         self.debug_enabled = getattr(config, 'debug_enabled', False) if config else False
 
@@ -137,10 +139,10 @@ class WindowsKeyboardInjector(KeyboardInjector):
                     time.sleep(self.typing_delay / 1000.0)
 
             if self.debug_enabled:
-                print(f"[DEBUG] WindowsKeyboardInjector: backspaced {count} characters", file=sys.stderr)
+                pr_debug(f"WindowsKeyboardInjector: backspaced {count} characters")
 
         except Exception as e:
-            print(f"Windows backspace command failed: {str(e)}", file=sys.stderr)
+            pr_err(f"Windows backspace command failed: {str(e)}")
 
     def emit(self, text: str) -> None:
         """Emit text at current cursor position using SendInput."""
@@ -154,17 +156,17 @@ class WindowsKeyboardInjector(KeyboardInjector):
                     self._send_unicode(line)
 
                     if self.debug_enabled:
-                        print(f"[DEBUG] WindowsKeyboardInjector: emitted text: {repr(line)}", file=sys.stderr)
+                        pr_debug(f"WindowsKeyboardInjector: emitted text: {repr(line)}")
 
                 if i < len(lines) - 1:
                     self._send_key(VK_RETURN, key_up=False)
                     self._send_key(VK_RETURN, key_up=True)
 
                     if self.debug_enabled:
-                        print(f"[DEBUG] WindowsKeyboardInjector: pressed Return key", file=sys.stderr)
+                        pr_debug("WindowsKeyboardInjector: pressed Return key")
 
                 if self.typing_delay > 0:
                     time.sleep(self.typing_delay / 1000.0)
 
         except Exception as e:
-            print(f"Windows text emission failed: {str(e)}", file=sys.stderr)
+            pr_err(f"Windows text emission failed: {str(e)}")

@@ -1,6 +1,13 @@
 """Test suite for XML Stream Processor using pytest."""
 
+import sys
+import os
 import pytest
+
+# Add parent directory to path for imports
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, parent_dir)
+
 from xml_stream_processor import XMLStreamProcessor
 from keyboard_injector import MockKeyboardInjector
 

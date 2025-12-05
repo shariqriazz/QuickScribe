@@ -22,6 +22,7 @@ class TestMalformedXMLFix(unittest.TestCase):
         """Set up test environment."""
         class MockConfig:
             debug_enabled = True
+            xml_stream_debug = False
 
         self.config = MockConfig()
         self.service = TranscriptionService(self.config)
@@ -82,10 +83,12 @@ class TestMalformedXMLFix(unittest.TestCase):
         final_output = self.keyboard.output
         print(f"After complete_stream: '{final_output}'")
 
-        # The malformed XML <100>the </110>original </120>script.</120> contains no properly formed tags
-        # (since opening and closing tag numbers don't match), so the regex won't match anything
-        # Therefore, the output should remain the same as the partial output
-        self.assertEqual(final_output, expected_partial)
+        # The malformed XML <100>the </110>original </120>script.</120> contains one mismatched tag
+        # With relaxed parsing, <100>the </110> is accepted (with warning) as sequence 100
+        # The rest (original </120>script.</120>) has no opening tags and is not extracted
+        # Therefore, the output includes the "the " from the mismatched tag
+        expected_with_mismatched = "I think the dependency tree is backwards compared to the "
+        self.assertEqual(final_output, expected_with_mismatched)
 
         # This demonstrates that the original issue was likely due to complete_stream not being called,
         # not due to malformed XML handling
@@ -137,7 +140,7 @@ class TestMalformedXMLFix(unittest.TestCase):
         print(f"After complete_stream (proper XML): '{final_output}'")
 
         # This should now have the complete sentence
-        expected_complete = "I think the dependency tree is backwards compared to the original script."
+        expected_complete = "I think the dependency tree is backwards compared to the original script. "
         self.assertEqual(final_output, expected_complete)
 
 

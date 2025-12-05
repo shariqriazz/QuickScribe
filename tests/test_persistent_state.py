@@ -23,6 +23,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that XMLStreamProcessor maintains state across multiple transcriptions."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -33,7 +34,7 @@ class TestPersistentState(unittest.TestCase):
         # First transcription
         service.process_xml_transcription('<10>This is test </10><20>number one.</20>')
         first_output = keyboard.output
-        self.assertEqual(first_output, "This is test number one.")
+        self.assertEqual(first_output, "This is test number one. ")
         
         # Reset only streaming state (not processor state)
         service.reset_streaming_state()
@@ -42,15 +43,15 @@ class TestPersistentState(unittest.TestCase):
         # Second transcription - should continue from ID 30
         service.process_xml_transcription('<30>This is test number two. </30><40>It should be appended </40><50>to the first.</50>')
         second_output = keyboard.output
-        self.assertEqual(second_output, "This is test number two. It should be appended to the first.")
+        self.assertEqual(second_output, "This is test number two. It should be appended to the first. ")
         
         # Verify state persistence
         expected_words = {
             10: "This is test ",
-            20: "number one.",
+            20: "number one. ",
             30: "This is test number two. ",
             40: "It should be appended ",
-            50: "to the first."
+            50: "to the first. "
         }
         
         self.assertEqual(service.processor.current_words, expected_words)
@@ -59,8 +60,8 @@ class TestPersistentState(unittest.TestCase):
         xml_context = service._build_xml_from_processor()
         text_context = service._build_current_text()
         
-        expected_xml = '<10>This is test </10><20>number one.</20><30>This is test number two. </30><40>It should be appended </40><50>to the first.</50>'
-        expected_text = 'This is test number one.This is test number two. It should be appended to the first.'
+        expected_xml = '<10>This is test </10><20>number one. </20><30>This is test number two. </30><40>It should be appended </40><50>to the first. </50>'
+        expected_text = 'This is test number one. This is test number two. It should be appended to the first. '
         
         self.assertEqual(xml_context, expected_xml)
         self.assertEqual(text_context, expected_text)
@@ -69,6 +70,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that explicit reset clears state."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -77,7 +79,7 @@ class TestPersistentState(unittest.TestCase):
         
         # Set up initial state
         service.process_xml_transcription('<10>Initial </10><20>content</20>')
-        self.assertEqual(service.processor.current_words, {10: "Initial ", 20: "content"})
+        self.assertEqual(service.processor.current_words, {10: "Initial ", 20: "content "})
         
         # Explicit reset
         service.reset_all_state()
@@ -85,13 +87,14 @@ class TestPersistentState(unittest.TestCase):
         
         # New content should start from ID 10 again
         service.process_xml_transcription('<10>Fresh </10><20>start</20>')
-        expected = {10: "Fresh ", 20: "start"}
+        expected = {10: "Fresh ", 20: "start "}
         self.assertEqual(service.processor.current_words, expected)
 
     def test_streaming_state_reset_preserves_processor(self):
         """Test that streaming state reset doesn't affect processor state."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -114,6 +117,7 @@ class TestPersistentState(unittest.TestCase):
         """Test XML context building with characters that need escaping."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -125,14 +129,15 @@ class TestPersistentState(unittest.TestCase):
         
         xml_context = service._build_xml_from_processor()
         
-        # Should have proper XML escaping
-        expected_xml = '<10>AT&amp;T </10><20>uses &lt;brackets&gt; </20><30>&amp;amp; symbols</30>'
+        # Should have proper XML escaping - & symbol should be escaped once, not twice
+        expected_xml = '<10>AT&amp;T </10><20>uses &lt;brackets&gt; </20><30>&amp; symbols </30>'
         self.assertEqual(xml_context, expected_xml)
 
     def test_sequential_id_continuation(self):
         """Test that word IDs continue sequentially across transcriptions."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -152,11 +157,11 @@ class TestPersistentState(unittest.TestCase):
         
         expected_words = {
             10: "First ",
-            20: "batch",
+            20: "batch ",
             30: "Second ",
-            40: "batch",
+            40: "batch ",
             50: "Third ",
-            60: "batch"
+            60: "batch "
         }
         
         self.assertEqual(service.processor.current_words, expected_words)
@@ -165,6 +170,7 @@ class TestPersistentState(unittest.TestCase):
         """Test that reset commands in conversation tags trigger state reset."""
         class MockConfig:
             debug_enabled = False
+            xml_stream_debug = False
         service = TranscriptionService(MockConfig())
         from keyboard_injector import MockKeyboardInjector
         keyboard = MockKeyboardInjector()
@@ -180,7 +186,7 @@ class TestPersistentState(unittest.TestCase):
         service.process_xml_transcription('<conversation>reset conversation</conversation><10>New </10><20>content</20>')
         
         # State should be reset and contain new content only
-        expected = {10: "New ", 20: "content"}
+        expected = {10: "New ", 20: "content "}
         self.assertEqual(service.processor.current_words, expected)
 
 

@@ -43,15 +43,15 @@ class TestStreamingProgressionBug(unittest.TestCase):
         expected_after_fourth = "Once upon a time, there was a squirrel, and he liked to jump from tree to tree."
         self.assertEqual(self.keyboard.output, expected_after_fourth, "After fourth fragment")
 
-        # end_stream should not add anything since all chunks were processed
+        # end_stream adds trailing space for xdotool compatibility
         self.processor.end_stream()
-        self.assertEqual(self.keyboard.output, expected_after_fourth, "After end_stream step 1")
+        self.assertEqual(self.keyboard.output, expected_after_fourth + " ", "After end_stream step 1")
 
         print("\n=== STEP 2: Add more content (incremental) ===")
 
         # Step 2: Add more content incrementally
         self.processor.process_chunk('<50>One day, </50>')
-        expected_after_50 = expected_after_fourth + "One day, "
+        expected_after_50 = expected_after_fourth + " One day, "
         self.assertEqual(self.keyboard.output, expected_after_50, "After chunk 50")
 
         self.processor.process_chunk('<60>he jumped to a tree </60>')
@@ -63,7 +63,7 @@ class TestStreamingProgressionBug(unittest.TestCase):
         self.assertEqual(self.keyboard.output, expected_after_70, "After chunk 70")
 
         self.processor.end_stream()
-        self.assertEqual(self.keyboard.output, expected_after_70, "After end_stream step 2")
+        self.assertEqual(self.keyboard.output, expected_after_70 + " ", "After end_stream step 2")
 
         print("\n=== STEP 3: Modify beginning (incremental behavior) ===")
 
@@ -76,9 +76,9 @@ class TestStreamingProgressionBug(unittest.TestCase):
         # - WAIT for more chunks or end_stream
         self.assertEqual(self.keyboard.output, "One day, ", "After modifying chunk 10 - should only emit chunk 10")
 
-        # end_stream should flush remaining chunks 20-70
+        # end_stream should flush remaining chunks 20-70 and add trailing space
         self.processor.end_stream()
-        expected_final = "One day, there was a squirrel, and he liked to jump from tree to tree.One day, he jumped to a tree that was 1000 miles away."
+        expected_final = "One day, there was a squirrel, and he liked to jump from tree to tree. One day, he jumped to a tree that was 1000 miles away. "
         self.assertEqual(self.keyboard.output, expected_final, "After end_stream - should flush remaining chunks")
 
         print(f"SUCCESS: Incremental behavior works correctly!")

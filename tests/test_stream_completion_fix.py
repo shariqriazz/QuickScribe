@@ -25,6 +25,7 @@ class TestStreamCompletionFix(unittest.TestCase):
         """Set up test environment."""
         class MockConfig:
             debug_enabled = True
+            xml_stream_debug = False
 
         self.config = MockConfig()
         self.service = TranscriptionService(self.config)
@@ -58,7 +59,7 @@ class TestStreamCompletionFix(unittest.TestCase):
         self.assertFalse(self.service.processor.streaming_active)
 
         # But we should have all remaining words emitted
-        self.assertEqual(self.keyboard.output, "Hi world from Python!")
+        self.assertEqual(self.keyboard.output, "Hi world from Python! ")
 
         # Reset keyboard to test complete_stream behavior
         self.keyboard.reset()
@@ -81,7 +82,7 @@ class TestStreamCompletionFix(unittest.TestCase):
         self.service.complete_stream()
 
         # Should have emitted all words
-        expected = "Hi there friend"
+        expected = "Hi there friend "
         self.assertEqual(self.keyboard.output, expected)
 
     def test_complete_stream_should_check_pending_words_not_streaming_active(self):
@@ -106,7 +107,7 @@ class TestStreamCompletionFix(unittest.TestCase):
         self.service.complete_stream()
 
         # Should have all words emitted
-        self.assertEqual(self.keyboard.output, "A fast brown fox")
+        self.assertEqual(self.keyboard.output, "A fast brown fox ")
 
 
 if __name__ == '__main__':
