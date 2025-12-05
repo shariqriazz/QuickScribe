@@ -308,14 +308,22 @@ class ConfigManager:
         self.language = args.language
         self.sample_rate = args.sample_rate
         self.channels = args.channels
-        self.trigger_key_name = args.trigger_key
+        self.trigger_key_name = args.trigger_key or os.environ.get('QUICKSCRIBE_TRIGGER_KEY', 'alt_r')
         if getattr(args, "no_trigger_key", False):
             self.trigger_key_name = "none"
-        self.debug_enabled = args.debug >= 1
-        self.litellm_debug = args.debug >= 2
-        self.xml_stream_debug = args.debug >= 3
+        
+        # Debug: CLI flag takes precedence, then env var
+        env_debug = os.environ.get('QUICKSCRIBE_DEBUG', '').lower() in ('true', '1', 'yes')
+        debug_level = args.debug if args.debug > 0 else (1 if env_debug else 0)
+        self.debug_enabled = debug_level >= 1
+        self.litellm_debug = debug_level >= 2
+        self.xml_stream_debug = debug_level >= 3
+        
         self.xdotool_rate = args.xdotool_rate
-        self.reset_state_each_response = getattr(args, 'once', False)
+        
+        # Once mode: CLI flag or env var
+        env_once = os.environ.get('QUICKSCRIBE_ONCE', '').lower() in ('true', '1', 'yes')
+        self.reset_state_each_response = getattr(args, 'once', False) or env_once
 
         # Audio source selection
         self.audio_source = getattr(args, 'audio_source', 'raw')
@@ -329,11 +337,12 @@ class ConfigManager:
         self.transcription_model = getattr(args, 'transcription_model', self.transcription_model)
         self.transcription_lang = getattr(args, 'transcription_lang', "en")
 
-        # Provider performance controls
-        self.enable_reasoning = getattr(args, 'enable_reasoning', 'low')
+        # Provider performance controls (CLI > env > default)
+        self.enable_reasoning = args.enable_reasoning or os.environ.get('QUICKSCRIBE_REASONING', 'low')
         self.thinking_budget = getattr(args, 'thinking_budget', 128)
         self.temperature = getattr(args, 'temperature', 0.2)
-        self.max_tokens = getattr(args, 'max_tokens', None)
+        env_max_tokens = os.environ.get('QUICKSCRIBE_MAX_TOKENS')
+        self.max_tokens = args.max_tokens if args.max_tokens is not None else (int(env_max_tokens) if env_max_tokens else None)
         self.top_p = getattr(args, 'top_p', 0.9)
 
         # API key
@@ -352,7 +361,10 @@ class ConfigManager:
         args_without_script = sys.argv[1:]
         args = parser.parse_args()
 
-        if self.is_interactive_mode(args_without_script):
+        # Check if model is available from env var
+        env_model = os.environ.get('QUICKSCRIBE_MODEL')
+        
+        if self.is_interactive_mode(args_without_script) and not env_model:
             if not self.handle_interactive_mode():
                 return False
             # Apply all other args in interactive mode

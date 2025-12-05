@@ -109,18 +109,14 @@ class MacOSKeyboardInjector(KeyboardInjector):
                 if event_down is None:
                     raise RuntimeError("Failed to create keyboard event - check accessibility permissions")
 
-                result = CGEventPost(kCGHIDEventTap, event_down)
-                if result != 0:
-                    raise RuntimeError(f"Failed to post keyboard event (error code: {result})")
+                CGEventPost(kCGHIDEventTap, event_down)
 
                 # Create key up event for Delete key
                 event_up = CGEventCreateKeyboardEvent(None, self.VK_DELETE, False)
                 if event_up is None:
                     raise RuntimeError("Failed to create keyboard event - check accessibility permissions")
 
-                result = CGEventPost(kCGHIDEventTap, event_up)
-                if result != 0:
-                    raise RuntimeError(f"Failed to post keyboard event (error code: {result})")
+                CGEventPost(kCGHIDEventTap, event_up)
 
                 # Apply typing delay between keypresses
                 if self.typing_delay > 0:
@@ -154,9 +150,7 @@ class MacOSKeyboardInjector(KeyboardInjector):
                         raise RuntimeError("Failed to create keyboard event - check accessibility permissions")
 
                     CGEventKeyboardSetUnicodeString(event, len(line), line)
-                    result = CGEventPost(kCGHIDEventTap, event)
-                    if result != 0:
-                        raise RuntimeError(f"Failed to post keyboard event (error code: {result})")
+                    CGEventPost(kCGHIDEventTap, event)
 
                     if self.debug_enabled:
                         pr_debug(f"MacOSKeyboardInjector: emitted text: {repr(line)}")
@@ -167,17 +161,13 @@ class MacOSKeyboardInjector(KeyboardInjector):
                     if event_return_down is None:
                         raise RuntimeError("Failed to create return key event - check accessibility permissions")
 
-                    result = CGEventPost(kCGHIDEventTap, event_return_down)
-                    if result != 0:
-                        raise RuntimeError(f"Failed to post return key event (error code: {result})")
+                    CGEventPost(kCGHIDEventTap, event_return_down)
 
                     event_return_up = CGEventCreateKeyboardEvent(None, self.VK_RETURN, False)
                     if event_return_up is None:
                         raise RuntimeError("Failed to create return key event - check accessibility permissions")
 
-                    result = CGEventPost(kCGHIDEventTap, event_return_up)
-                    if result != 0:
-                        raise RuntimeError(f"Failed to post return key event (error code: {result})")
+                    CGEventPost(kCGHIDEventTap, event_return_up)
 
                     if self.debug_enabled:
                         pr_debug("MacOSKeyboardInjector: pressed Return key")
